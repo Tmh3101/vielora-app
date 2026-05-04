@@ -1,0 +1,119 @@
+# =============================================================================
+# Vielora - Docker Compose (Multi-Profile Architecture)
+# =============================================================================
+# Profiles:
+#   hybrid   → Vercel (Web) + EC2 (Redis, Worker, Cron). Redis exposed to internet.
+#   monolith → EC2 runs everything (Web, Redis, Worker, Cron). Redis isolated.
+#
+# Usage:
+#   docker compose --profile hybrid   up -d --build
+#   docker compose --profile monolith up -d --build
+# =============================================================================
+
+networks:
+  vielora-network:
+    driver: bridge
+
+volumes:
+  vielora_redis_data:
+
+# ---- Shared environment block (YAML anchor) ---------------------------------
+x-worker-env: &worker-env
+  NODE_ENV: production
+  # Redis connection (defaults to internal Docker DNS; override for split deployments)
+  REDIS_URL: "${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379}"
+  # Supabase
+  NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
+  SUPABASE_SERVICE_ROLE_KEY: "${SUPABASE_SERVICE_ROLE_KEY}"
+  # Google Gemini AI
+  GOOGLE_API_KEY: "${GOOGLE_API_KEY}"
+  EMBEDDING_MODEL: "${EMBEDDING_MODEL:-gemini-embedding-001}"
+  CHAT_MODEL: "${CHAT_MODEL:-gemini-2.5-flash-lite}"
+
+services:
+  # 1. REDIS — Message broker (shared by both topologies)
+  redis:
+    image: redis:7-alpine
+    container_name: vielora-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    ports:
+      # Dynamic binding via .env:
+      #   Hybrid  → REDIS_IP=0.0.0.0  REDIS_PORT=50379  (exposed to internet)
+      #   Monolith→ REDIS_IP=127.0.0.1 REDIS_PORT=6379   (localhost only)
+      - "${REDIS_IP:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - vielora_redis_data:/data
+    networks:
+      - vielora-network
+    profiles:
+      - hybrid
+      - monolith
+
+  # 2. WORKER — BullMQ Crawler (Puppeteer + RAG indexing)
+  worker:
+    build:
+      context: .
+      target: runner
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
+    container_name: vielora-worker
+    restart: unless-stopped
+    command: >
+      /bin/sh -c "Xvfb :99 -screen 0 1280x1024x24 & export DISPLAY=:99 && exec npx tsx scripts/start-worker.ts"
+    environment:
+      <<: *worker-env
+    depends_on:
+      - redis
+    networks:
+      - vielora-network
+    profiles:
+      - hybrid
+      - monolith
+
+  # 3. CRON — BullMQ Scheduled Jobs (subscription lifecycle)
+  cron:
+    build:
+      context: .
+      target: runner
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
+    container_name: vielora-cron
+    restart: unless-stopped
+    command: ["npm", "run", "cron"]
+    environment:
+      <<: *worker-env
+    depends_on:
+      - redis
+    networks:
+      - vielora-network
+    profiles:
+      - hybrid
+      - monolith
+
+  # 4. WEB — Next.js Application (monolith only)
+  web:
+    build:
+      context: .
+      target: runner
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
+    container_name: vielora-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      <<: *worker-env
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+      NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
+    networks:
+      - vielora-network
+    profiles:
+      - monolith
+      - web

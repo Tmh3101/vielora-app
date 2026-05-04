@@ -1,0 +1,2 @@
+export const MAX_MANUAL_CONTENT_LENGTH = 10000;
+export const MAX_MANUAL_TITLE_LENGTH = 100;

@@ -1,0 +1,65 @@
+DROP FUNCTION IF EXISTS public.hybrid_search(text, vector, int4, float8, float8, uuid);
+DROP FUNCTION IF EXISTS public.hybrid_search(text, vector, int4, uuid);
+
+CREATE OR REPLACE FUNCTION public.hybrid_search(
+  query_text text,
+  query_embedding vector,
+  match_count integer DEFAULT 5,
+  full_text_weight double precision DEFAULT 1.0, -- Nhận % Lexical từ code TS
+  semantic_weight double precision DEFAULT 1.0,  -- Nhận % Semantic từ code TS
+  p_bot_id uuid DEFAULT NULL::uuid
+) RETURNS TABLE(
+  id uuid,
+  bot_id uuid,
+  content text,
+  metadata jsonb,
+  similarity double precision
+) LANGUAGE plpgsql
+AS $function$
+declare
+  rrf_k constant integer := 60;
+begin
+  return query
+  with full_text_results as (
+    select
+      d.id,
+      row_number() over (order by ts_rank_cd(d.fts, plainto_tsquery('simple', query_text)) desc) as rank_ix
+    from public.documents d
+    where 
+      (p_bot_id is null or d.bot_id = p_bot_id)
+      and d.fts @@ plainto_tsquery('simple', query_text)
+    limit 20
+  ),
+  semantic_results as (
+    select
+      d.id,
+      row_number() over (order by d.embedding <=> query_embedding) as rank_ix
+    from public.documents d
+    where 
+      (p_bot_id is null or d.bot_id = p_bot_id)
+      and d.embedding is not null
+    limit 20
+  ),
+  rrf_results as (
+    select
+      coalesce(ft.id, sem.id) as id,
+      (
+        -- NHÂN THÊM TRỌNG SỐ VÀO ĐIỂM RRF TẠI ĐÂY
+        coalesce(full_text_weight * (1.0 / (rrf_k + ft.rank_ix)), 0.0) +
+        coalesce(semantic_weight * (1.0 / (rrf_k + sem.rank_ix)), 0.0)
+      ) as rrf_score
+    from full_text_results ft
+    full outer join semantic_results sem on ft.id = sem.id
+  )
+  select
+    d.id,
+    d.bot_id,
+    d.content,
+    d.metadata,
+    rrf.rrf_score as similarity
+  from rrf_results rrf
+  join public.documents d on d.id = rrf.id
+  order by rrf.rrf_score desc
+  limit match_count;
+end;
+$function$;

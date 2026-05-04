@@ -1,0 +1,71 @@
+# Dependencies (re-installed via npm ci in Dockerfile)
+node_modules
+
+# Build outputs (rebuilt in builder stage)
+.next
+out
+build
+dist
+dist-ssr
+
+# Environment files (passed via docker-compose --env-file)
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+.husky
+
+# Docker (avoid recursive context)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+docs
+README.md
+SKILL.md
+*.md
+
+# IDE / Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Testing & Coverage
+coverage
+__tests__
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Linting & Formatting
+.eslintrc.json
+.eslintignore
+eslint.config.mjs
+.prettierrc
+.prettierignore
+.lintstagedrc
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
+
+# Supabase (local dev only)
+supabase
+
+# Cache
+.cache
+.eslintcache
+.turbo
+
+# Vercel
+.vercel
+
+# Debug logs
+logs
+*.log
+npm-debug.log*
