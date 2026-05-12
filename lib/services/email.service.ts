@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { ESubscriptionCycle, EPaymentCurrency } from "@/types";
 
 // ============================================================
 // Resend client (lazy-init singleton)
@@ -212,11 +213,14 @@ export async function sendPaymentConfirmationEmail(
   data: PaymentEmailData
 ): Promise<boolean> {
   const appUrl = APP_URL();
-  const cycleLabel = data.billingCycle === "yearly" ? "Hàng năm" : "Hàng tháng";
+  const cycleLabel = data.billingCycle === ESubscriptionCycle.Yearly ? "Hàng năm" : "Hàng tháng";
   const formattedAmount =
-    data.currency === "VND"
+    data.currency === EPaymentCurrency.VND
       ? new Intl.NumberFormat("vi-VN").format(data.amount) + " ₫"
-      : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(data.amount);
+      : new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: EPaymentCurrency.USD,
+        }).format(data.amount);
 
   const body =
     paragraph(
@@ -386,6 +390,57 @@ export async function sendSubscriptionExpiryReminderEmail(
     `📅 Gói ${data.planName} sắp hết hạn trong ${data.daysRemaining} ngày`,
     html
   );
+}
+
+// ============================================================
+// UC7 — PAYG Credit Purchase email
+// ============================================================
+
+export interface PAYGPurchaseEmailData {
+  packageName: string;
+  amount: number;
+  currency: string;
+  txnId: string;
+  creditsAdded: number;
+  newTotalCredits: number;
+}
+
+export async function sendPAYGPurchaseEmail(
+  to: string,
+  fullName: string,
+  data: PAYGPurchaseEmailData
+): Promise<boolean> {
+  const appUrl = APP_URL();
+  const formattedAmount =
+    data.currency === EPaymentCurrency.VND
+      ? new Intl.NumberFormat("vi-VN").format(data.amount) + " ₫"
+      : new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: EPaymentCurrency.USD,
+        }).format(data.amount);
+
+  const formattedCreditsAdded = new Intl.NumberFormat("vi-VN").format(data.creditsAdded);
+  const formattedTotalCredits = new Intl.NumberFormat("vi-VN").format(data.newTotalCredits);
+
+  const body =
+    paragraph(
+      `Xin chào <strong>${fullName}</strong>, bạn đã nạp thành công <strong>${formattedCreditsAdded} credits</strong> vào tài khoản!`
+    ) +
+    infoTable(
+      infoRow("Gói nạp", data.packageName) +
+        infoRow("Số tiền", formattedAmount) +
+        infoRow("Mã giao dịch", data.txnId) +
+        infoRow("Số credits nạp", `+${formattedCreditsAdded}`) +
+        infoRow("Tổng credits hiện tại", formattedTotalCredits)
+    ) +
+    ctaButton("Truy cập Dashboard →", `${appUrl}/dashboard`);
+
+  const html = emailLayout(
+    "✅ Nạp Credit thành công",
+    `Bạn vừa nạp ${formattedCreditsAdded} credits`,
+    body
+  );
+  return sendEmail(to, `✅ Nạp thành công ${formattedCreditsAdded} credits vào tài khoản`, html);
 }
 
 // ============================================================

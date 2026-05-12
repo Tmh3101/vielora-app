@@ -71,6 +71,17 @@ export function isRedisConfigured(): boolean {
   return hasUrlConfig || hasParamConfig;
 }
 
+// Singleton publisher client for Redis Pub/Sub (worker-side PUBLISH)
+let _publisher: import("ioredis").Redis | null = null;
+
+export async function getRedisPublisher(): Promise<import("ioredis").Redis> {
+  if (_publisher) return _publisher;
+  const IORedis = (await import("ioredis")).default;
+  const { maxRetriesPerRequest: _mr, ...opts } = getRedisConnectionOptions();
+  _publisher = new IORedis(opts);
+  return _publisher;
+}
+
 /**
  * Check if Redis connection is healthy (simple ping test)
  */

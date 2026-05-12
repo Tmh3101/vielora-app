@@ -46,7 +46,7 @@ export interface UseBotDataResult {
   pages: PageType[];
   isLoading: boolean;
   totalCredits: number;
-  planCode: string;
+  planCode: ESubscriptionPlan;
   botsLimit: number;
   botLoadVersion: number;
   fetchData: () => Promise<void>;
@@ -68,7 +68,7 @@ export function useBotData({
   const [pages, setPages] = useState<PageType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalCredits, setTotalCredits] = useState(0);
-  const [planCode, setPlanCode] = useState<string>(ESubscriptionPlan.Free);
+  const [planCode, setPlanCode] = useState<ESubscriptionPlan>(ESubscriptionPlan.Free);
   const [botsLimit, setBotsLimit] = useState<number>(1);
   const [botLoadVersion, setBotLoadVersion] = useState(0);
 

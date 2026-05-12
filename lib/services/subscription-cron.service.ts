@@ -1,5 +1,10 @@
 import type { ServiceClient } from "@/lib/services/types";
-import { ETransactionType } from "@/types";
+import {
+  ETransactionType,
+  ESubscriptionStatus,
+  ESubscriptionCycle,
+  ESubscriptionPlan,
+} from "@/types";
 import {
   sendSubscriptionDowngradeEmail,
   sendCreditResetEmail,
@@ -39,7 +44,7 @@ export async function processSubscriptionLifecycle(
   const { data: freePlan, error: freePlanError } = await client
     .from("plans")
     .select("id, monthly_credits, bots_limit")
-    .eq("code", "free")
+    .eq("code", ESubscriptionPlan.Free)
     .single();
 
   if (freePlanError || !freePlan) {
@@ -72,8 +77,8 @@ export async function processSubscriptionLifecycle(
         .from("subscriptions")
         .update({
           plan_id: freePlan.id,
-          billing_cycle: "monthly",
-          status: "active",
+          billing_cycle: ESubscriptionCycle.Monthly,
+          status: ESubscriptionStatus.Active,
           current_period_start: nowIso,
           current_period_end: nextMonthIso,
           next_credit_reset_at: nextMonthIso,
@@ -243,7 +248,11 @@ export async function processExpiryReminders(client: ServiceClient): Promise<Exp
 
   console.log("[SubscriptionCron] Expiry Reminder: Checking for subscriptions expiring soon…");
 
-  const { data: freePlan } = await client.from("plans").select("id").eq("code", "free").single();
+  const { data: freePlan } = await client
+    .from("plans")
+    .select("id")
+    .eq("code", ESubscriptionPlan.Free)
+    .single();
 
   if (!freePlan) {
     console.error("[SubscriptionCron] Expiry Reminder: Cannot fetch free plan — skipping");

@@ -19,39 +19,25 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    console.error("[DashboardPage] Redirecting to /auth. Reason:", { userError, user: !!user });
     redirect("/auth");
   }
 
-  const bots = await getBotsByUserId(supabase, user.id);
+  const [bots, subscription] = await Promise.all([
+    getBotsByUserId(supabase, user.id),
+    getSubscriptionByUserId(supabase, user.id),
+  ]);
 
-  const indexedPagesByBot =
-    bots.length > 0
-      ? await getIndexedPageCountsByBotIds(
-          supabase,
-          bots.map((b) => b.id)
-        )
-      : {};
+  const botIds = bots.map((b) => b.id);
+  const planId = subscription?.plan_id;
 
-  const subscription = await getSubscriptionByUserId(supabase, user.id);
+  const [indexedPagesByBot, totalConversations, plan, creditSummary] = await Promise.all([
+    bots.length > 0 ? getIndexedPageCountsByBotIds(supabase, botIds) : Promise.resolve({}),
+    bots.length > 0 ? getTotalConversationCount(supabase, botIds) : Promise.resolve(0),
+    planId ? getPlanById(supabase, planId) : Promise.resolve(null),
+    planId ? getCreditSummary(supabase, user.id) : Promise.resolve(null),
+  ]);
 
-  let plan = null;
-  let creditSummary = null;
-  let messagesThisMonth = 0;
-
-  if (subscription?.plan_id) {
-    plan = await getPlanById(supabase, subscription.plan_id);
-    creditSummary = await getCreditSummary(supabase, user.id);
-    messagesThisMonth = creditSummary?.messageCreditsUsedThisMonth ?? 0;
-  }
-
-  const totalConversations =
-    bots.length > 0
-      ? await getTotalConversationCount(
-          supabase,
-          bots.map((b) => b.id)
-        )
-      : 0;
+  const messagesThisMonth = creditSummary?.messageCreditsUsedThisMonth ?? 0;
 
   const initialData: DashboardInitialData = {
     bots,

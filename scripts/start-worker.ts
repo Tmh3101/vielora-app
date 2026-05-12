@@ -6,6 +6,7 @@
  *
  * The worker will:
  * - Process discover jobs from discover-queue
+ * - Process page-crawler jobs from page-crawler-queue
  * - Process indexing jobs from indexer-queue
  * - Keep legacy crawler-queue worker for backward compatibility
  * - Update page/bot status in database
@@ -29,8 +30,11 @@ async function main() {
   console.log("> Worker started successfully");
   console.log("");
   console.log("> Configuration:");
-  console.log("   - Queues: discover-queue, indexer-queue, crawler-queue (legacy)");
+  console.log(
+    "   - Queues: discover-queue, page-crawler-queue, indexer-queue, crawler-queue (legacy)"
+  );
   console.log("   - Discover concurrency: 5 jobs");
+  console.log("   - Page crawler concurrency: 15 jobs");
   console.log("   - Indexer concurrency: 2 jobs");
   console.log("   - Legacy concurrency: 1 job");
   console.log("");

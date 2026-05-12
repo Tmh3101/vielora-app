@@ -19,11 +19,13 @@ export type Database = {
           created_at: string;
           domain: string;
           id: string;
+          is_public: boolean;
           is_stopped: boolean;
           last_crawl_at: string | null;
           name: string;
           rate_limit_per_day: number | null;
           rate_limit_per_ip: number | null;
+          slug: string | null;
           status: Database["public"]["Enums"]["bot_status"];
           updated_at: string;
           user_id: string;
@@ -37,11 +39,13 @@ export type Database = {
           created_at?: string;
           domain: string;
           id?: string;
+          is_public?: boolean;
           is_stopped?: boolean;
           last_crawl_at?: string | null;
           name: string;
           rate_limit_per_day?: number | null;
           rate_limit_per_ip?: number | null;
+          slug?: string | null;
           status?: Database["public"]["Enums"]["bot_status"];
           updated_at?: string;
           user_id: string;
@@ -55,11 +59,13 @@ export type Database = {
           created_at?: string;
           domain?: string;
           id?: string;
+          is_public?: boolean;
           is_stopped?: boolean;
           last_crawl_at?: string | null;
           name?: string;
           rate_limit_per_day?: number | null;
           rate_limit_per_ip?: number | null;
+          slug?: string | null;
           status?: Database["public"]["Enums"]["bot_status"];
           updated_at?: string;
           user_id?: string;
@@ -100,6 +106,36 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      credit_packages: {
+        Row: {
+          id: string;
+          name: string;
+          credits_amount: number;
+          price: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          credits_amount: number;
+          price: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          credits_amount?: number;
+          price?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       credit_transactions: {
         Row: {
@@ -593,9 +629,10 @@ export type Database = {
         | "render_error"
         | "empty_content"
         | "url_error"
+        | "not_found"
         | "unknown_error";
       payment_status: "pending" | "completed" | "failed" | "refunded";
-      payment_type: "subscription" | "payg";
+      payment_type: "subscription" | "payg" | "subscription_upgrade" | "subscription_renew";
       pricing_plan: "free" | "standard" | "pro" | "enterprise";
       transaction_type:
         | "subscription_renewal"
@@ -608,7 +645,8 @@ export type Database = {
         | "update_knowledge"
         | "update_knowledge_refund"
         | "plan_downgrade"
-        | "monthly_reset";
+        | "monthly_reset"
+        | "payg_purchase";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -738,7 +776,7 @@ export const Constants = {
       bot_status: ["pending", "discovering", "discovered", "indexing", "ready", "failed"],
       page_status: ["pending", "processing", "pending_index", "ignored", "completed", "failed"],
       payment_status: ["pending", "completed", "failed", "refunded"],
-      payment_type: ["subscription", "payg"],
+      payment_type: ["subscription", "payg", "subscription_upgrade", "subscription_renew"],
       pricing_plan: ["free", "standard", "pro", "enterprise"],
       transaction_type: [
         "subscription_renewal",
@@ -749,8 +787,10 @@ export const Constants = {
         "add_knowledge",
         "add_knowledge_refund",
         "update_knowledge",
+        "update_knowledge_refund",
         "plan_downgrade",
         "monthly_reset",
+        "payg_purchase",
       ],
     },
   },

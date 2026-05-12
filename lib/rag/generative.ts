@@ -1,4 +1,9 @@
-import { GoogleGenerativeAI, TaskType } from "@google/generative-ai";
+import {
+  GoogleGenerativeAI,
+  TaskType,
+  type BatchEmbedContentsResponse,
+  type EmbedContentRequest,
+} from "@google/generative-ai";
 import { EMBEDDING_DIMENSIONS, GENERATION_CONFIG } from "@/config";
 import { MessageRole } from "@/lib/constants";
 
@@ -18,6 +23,10 @@ export interface EmbeddingRequest {
   isQuery?: boolean;
   documentTitle?: string;
 }
+
+type EmbedContentRequestWithOutputDimensionality = EmbedContentRequest & {
+  outputDimensionality: number;
+};
 
 /**
  * Generate embedding for a single text using Google's text-embedding-004 model
@@ -57,6 +66,61 @@ export async function generateEmbedding({
     return embedding;
   } catch (error) {
     console.error("Error generating embedding:", error);
+    throw error;
+  }
+}
+
+export async function generateBatchEmbeddings(
+  texts: string[],
+  documentTitle?: string
+): Promise<number[][]> {
+  if (!GOOGLE_API_KEY) {
+    throw new Error("GOOGLE_API_KEY is not configured");
+  }
+
+  if (texts.length === 0) {
+    return [];
+  }
+
+  const sanitizedTexts = texts.map((text, index) => {
+    if (!text || text.trim().length === 0) {
+      throw new Error(`Text at index ${index} cannot be empty`);
+    }
+
+    return text;
+  });
+
+  try {
+    const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
+    const requests: EmbedContentRequestWithOutputDimensionality[] = sanitizedTexts.map((text) => ({
+      content: { parts: [{ text }], role: MessageRole.USER },
+      taskType: TaskType.RETRIEVAL_DOCUMENT,
+      ...(documentTitle && { title: documentTitle }),
+      outputDimensionality: EMBEDDING_DIMENSIONS,
+    }));
+
+    const result: BatchEmbedContentsResponse = await model.batchEmbedContents({ requests });
+    const embeddings = result.embeddings.map((embedding, index) => {
+      const values = embedding.values;
+
+      if (!values || values.length !== EMBEDDING_DIMENSIONS) {
+        throw new Error(
+          `Unexpected embedding dimension at batch index ${index}: ${values?.length}`
+        );
+      }
+
+      return values;
+    });
+
+    if (embeddings.length !== sanitizedTexts.length) {
+      throw new Error(
+        `Embedding count mismatch: expected ${sanitizedTexts.length}, received ${embeddings.length}`
+      );
+    }
+
+    return embeddings;
+  } catch (error) {
+    console.error("Error generating batch embeddings:", error);
     throw error;
   }
 }
@@ -125,8 +189,6 @@ export async function generateChatResponse(
     return text;
   } catch (error) {
     console.error("Error generating chat response:", error);
-
-    // Xử lý lỗi tinh tế hơn để trả về Frontend
     if (error instanceof Error) {
       if (error.message.includes("429") || error.message.includes("quota")) {
         throw new Error("Hệ thống đang quá tải, vui lòng thử lại sau giây lát.");
@@ -139,9 +201,3 @@ export async function generateChatResponse(
     throw new Error("Đã có lỗi xảy ra khi kết nối với AI. Vui lòng thử lại.");
   }
 }
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export { sleep };

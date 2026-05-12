@@ -1,0 +1,217 @@
+import { NextRequest, NextResponse } from "next/server";
+import { corsHeaders } from "@/lib/constants";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
+import { ESubscriptionPlan } from "@/types";
+import {
+  getBotByIdServer,
+  updateBotAppearance,
+  validateSuggestedQuestions,
+} from "@/lib/services/bot.service";
+import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
+
+export async function OPTIONS() {
+  return NextResponse.json(null, { headers: corsHeaders });
+}
+
+// Plans that are allowed to use suggested questions feature
+const SUGGESTED_QUESTIONS_ALLOWED_PLANS = [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro];
+
+interface AppearanceUpdateRequest {
+  name?: string;
+  avatarUrl?: string | null;
+  widgetSettings?: {
+    primaryColor?: string;
+    textColor?: string;
+    position?: string;
+    welcomeMessage?: string;
+    suggestedQuestions?: string[] | null;
+    chatBackgroundType?: "solid" | "gradient" | "image";
+    chatBackgroundValue?: string;
+    chatBackgroundOpacity?: number;
+    chatIconType?: "preset" | "custom";
+    chatIconPreset?: string;
+    chatIconUrl?: string | null;
+    chatIconColor?: string;
+    chatIconBgColor?: string;
+  };
+}
+
+interface AppearanceUpdateResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+    widget_settings: Record<string, unknown>;
+  };
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ botId: string }> }
+): Promise<NextResponse<AppearanceUpdateResponse>> {
+  try {
+    const { botId } = await params;
+
+    if (!botId) {
+      return NextResponse.json(
+        { success: false, message: "botId is required" },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // Authenticate user
+    const authResult = await authenticateRequest(req);
+    if (isAuthError(authResult)) return authResult;
+    const { user, supabase } = authResult;
+
+    // Get bot and verify ownership
+    const bot = await getBotByIdServer(supabase, botId);
+    if (!bot) {
+      return NextResponse.json(
+        { success: false, message: "Bot not found" },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    if (bot.user_id !== user.id) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    // Parse request body
+    const body: AppearanceUpdateRequest = await req.json();
+    const { name, avatarUrl, widgetSettings } = body;
+
+    // If suggestedQuestions is being set, check plan
+    if (widgetSettings?.suggestedQuestions !== undefined) {
+      const planCode = await getUserActivePlanCodeServer(supabase, user.id);
+
+      if (!planCode) {
+        return NextResponse.json(
+          { success: false, message: "Unable to verify subscription status" },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+
+      // Check if plan allows using suggested questions
+      if (!SUGGESTED_QUESTIONS_ALLOWED_PLANS.includes(planCode as ESubscriptionPlan)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Upgrade to Standard or Pro plan to use suggested questions feature.",
+          },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+
+      // Validate suggestedQuestions format
+      const validation = validateSuggestedQuestions(widgetSettings.suggestedQuestions);
+      if (!validation.valid) {
+        return NextResponse.json(
+          { success: false, message: validation.error },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+    }
+
+    // Build updated widget settings
+    let updatedWidgetSettings = null;
+    if (widgetSettings) {
+      // Get current widget settings
+      const currentBot = await supabase
+        .from("bots")
+        .select("widget_settings")
+        .eq("id", botId)
+        .single();
+      const currentSettings = (currentBot.data?.widget_settings as Record<string, unknown>) || {};
+
+      // Merge with new settings
+      updatedWidgetSettings = {
+        ...currentSettings,
+        ...(widgetSettings.primaryColor !== undefined && {
+          primaryColor: widgetSettings.primaryColor,
+        }),
+        ...(widgetSettings.textColor !== undefined && {
+          textColor: widgetSettings.textColor,
+        }),
+        ...(widgetSettings.position !== undefined && { position: widgetSettings.position }),
+        ...(widgetSettings.welcomeMessage !== undefined && {
+          welcomeMessage: widgetSettings.welcomeMessage,
+        }),
+        ...(widgetSettings.suggestedQuestions !== undefined && {
+          suggestedQuestions: widgetSettings.suggestedQuestions || [],
+        }),
+        ...(widgetSettings.chatBackgroundType !== undefined && {
+          chatBackgroundType: widgetSettings.chatBackgroundType,
+        }),
+        ...(widgetSettings.chatBackgroundValue !== undefined && {
+          chatBackgroundValue: widgetSettings.chatBackgroundValue,
+        }),
+        ...(widgetSettings.chatBackgroundOpacity !== undefined && {
+          chatBackgroundOpacity: widgetSettings.chatBackgroundOpacity,
+        }),
+        ...(widgetSettings.chatIconType !== undefined && {
+          chatIconType: widgetSettings.chatIconType,
+        }),
+        ...(widgetSettings.chatIconPreset !== undefined && {
+          chatIconPreset: widgetSettings.chatIconPreset,
+        }),
+        ...(widgetSettings.chatIconUrl !== undefined && {
+          chatIconUrl: widgetSettings.chatIconUrl,
+        }),
+        ...(widgetSettings.chatIconColor !== undefined && {
+          chatIconColor: widgetSettings.chatIconColor,
+        }),
+        ...(widgetSettings.chatIconBgColor !== undefined && {
+          chatIconBgColor: widgetSettings.chatIconBgColor,
+        }),
+      };
+    }
+
+    // Update bot appearance
+    await updateBotAppearance(supabase, botId, {
+      name,
+      avatarUrl,
+      widgetSettings: updatedWidgetSettings,
+    });
+
+    // Fetch updated bot
+    const { data: updatedBot, error } = await supabase
+      .from("bots")
+      .select("id, name, avatar_url, widget_settings")
+      .eq("id", botId)
+      .single();
+
+    if (error || !updatedBot) {
+      return NextResponse.json(
+        { success: false, message: "Failed to retrieve updated bot" },
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Bot appearance updated successfully",
+        data: {
+          id: updatedBot.id,
+          name: updatedBot.name,
+          avatar_url: updatedBot.avatar_url,
+          widget_settings: updatedBot.widget_settings as Record<string, unknown>,
+        },
+      },
+      { headers: corsHeaders }
+    );
+  } catch (error) {
+    console.error("Error updating bot appearance:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json(
+      { success: false, message: errorMessage },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}

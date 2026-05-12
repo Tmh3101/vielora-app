@@ -69,3 +69,14 @@ supabase/.temp/
 
 # Agent skills
 .skill/
+AGENTS.md
+CLAUDE.md
+
+.gitnexus
+.gemini
+.kiro
+.agents
+.codex
+.claude
+
+skills-lock.json

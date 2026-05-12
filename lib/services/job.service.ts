@@ -65,15 +65,50 @@ export async function updateJobState(
  * Updates the progress percentage of a job (0–100).
  * Throttle calls at the call-site — do not invoke on every tick.
  */
+async function getMergedJobData(
+  client: ServiceClient,
+  jobId: string,
+  meta: Record<string, unknown>
+): Promise<Json> {
+  const { data, error } = await client.from("jobs").select("data").eq("id", jobId).maybeSingle();
+  if (error) {
+    console.error(`[JobTracker] Failed to load data for job ${jobId}:`, error.message);
+    return meta as Json;
+  }
+
+  const existing = data ? parseJsonRecord(data.data) : {};
+  return { ...existing, ...meta } as Json;
+}
+
+function parseJsonRecord(value: Json | null): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  if (typeof value === "object") {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
 export async function updateJobProgress(
   client: ServiceClient,
   jobId: string,
-  progress: number
+  progress: number,
+  meta?: Record<string, unknown>
 ): Promise<void> {
-  const { error } = await client
-    .from("jobs")
-    .update({ progress: Math.min(100, Math.max(0, Math.round(progress))) })
-    .eq("id", jobId);
+  const normalizedProgress = Math.min(100, Math.max(0, Math.round(progress)));
+  const patch: Database["public"]["Tables"]["jobs"]["Update"] = { progress: normalizedProgress };
+
+  if (meta && Object.keys(meta).length > 0) {
+    patch.data = await getMergedJobData(client, jobId, meta);
+  }
+
+  const { error } = await client.from("jobs").update(patch).eq("id", jobId);
 
   if (error) {
     console.error(`[JobTracker] updateJobProgress failed for ${jobId}:`, error.message);

@@ -1,6 +1,15 @@
-import { generateEmbedding, sleep } from "@/lib/rag/generative";
+import { generateBatchEmbeddings } from "@/lib/rag/generative";
 import { PageContent } from "@/types";
-import { CHUNK_SIZE, CHUNK_OVERLAP, RATE_LIMIT_DELAY, MIN_CHUNK_SIZE } from "@/config";
+import {
+  CHUNK_SIZE,
+  CHUNK_OVERLAP,
+  MIN_CHUNK_SIZE,
+  BATCH_SIZE,
+  MAX_RETRIES,
+  INITIAL_BACKOFF_MS,
+} from "@/config";
+import { chunkArray } from "@/lib/utils/array-helpers";
+import { sleep } from "@/lib/utils/sleep";
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
@@ -108,10 +117,10 @@ function preprocessMarkdown(markdown: string): string {
   if (!markdown) return "";
 
   return markdown
-    .replace(/\n{3,}/g, "\n\n") // Giảm thiểu khoảng trắng thừa
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1") // Bỏ ảnh Markdown, giữ Alt text
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Bỏ link Markdown, giữ Text
-    .replace(/ {2,}/g, " ") // Xóa khoảng trắng thừa
+    .replace(/\n{3,}/g, "\n\n") // Reduce excessive blank lines
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1") // Remove Markdown images but keep alt text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Remove Markdown links but keep link text
+    .replace(/ {2,}/g, " ") // Remove excessive spaces
     .trim();
 }
 
@@ -124,17 +133,14 @@ export function createChunks(pages: PageContent[]): DocumentChunk[] {
   for (const page of pages) {
     const cleanedContent = preprocessMarkdown(page.content);
 
-    // FIXED: Bỏ qua thực sự chứ không push rác vào database
     if (!cleanedContent || cleanedContent.length < MIN_CHUNK_SIZE) {
       console.log(
-        `[RAG Info] Bỏ qua trang ${page.url} vì nội dung quá ngắn (< ${MIN_CHUNK_SIZE} chars)`
+        `[RAG Info] Skipping page ${page.url} because the content is too short (< ${MIN_CHUNK_SIZE} chars)`
       );
       continue;
     }
 
     const textChunks = splitText(cleanedContent);
-
-    // Lọc lại một lần nữa để chắc chắn không có chunk rác nào lọt lưới
     const validChunks = textChunks.filter((chunk) => chunk.length >= MIN_CHUNK_SIZE);
 
     for (let i = 0; i < validChunks.length; i++) {
@@ -155,52 +161,92 @@ export function createChunks(pages: PageContent[]): DocumentChunk[] {
 
 /**
  * Process chunks and create embeddings with rate limiting using Google Gemini
- * IMPORTANT: Implements delay between each request to avoid 429 errors on Free Tier
+ * IMPORTANT: Batch requests to reduce API calls and retry internally on rate limits.
  */
 export async function embedChunks(chunks: DocumentChunk[]): Promise<ProcessedDocument[]> {
   if (!GOOGLE_API_KEY) {
     throw new Error("GOOGLE_API_KEY is not configured");
   }
 
-  const processedDocuments: ProcessedDocument[] = [];
+  if (chunks.length === 0) {
+    return [];
+  }
 
-  // Process one at a time with delay to respect Google Free Tier rate limits (15 RPM)
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
+  const chunkBatches = chunkArray(chunks, BATCH_SIZE);
+  const embeddings: number[][] = [];
 
-    console.log(`Processing embedding ${i + 1}/${chunks.length}: ${chunk.metadata.url}`);
+  for (let batchIndex = 0; batchIndex < chunkBatches.length; batchIndex++) {
+    const batch = chunkBatches[batchIndex];
+    const batchTexts = batch.map((chunk) => chunk.content);
+    const batchDocumentTitle = batch.length === 1 ? batch[0].metadata.title : undefined;
 
-    try {
-      const embedding = await generateEmbedding({
-        text: chunk.content,
-        isQuery: false,
-        documentTitle: chunk.metadata.title,
-      });
+    console.log(
+      `Processing embedding batch ${batchIndex + 1}/${chunkBatches.length} (${batch.length} chunks)`
+    );
 
-      processedDocuments.push({
-        content: chunk.content,
-        metadata: chunk.metadata,
-        embedding,
-      });
+    let retries = 0;
 
-      // CRITICAL: Add delay between requests to avoid rate limiting
-      if (i < chunks.length - 1) {
-        await sleep(RATE_LIMIT_DELAY);
+    while (retries < MAX_RETRIES) {
+      try {
+        const batchEmbeddings = await generateBatchEmbeddings(batchTexts, batchDocumentTitle);
+        embeddings.push(...batchEmbeddings);
+
+        if (batchIndex < chunkBatches.length - 1) {
+          await sleep(1000);
+        }
+
+        break;
+      } catch (error) {
+        retries += 1;
+
+        if (isRateLimitError(error) && retries < MAX_RETRIES) {
+          // Try to extract the suggested wait time from the Google error message
+          // Example: "Please retry in 13.315727224s" or "retryDelay: '13s'"
+          let backoffTime = INITIAL_BACKOFF_MS * Math.pow(2, retries - 1);
+          const errorMsg = error instanceof Error ? error.message : String(error);
+
+          const retryMatch =
+            errorMsg.match(/retry in (\d+(?:\.\d+)?)s/i) ||
+            errorMsg.match(/retryDelay["']?:\s*["']?(\d+(?:\.\d+)?)s/i);
+
+          if (retryMatch && retryMatch[1]) {
+            const apiSuggestedDelayMs = parseFloat(retryMatch[1]) * 1000;
+            // Use API suggestion + 1.5s buffer, but at least as much as our exponential backoff
+            backoffTime = Math.max(backoffTime, apiSuggestedDelayMs + 1500);
+          }
+
+          console.warn(
+            `Rate limit hit for batch ${batchIndex + 1}. Retrying in ${Math.round(backoffTime)}ms (${retries}/${MAX_RETRIES})`
+          );
+
+          await sleep(backoffTime);
+          continue;
+        }
+
+        console.error(`Error processing embedding batch ${batchIndex + 1}:`, error);
+        throw error;
       }
-    } catch (error) {
-      console.error(`Error processing chunk ${i}:`, error);
-
-      // If rate limited, wait longer and retry
-      if (error instanceof Error && error.message.includes("429")) {
-        console.log("Rate limited, waiting 60 seconds before retry...");
-        await sleep(30000); // Wait 30 seconds
-        i--; // Retry this chunk
-        continue;
-      }
-
-      throw error;
     }
   }
 
-  return processedDocuments;
+  if (embeddings.length !== chunks.length) {
+    throw new Error(
+      `Processed embedding count mismatch: expected ${chunks.length}, received ${embeddings.length}`
+    );
+  }
+
+  return chunks.map((chunk, index) => ({
+    content: chunk.content,
+    metadata: chunk.metadata,
+    embedding: embeddings[index],
+  }));
+}
+
+function isRateLimitError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return message.includes("429") || message.includes("quota");
 }

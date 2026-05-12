@@ -5,95 +5,12 @@
  */
 
 import * as cheerio from "cheerio";
-
-/**
- * File extensions to exclude (non-HTML resources)
- */
-const EXCLUDED_EXTENSIONS = [
-  ".pdf",
-  ".doc",
-  ".docx",
-  ".xls",
-  ".xlsx",
-  ".ppt",
-  ".pptx",
-  ".zip",
-  ".rar",
-  ".7z",
-  ".tar",
-  ".gz",
-  ".jpg",
-  ".jpeg",
-  ".png",
-  ".gif",
-  ".webp",
-  ".svg",
-  ".ico",
-  ".mp3",
-  ".mp4",
-  ".avi",
-  ".mov",
-  ".wmv",
-  ".flv",
-  ".webm",
-  ".wav",
-  ".ogg",
-  ".css",
-  ".js",
-  ".woff",
-  ".woff2",
-  ".ttf",
-  ".eot",
-  ".xml",
-  ".json",
-  ".rss",
-  ".atom",
-];
-
-/**
- * URL patterns to always exclude (auth, actions, etc.)
- */
-const EXCLUDED_PATTERNS = [
-  "/login",
-  "/logout",
-  "/signin",
-  "/signout",
-  "/signup",
-  "/register",
-  "/cart",
-  "/checkout",
-  "/admin",
-  "/wp-admin",
-  "/account",
-  "/my-account",
-  "/password",
-  "/reset",
-  "/unsubscribe",
-  "/delete",
-  "/api/",
-  "/feed",
-  "/rss",
-  "?action=",
-  "?logout",
-  "javascript:",
-  "mailto:",
-  "tel:",
-  "data:",
-];
-
-const PAAS_SUFFIXES = [
-  "vercel.app",
-  "onrender.com",
-  "up.railway.app",
-  "herokuapp.com",
-  "netlify.app",
-  "github.io",
-  "webflow.io",
-  "pages.dev",
-  "firebaseapp.com",
-];
-
-const KNOWN_SLDS = ["co", "com", "org", "net", "gov", "edu", "ac", "vn", "com.vn", "edu.vn"];
+import {
+  EXCLUDED_EXTENSIONS,
+  EXCLUDED_PATTERNS,
+  KNOWN_SLDS,
+  PAAS_SUFFIXES,
+} from "@/config/scraper";
 
 /**
  * Options for link processing
@@ -101,6 +18,8 @@ const KNOWN_SLDS = ["co", "com", "org", "net", "gov", "edu", "ac", "vn", "com.vn
 export interface LinkProcessorOptions {
   /** Base URL for resolving relative links */
   baseUrl: string;
+  /** Start URL hostname for exact-domain filtering (e.g., docs.example.com) */
+  startHostname: string;
   /** Base domain for filtering (e.g., example.com) */
   baseDomain: string;
   /** Include subdomains (e.g., blog.example.com) */
@@ -166,17 +85,20 @@ export function extractBaseDomain(url: string): string {
 /**
  * Check if a URL belongs to the same domain (including subdomains optionally)
  */
-function isSameDomain(url: string, baseDomain: string, includeSubdomains: boolean): boolean {
+function isSameDomain(
+  url: string,
+  startHostname: string,
+  baseDomain: string,
+  includeSubdomains: boolean
+): boolean {
   try {
     const urlHostname = new URL(url).hostname;
-    const urlBaseDomain = extractBaseDomain(url);
 
     if (includeSubdomains) {
-      // Compare base domains (both "www.example.com" and "blog.example.com" -> "example.com")
-      return urlBaseDomain === baseDomain;
+      return urlHostname.endsWith(baseDomain);
     } else {
       // Exact hostname match only
-      return urlHostname === baseDomain;
+      return urlHostname === startHostname;
     }
   } catch {
     return false;
@@ -201,6 +123,24 @@ function hasExcludedExtension(url: string): boolean {
 function hasExcludedPattern(url: string): boolean {
   const urlLower = url.toLowerCase();
   return EXCLUDED_PATTERNS.some((pattern) => urlLower.includes(pattern));
+}
+
+/**
+ * Simple glob-like pattern matching
+ * Supports * as wildcard
+ */
+function matchesPattern(url: string, pattern: string): boolean {
+  // Convert glob pattern to regex
+  const regexPattern = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&") // Escape special chars
+    .replace(/\*/g, ".*"); // Convert * to .*
+
+  try {
+    const regex = new RegExp(`^${regexPattern}$`, "i");
+    return regex.test(url);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -232,29 +172,12 @@ export function normalizeUrl(url: string): string {
 }
 
 /**
- * Simple glob-like pattern matching
- * Supports * as wildcard
- */
-function matchesPattern(url: string, pattern: string): boolean {
-  // Convert glob pattern to regex
-  const regexPattern = pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&") // Escape special chars
-    .replace(/\*/g, ".*"); // Convert * to .*
-
-  try {
-    const regex = new RegExp(`^${regexPattern}$`, "i");
-    return regex.test(url);
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Extract and process links from HTML content or pre-extracted links
  */
 export function processLinks(html: string, options: LinkProcessorOptions): LinkProcessorResult {
   const {
     baseUrl,
+    startHostname,
     baseDomain,
     includeSubdomains = true,
     includePatterns,
@@ -331,7 +254,7 @@ export function processLinks(html: string, options: LinkProcessorOptions): LinkP
     }
 
     // Check domain restriction
-    if (!isSameDomain(normalizedUrl, baseDomain, includeSubdomains)) {
+    if (!isSameDomain(normalizedUrl, startHostname, baseDomain, includeSubdomains)) {
       filteredCount++;
       continue;
     }
@@ -376,11 +299,4 @@ export function processLinks(html: string, options: LinkProcessorOptions): LinkP
     filteredCount,
     totalFound: foundUrls.size,
   };
-}
-
-/**
- * Create a Redis key for tracking visited URLs within a crawl job
- */
-export function getVisitedUrlsKey(rootJobId: string): string {
-  return `crawler:visited:${rootJobId}`;
 }

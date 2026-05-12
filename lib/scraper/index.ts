@@ -14,10 +14,10 @@ export {
   addIndexerJob,
   addIndexerJobs,
   getDiscoverQueue,
+  getPageCrawlerQueue,
   getIndexerQueue,
   getQueueStatus,
   closeQueue,
-  RATE_LIMITER_CONFIG,
 } from "./core/queue";
 
 // ============================================================================
@@ -26,8 +26,10 @@ export {
 
 export {
   startDiscoverWorker,
+  startPageCrawlerWorker,
   startIndexerWorker,
   stopDiscoverWorker,
+  stopPageCrawlerWorker,
   stopIndexerWorker,
   startWorkers,
   stopWorkers,

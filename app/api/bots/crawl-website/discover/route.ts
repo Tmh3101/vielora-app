@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addDiscoverJob } from "@/lib/scraper";
 import { RenderMode as RenderModeEnum, corsHeaders } from "@/lib/constants";
-import { authenticateRequest, isAuthError } from "@/lib/helper/auth";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
 import { EBotStatus, type RenderModeType } from "@/types";
 import { getBotByIdServer, updateBotStatusServer } from "@/lib/services/bot.service";
 

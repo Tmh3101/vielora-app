@@ -8,6 +8,7 @@ import {
   EPaymentType,
   EPaymentProvider,
   EPaymentCurrency,
+  ESubscriptionStatus,
 } from "@/types";
 import { getPlanByCodeServer } from "@/lib/services/plan.service";
 import { getSubscriptionByUserIdServer } from "@/lib/services/subscription.service";
@@ -15,7 +16,10 @@ import {
   getPendingPayOSPaymentsByUser,
   updatePaymentStatus,
   createPaymentRecord,
+  calculateCreditBasedProration,
+  handlePaymentSuccess,
 } from "@/lib/services/payment.service";
+import { PaymentAction, PAYOS_MIN_AMOUNT_VND } from "@/lib/constants/payment";
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,9 +42,14 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse request body
     const body = await request.json();
-    const { planCode, billingCycle } = body as {
+    const {
+      planCode,
+      billingCycle,
+      action = PaymentAction.Upgrade,
+    } = body as {
       planCode: ESubscriptionPlan;
       billingCycle: ESubscriptionCycle;
+      action?: keyof typeof PaymentAction;
     };
 
     if (!planCode || !billingCycle) {
@@ -63,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     // 4. Get price from plan pricing
     const pricing = plan.pricing as Record<string, Record<string, number>> | null;
-    const amount = pricing?.VND?.[billingCycle];
+    let amount = pricing?.VND?.[billingCycle];
 
     if (!amount || amount <= 0) {
       return NextResponse.json(
@@ -72,11 +81,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Check if user already has the same active plan
+    // 5. Check active plan & Apply Proration
     const currentSub = await getSubscriptionByUserIdServer(supabase, user.id);
 
-    if (currentSub?.plan_id === plan.id) {
+    if (currentSub?.plan_id === plan.id && action !== PaymentAction.Renew) {
       return NextResponse.json({ error: "You are already on this plan" }, { status: 400 });
+    }
+
+    if (
+      action === PaymentAction.Renew &&
+      currentSub &&
+      currentSub.status === ESubscriptionStatus.Active
+    ) {
+      const now = new Date();
+      const periodEnd = new Date(currentSub.current_period_end);
+
+      if (periodEnd > now) {
+        const daysLeft = (periodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+        // Ngăn chặn user renew liên tục quá 2 chu kỳ (chu kỳ hiện tại + chu kỳ tới)
+        if (billingCycle === ESubscriptionCycle.Monthly && daysLeft > 35) {
+          return NextResponse.json(
+            { error: "Không thể gia hạn. Bạn đã có sẵn chu kỳ tiếp theo." },
+            { status: 400 }
+          );
+        } else if (billingCycle === ESubscriptionCycle.Yearly && daysLeft > 370) {
+          return NextResponse.json(
+            { error: "Không thể gia hạn. Bạn đã có sẵn chu kỳ tiếp theo." },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    let prorationDiscount = 0;
+    if (
+      action === PaymentAction.Upgrade &&
+      currentSub &&
+      currentSub.status === ESubscriptionStatus.Active
+    ) {
+      prorationDiscount = await calculateCreditBasedProration(supabase, user.id);
+      amount = amount - prorationDiscount;
     }
 
     // 5.5 Cancel all existing pending PayOS payments for this user
@@ -106,10 +150,13 @@ export async function POST(request: NextRequest) {
     // 6. Create payment record in DB
     const payment = await createPaymentRecord(supabase, {
       user_id: user.id,
-      amount: amount,
+      amount: Math.max(0, amount),
       currency: EPaymentCurrency.VND,
       status: EPaymentStatus.Pending,
-      payment_type: EPaymentType.Subscription,
+      payment_type:
+        action === PaymentAction.Renew
+          ? EPaymentType.SubscriptionRenew
+          : EPaymentType.SubscriptionUpgrade,
       provider: EPaymentProvider.PayOS,
       plan_id: plan.id,
       provider_transaction_id: String(orderCode),
@@ -117,16 +164,28 @@ export async function POST(request: NextRequest) {
         cycle: billingCycle,
         planCode: plan.code,
         planName: plan.name,
+        action: action,
+        prorationDiscount,
       },
     });
 
-    // 7. Build PayOS payment link
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
+    if (amount <= PAYOS_MIN_AMOUNT_VND && action === PaymentAction.Upgrade) {
+      await handlePaymentSuccess(supabase, payment.id);
+      const successUrl = `${appUrl}/api/payment/payos-return?paymentId=${payment.id}&code=00`;
+      return NextResponse.json({
+        paymentUrl: successUrl,
+        paymentId: payment.id,
+        returnUrl: successUrl,
+      });
+    }
+
+    // 7. Build PayOS payment link
     const orderInfo = `Nang cap goi ${plan.name} - ${billingCycle === ESubscriptionCycle.Monthly ? "thang" : "nam"}`;
 
-    // Override amount to 2000 VND for testing with real money
-    const paymentAmount = process.env.PAYOS_TEST_MODE === "true" ? 2000 : amount;
+    // Override amount to PAYOS_MIN_AMOUNT_VND for testing with real money
+    const paymentAmount = process.env.PAYOS_TEST_MODE === "true" ? PAYOS_MIN_AMOUNT_VND : amount;
 
     // Payment link expires after 15 minutes
     const expiredAt = Math.floor(Date.now() / 1000) + 900;

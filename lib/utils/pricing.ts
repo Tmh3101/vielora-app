@@ -1,4 +1,5 @@
 import type { PlanCode } from "@/config/pricing";
+import { ESubscriptionPlan } from "@/types";
 
 export interface PlanComparisonState {
   isCurrentPlan: boolean;
@@ -11,7 +12,7 @@ export function comparePlans(
   targetPlanCode: string,
   planOrderArray: readonly PlanCode[]
 ): PlanComparisonState {
-  const normalizedCurrent = (currentPlanCode ?? "free") as PlanCode;
+  const normalizedCurrent = (currentPlanCode ?? ESubscriptionPlan.Free) as PlanCode;
   const currentPlanIndex = planOrderArray.indexOf(normalizedCurrent);
   const targetPlanIndex = planOrderArray.indexOf(targetPlanCode as PlanCode);
 

@@ -12,112 +12,61 @@ import {
   extractLinks,
   htmlToMarkdown,
   classifyError,
-} from "@/lib/helper/crawl-website-helpers";
-import {
-  SCRAPE_DEFAULT_TIMEOUT,
-  BLOCKED_RESOURCE_TYPES,
-  BLOCKED_URL_PATTERNS,
-  BROWSER_ARGS,
-} from "@/config";
-// import * as fs from 'node:fs';
-// import * as path from 'node:path';
+  getExtractHiddenItemsScript,
+} from "@/lib/helpers/crawl-website-helpers";
+import { EPageErrorType } from "@/types/enums";
+import { SCRAPE_DEFAULT_TIMEOUT, BLOCKED_RESOURCE_TYPES, BLOCKED_URL_PATTERNS } from "@/config";
+import { BrowserManager } from "@/lib/scraper/core/browser-manager";
 
-/**
- * Load puppeteer-extra with stealth plugin
- * Returns configured puppeteer instance
- */
-async function loadStealthPuppeteer() {
-  const puppeteerExtra = await import("puppeteer-extra");
-  const StealthPlugin = await import("puppeteer-extra-plugin-stealth");
-
-  // Add stealth plugin
-  puppeteerExtra.default.use(StealthPlugin.default());
-
-  return puppeteerExtra.default;
-}
-
-/**
- * Load standard puppeteer (non-stealth)
- */
-async function loadStandardPuppeteer() {
-  const puppeteer = await import("puppeteer");
-  return puppeteer.default;
-}
-
-/**
- * Main dynamic extraction function
- * Uses Puppeteer-Extra with Stealth to render JavaScript-heavy pages
- */
 export async function extractDynamic(job: CrawlJob): Promise<CrawlResult> {
   const startTime = Date.now();
   const { url, id: jobId, config } = job;
   const timeout = config?.timeout || SCRAPE_DEFAULT_TIMEOUT;
-  const useStealth = config?.useStealth !== false; // Default to true
+  const useStealth = config?.useStealth !== false;
   const proxyUrl = config?.proxyUrl;
-  // const takeScreenshot = config?.takeScreenshot || false;
-  // const screenshotPath = config?.screenshotPath || './debug';
 
-  // Rotate user agent for each request
   const userAgent = config?.userAgent || getRandomDesktopUserAgent();
   const headers = getRealisticHeaders(userAgent);
 
-  let browser = null;
   let page = null;
 
   try {
-    // Load appropriate puppeteer variant
-    const puppeteer = useStealth ? await loadStealthPuppeteer() : await loadStandardPuppeteer();
-
-    // Add proxy if configured
-    if (proxyUrl) {
-      BROWSER_ARGS.push(`--proxy-server=${proxyUrl}`);
-    }
-
-    // Launch browser with optimized settings
-    // Use 'new' headless mode for better WebGL/SPA support (Chrome 112+)
-    browser = await puppeteer.launch({
-      // @ts-expect-error - 'new' headless mode is not yet in types
-      headless: "new" as const,
-      args: BROWSER_ARGS,
-    });
-
-    page = await browser.newPage();
+    page = await BrowserManager.getPage(useStealth, proxyUrl);
 
     page.on("pageerror", (err) => {
       console.error(`[Browser Crash] ${url}: ${err.message}`);
     });
     page.on("console", (msg) => {
       if (msg.type() === "error") {
-        console.error(`[Browser Console Error] ${url}: ${msg.text()}`);
+        const text = msg.text();
+        if (
+          text.includes("net::ERR_FAILED") ||
+          text.includes("net::ERR_BLOCKED_BY_CLIENT") ||
+          text.includes("status of 404")
+        ) {
+          return;
+        }
+        console.error(`[Browser Console Error] ${url}: ${text}`);
       }
     });
 
-    // Set user agent
     await page.setUserAgent(userAgent);
-
-    // Set extra HTTP headers for realism
     await page.setExtraHTTPHeaders({
       "Accept-Language": headers["Accept-Language"],
       Accept: headers["Accept"],
     });
-
-    // Set viewport
     await page.setViewport({ width: 1920, height: 1080 });
-
-    // Enable request interception for blocking resources
     await page.setRequestInterception(true);
 
     page.on("request", (request) => {
       const resourceType = request.resourceType();
       const requestUrl = request.url();
 
-      // Block heavy resources
       if (BLOCKED_RESOURCE_TYPES.includes(resourceType)) {
         request.abort();
         return;
       }
 
-      // Block known tracking/ad URLs
       if (BLOCKED_URL_PATTERNS.some((pattern) => requestUrl.includes(pattern))) {
         request.abort();
         return;
@@ -126,17 +75,32 @@ export async function extractDynamic(job: CrawlJob): Promise<CrawlResult> {
       request.continue();
     });
 
-    // Navigate with timeout.
-    // NOTE: "networkidle2" hangs on pages with persistent connections (WebSocket, polling).
-    // Use "load" (DOMContentLoaded + subresources) as a reliable baseline,
-    // then do a short fixed wait for JS frameworks.
-    await page.goto(url, {
-      waitUntil: "load",
+    const response = await page.goto(url, {
+      waitUntil: "domcontentloaded",
       timeout,
     });
 
-    // Wait a bit more for late-loading JS frameworks
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (!response) {
+      throw new Error("No response received from navigation");
+    }
+
+    const statusCode = response.status();
+    if (statusCode === 404) {
+      return {
+        success: false,
+        url,
+        jobId,
+        statusCode: 404,
+        title: "404 Not Found",
+        html: "",
+        markdown: "",
+        error: "HTTP 404: Not Found",
+        errorType: EPageErrorType.NotFound,
+        processingTimeMs: Date.now() - startTime,
+      };
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Wait for SPA content to render (React, Vue, Next.js, etc.)
     // Check if #root or #app has actual content
@@ -147,12 +111,9 @@ export async function extractDynamic(job: CrawlJob): Promise<CrawlResult> {
             document.querySelector("#root") ||
             document.querySelector("#app") ||
             document.querySelector("#__next");
-          if (!root) return true; // No SPA container, content likely already there
+          if (!root) return true;
 
-          // Check if root has meaningful content (not just empty or loading)
           const hasContent = root.children.length > 0 || root.textContent?.trim().length || 0 > 50;
-
-          // Also check for navigation links as a sign of loaded content
           const hasLinks = document.querySelectorAll("a[href]").length > 3;
 
           return hasContent || hasLinks;
@@ -163,8 +124,11 @@ export async function extractDynamic(job: CrawlJob): Promise<CrawlResult> {
       // SPA wait timeout, continue with current content
     }
 
-    // Additional wait for any late JS execution
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      await page.evaluate(getExtractHiddenItemsScript());
+    } catch (evaluateError) {
+      console.warn(`[DynamicExtractor] Error clicking load more on ${url}:`, evaluateError);
+    }
 
     // Take screenshot if requested (for debugging)
     // if (takeScreenshot) {
@@ -192,27 +156,20 @@ export async function extractDynamic(job: CrawlJob): Promise<CrawlResult> {
       console.warn(`[DynamicExtractor] <base href="${baseTag}"> found for ${url}`);
     }
 
-    // Extract metadata
     const metadata = extractMetadata($);
     const title = pageTitle || metadata.ogTitle || new URL(url).hostname;
-
-    // Extract links for recursive crawling
     const links = extractLinks($, url);
-
-    // Clean HTML
     const cleanHtml = extractCleanHtml($, {
       includeTags: config?.includeTags,
       excludeTags: config?.excludeTags,
     });
-
-    // Convert to Markdown (HTML already cleaned)
     const markdown = htmlToMarkdown(cleanHtml);
 
     return {
       success: true,
       url,
       jobId,
-      statusCode: 200,
+      statusCode,
       title,
       html: cleanHtml,
       rawHtml,
@@ -238,31 +195,16 @@ export async function extractDynamic(job: CrawlJob): Promise<CrawlResult> {
       processingTimeMs: Date.now() - startTime,
     };
   } finally {
-    // Ensure browser is closed to prevent memory leaks
     if (page) {
       try {
-        await page.close();
-      } catch {
-        // Ignore close errors
-      }
-    }
-    if (browser) {
-      try {
-        // Wrap in a timeout to prevent browser.close() from deadlocking
-        // in Docker --single-process mode when the renderer crashes.
         await Promise.race([
-          browser.close(),
+          page.close(),
           new Promise<void>((_, reject) =>
-            setTimeout(() => reject(new Error("browser.close() timed out")), 5000)
+            setTimeout(() => reject(new Error("page.close() timed out")), 5000)
           ),
         ]);
       } catch {
-        // Force-kill the Chromium process if close() hangs
-        try {
-          browser.process()?.kill("SIGKILL");
-        } catch {
-          // ignore
-        }
+        BrowserManager.markPageZombie(page);
       }
     }
   }

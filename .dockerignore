@@ -24,10 +24,10 @@ docker-compose.yml
 .dockerignore
 
 # Documentation
-docs
 README.md
 SKILL.md
-*.md
+DEPLOYMENT.md
+SUPABASE_SETUP.md
 
 # IDE / Editor
 .vscode

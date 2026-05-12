@@ -38,6 +38,9 @@ export const JobName = {
 export const DISCOVER_QUEUE_NAME = "discover-queue";
 export const DISCOVER_WORKER_CONCURRENCY = 5;
 
+export const PAGE_CRAWLER_QUEUE_NAME = "page-crawler-queue";
+export const PAGE_CRAWLER_WORKER_CONCURRENCY = 5;
+
 export const INDEXER_QUEUE_NAME = "indexer-queue";
 export const INDEXER_WORKER_CONCURRENCY = 2;
 

@@ -4,12 +4,11 @@ import {
   JobType as JobTypeEnum,
   PageStatus as PageStatusEnum,
   CrawlSessionStatus as CrawlSessionStatusEnum,
+  CrawlScope as CrawlScopeEnum,
 } from "@/lib/constants";
 import type { EPageErrorType } from "./enums";
 
-/**
- * Core type definitions for Crawler
- */
+export type CrawlScopeType = (typeof CrawlScopeEnum)[keyof typeof CrawlScopeEnum];
 
 /**
  * Job types supported by the crawler
@@ -154,6 +153,18 @@ export interface DiscoverJobData {
   botId: string;
   startUrl: string;
   requestId: string;
+  config?: CrawlJobConfig;
+}
+
+export interface PageCrawlerJobData {
+  botId: string;
+  currentUrl: string;
+  depth: number;
+  discoverJobId: string;
+  startHostname: string;
+  baseDomain: string;
+  maxPages: number;
+  maxDepth: number;
   config?: CrawlJobConfig;
 }
 

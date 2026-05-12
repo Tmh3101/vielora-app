@@ -2,6 +2,7 @@ import type { ServiceClient } from "@/lib/services/types";
 import type { Json, Tables, TablesInsert, TablesUpdate } from "@/lib/supabase/types";
 import { deletePagesByBotId } from "@/lib/services/page.service";
 import { getJobById, getActiveJobsByBotId } from "@/lib/services/job.service";
+import { WIDGET_LIMITS } from "@/config";
 import {
   CrawlStatusData,
   CrawlStatusResponse,
@@ -16,6 +17,58 @@ import {
   EPageStatus,
   EPageSourceType,
 } from "@/types";
+
+// ============================================================
+// Validation Helpers
+// ============================================================
+
+/**
+ * Validates suggested questions array
+ * @throws Error if validation fails
+ */
+export function validateSuggestedQuestions(questions: unknown): { valid: boolean; error?: string } {
+  if (questions === undefined || questions === null) {
+    return { valid: true }; // Optional field, null/undefined is okay
+  }
+
+  if (!Array.isArray(questions)) {
+    return { valid: false, error: "suggestedQuestions must be an array" };
+  }
+
+  if (questions.length > WIDGET_LIMITS.SUGGESTED_QUESTIONS_MAX_COUNT) {
+    return {
+      valid: false,
+      error: `Maximum ${WIDGET_LIMITS.SUGGESTED_QUESTIONS_MAX_COUNT} suggested questions allowed`,
+    };
+  }
+
+  for (let i = 0; i < questions.length; i++) {
+    const question = questions[i];
+
+    if (typeof question !== "string") {
+      return {
+        valid: false,
+        error: `Question ${i} must be a string`,
+      };
+    }
+
+    if (question.trim().length === 0) {
+      return {
+        valid: false,
+        error: `Question ${i} cannot be empty`,
+      };
+    }
+
+    if (question.length > WIDGET_LIMITS.SUGGESTED_QUESTIONS_MAX_LENGTH) {
+      return {
+        valid: false,
+        error: `Question ${i} exceeds maximum length of ${WIDGET_LIMITS.SUGGESTED_QUESTIONS_MAX_LENGTH} characters`,
+      };
+    }
+  }
+
+  return { valid: true };
+}
 
 export interface AddKnowledgeRequest {
   botId: string;
@@ -83,7 +136,6 @@ async function getAuthHeaders(client: ServiceClient): Promise<Record<string, str
     throw new Error("Not authenticated");
   }
   return {
-    "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
   };
 }
@@ -111,7 +163,10 @@ export async function startDiscover(
   client: ServiceClient,
   request: DiscoverRequest
 ): Promise<{ discoverJobId: string; botId: string }> {
-  const headers = await getAuthHeaders(client);
+  const headers = {
+    ...(await getAuthHeaders(client)),
+    "Content-Type": "application/json",
+  };
   const response = await fetch("/api/bots/crawl-website/discover", {
     method: "POST",
     headers,
@@ -269,7 +324,10 @@ export async function submitSelection(
   botId: string,
   selectedPageIds: string[]
 ): Promise<SelectionResponse["data"]> {
-  const headers = await getAuthHeaders(client);
+  const headers = {
+    ...(await getAuthHeaders(client)),
+    "Content-Type": "application/json",
+  };
   const response = await fetch("/api/bots/crawl-website/selection", {
     method: "POST",
     headers,
@@ -311,7 +369,10 @@ export async function addKnowledge(
   client: ServiceClient,
   request: AddKnowledgeRequest
 ): Promise<NonNullable<AddKnowledgeResponse["data"]>> {
-  const headers = await getAuthHeaders(client);
+  const headers = {
+    ...(await getAuthHeaders(client)),
+    "Content-Type": "application/json",
+  };
   const response = await fetch("/api/bots/knowledge", {
     method: "POST",
     headers,
@@ -321,6 +382,30 @@ export async function addKnowledge(
   const res = (await response.json()) as AddKnowledgeResponse;
   if (!response.ok || !res.success || !res.data) {
     throw new Error(res.message || "Failed to add knowledge");
+  }
+
+  return res.data;
+}
+
+export async function addKnowledgeFile(
+  client: ServiceClient,
+  request: { botId: string; file: File }
+): Promise<NonNullable<AddKnowledgeResponse["data"]>> {
+  const headers = await getAuthHeaders(client);
+  const formData = new FormData();
+  formData.append("botId", request.botId);
+  formData.append("file", request.file);
+  formData.append("mode", "file");
+
+  const response = await fetch("/api/bots/knowledge", {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  const res = (await response.json()) as AddKnowledgeResponse;
+  if (!response.ok || !res.success || !res.data) {
+    throw new Error(res.message || "Failed to add file knowledge");
   }
 
   return res.data;
@@ -355,7 +440,10 @@ export async function editKnowledge(
   pageId: string,
   request: EditKnowledgeRequest
 ): Promise<EditKnowledgeResponse> {
-  const headers = await getAuthHeaders(client);
+  const headers = {
+    ...(await getAuthHeaders(client)),
+    "Content-Type": "application/json",
+  };
   const response = await fetch(`/api/bots/knowledge/${pageId}`, {
     method: "PUT",
     headers,
@@ -398,6 +486,14 @@ export interface CreateBotParams {
   name: string;
   domain: string;
   avatarUrl?: string | null;
+}
+
+export interface WidgetSettingsInput {
+  primaryColor?: string;
+  textColor?: string;
+  position?: string;
+  welcomeMessage?: string;
+  suggestedQuestions?: string[];
 }
 
 export interface UpdateBotAppearanceParams {
@@ -694,4 +790,69 @@ export async function getBotForWidgetServer(
 
   if (error) throw new Error(error.message);
   return data as BotForWidget | null;
+}
+
+// ============================================================
+// Standalone Chat Support
+// ============================================================
+
+export interface PublicBotData {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+  widget_settings: Json;
+  is_public: boolean;
+  is_stopped: boolean;
+  status: string;
+}
+
+/**
+ * Lấy bot theo slug cho trang standalone chat (chỉ public bots).
+ */
+export async function getBotBySlug(
+  client: ServiceClient,
+  slug: string
+): Promise<PublicBotData | null> {
+  const normalizedSlug = slug.toLowerCase();
+  const { data, error } = await client
+    .from("bots")
+    .select("id, name, avatar_url, widget_settings, is_public, is_stopped, status")
+    .eq("slug", normalizedSlug)
+    .eq("is_public", true)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data as PublicBotData | null;
+}
+
+/**
+ * Cập nhật slug và/hoặc is_public của bot.
+ */
+export async function updateBotSlugSettings(
+  client: ServiceClient,
+  botId: string,
+  params: { slug?: string | null; isPublic?: boolean }
+): Promise<void> {
+  const updates: TablesUpdate<"bots"> = {};
+
+  if (params.slug !== undefined) {
+    // Validate slug format
+    if (params.slug && !/^[a-z0-9-]+$/.test(params.slug)) {
+      throw new Error("Slug must contain only lowercase letters, numbers, and hyphens");
+    }
+    updates.slug = params.slug;
+  }
+
+  if (params.isPublic !== undefined) {
+    updates.is_public = params.isPublic;
+  }
+
+  const { error } = await client.from("bots").update(updates).eq("id", botId);
+
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("This slug is already taken. Please choose another.");
+    }
+    throw new Error(error.message);
+  }
 }

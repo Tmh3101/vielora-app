@@ -77,9 +77,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       );
     }
 
-    // Fetch bot by ID and check if it's stopped
+    // Fetch bot data once
     const botData = await getBotById(supabase, botId);
-    console.log("Bot data:", botData);
 
     if (!botData) {
       return NextResponse.json(
@@ -95,24 +94,48 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       );
     }
 
-    // Verify request with security middleware (with rate limit check)
-    const securityResult = await verifyWidgetRequest(req, {
-      checkRateLimits: true,
-      requireVisitorId: true,
-    });
+    // Check if this is a standalone chat request
+    const isStandaloneRequest = req.headers.get("x-standalone-chat") === "true";
 
-    if (!securityResult.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: securityResult.error || "Unauthorized",
-        },
-        { status: securityResult.statusCode || 401, headers: corsHeaders }
-      );
+    let bot;
+    let clientIp: string;
+
+    if (isStandaloneRequest) {
+      // Standalone chat: verify bot is public
+      if (!botData.is_public) {
+        return NextResponse.json(
+          { success: false, message: "This bot is not publicly accessible" },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+
+      // Extract client IP for usage logging
+      const forwardedFor = req.headers.get("x-forwarded-for");
+      clientIp = forwardedFor
+        ? forwardedFor.split(",")[0].trim()
+        : req.headers.get("x-real-ip") || "unknown";
+
+      bot = botData;
+    } else {
+      // Widget request: use security middleware
+      const securityResult = await verifyWidgetRequest(req, {
+        checkRateLimits: true,
+        requireVisitorId: true,
+      });
+
+      if (!securityResult.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: securityResult.error || "Unauthorized",
+          },
+          { status: securityResult.statusCode || 401, headers: corsHeaders }
+        );
+      }
+
+      bot = securityResult.context!.bot;
+      clientIp = securityResult.context!.clientIp;
     }
-
-    const bot = securityResult.context!.bot;
-    const clientIp = securityResult.context!.clientIp;
 
     if (!process.env.GOOGLE_API_KEY) {
       throw new Error("GOOGLE_API_KEY is not configured");

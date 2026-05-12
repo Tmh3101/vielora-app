@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense, useCallback, memo, useMemo } from "react";
+import { useState, useEffect, Suspense, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -18,19 +18,20 @@ import {
   CheckCircle2,
   Package,
   CalendarDays,
-  ChevronDown,
   Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/lib/supabase/types";
-import { usePayOS, PayOSConfig } from "@payos/payos-checkout";
+import { PayOSCheckout } from "@/components/shared/PayOSCheckout";
+import { ESubscriptionStatus, ESubscriptionCycle, ESubscriptionPlan } from "@/types";
+import { PaymentAction } from "@/lib/constants/payment";
 
 function formatVND(amount: number): string {
   if (amount === 0) return "0";
   return amount.toLocaleString("vi-VN");
 }
 
-function getPriceFromPlan(plan: Tables<"plans">, cycle: "monthly" | "yearly"): number {
+function getPriceFromPlan(plan: Tables<"plans">, cycle: ESubscriptionCycle): number {
   try {
     const pricing = plan.pricing as Record<string, Record<string, number>> | null;
     return pricing?.VND?.[cycle] ?? 0;
@@ -51,13 +52,17 @@ function CheckoutPageContent() {
   const { user, isLoading: authLoading } = useAuth();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
-  const queryPlan = searchParams.get("plan") || "standard";
-  const queryCycle = searchParams.get("cycle") || "monthly";
+  const queryPlan = searchParams.get("plan") || ESubscriptionPlan.Standard;
+  const queryCycle = searchParams.get("cycle") || ESubscriptionCycle.Monthly;
+  const queryAction = searchParams.get("action") || PaymentAction.Upgrade;
 
   const [selectedPlanCode, setSelectedPlanCode] = useState<string>(queryPlan);
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
-    queryCycle === "yearly" ? "yearly" : "monthly"
+  const [billingCycle] = useState<ESubscriptionCycle>(
+    queryCycle === ESubscriptionCycle.Yearly
+      ? ESubscriptionCycle.Yearly
+      : ESubscriptionCycle.Monthly
   );
+  const action = queryAction as (typeof PaymentAction)[keyof typeof PaymentAction];
 
   // Embedded Checkout URL
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
@@ -68,9 +73,87 @@ function CheckoutPageContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPlanPicker, setShowPlanPicker] = useState(false);
 
+  const [prorationDiscount, setProrationDiscount] = useState<number>(0);
+  const [isCalculatingProration, setIsCalculatingProration] = useState(false);
+
   // Countdown timer (15 minutes = 900 seconds)
   const [countdown, setCountdown] = useState<number>(0);
   const [isExpired, setIsExpired] = useState<boolean>(false);
+
+  // Fetch proration discount if upgrading
+  useEffect(() => {
+    if (action !== "upgrade" || !user) return;
+
+    const fetchProration = async () => {
+      setIsCalculatingProration(true);
+      try {
+        const { data: subData } = await supabase
+          .from("subscriptions")
+          .select("*, plans(monthly_credits, pricing)")
+          .eq("user_id", user.id)
+          .eq("status", ESubscriptionStatus.Active)
+          .maybeSingle();
+
+        const sub = subData as
+          | (Tables<"subscriptions"> & { plans: Tables<"plans"> | Tables<"plans">[] | null })
+          | null;
+        if (!sub || !sub.plans) return;
+
+        const plansData = sub.plans;
+        const planData = (
+          Array.isArray(plansData) ? plansData[0] : plansData
+        ) as Tables<"plans"> | null;
+
+        if (!planData || !planData.monthly_credits) return;
+
+        const now = new Date();
+        const periodEnd = new Date(sub.current_period_end);
+        if (now >= periodEnd) return;
+
+        const { data: walletData } = await supabase
+          .from("wallets")
+          .select("subscription_credits")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const wallet = walletData as Tables<"wallets"> | null;
+        const currentCredits = wallet?.subscription_credits ?? 0;
+        const pricing = planData.pricing as Record<string, Record<string, number>> | null;
+        const pricePaid = pricing?.VND?.[sub.billing_cycle || ESubscriptionCycle.Monthly] ?? 0;
+        if (pricePaid <= 0) return;
+
+        const isYearly = sub.billing_cycle === ESubscriptionCycle.Yearly;
+        const totalCreditsPeriod = planData.monthly_credits * (isYearly ? 12 : 1);
+
+        let fullMonthsLeft = 0;
+        if (sub.next_credit_reset_at) {
+          const nextReset = new Date(sub.next_credit_reset_at);
+          if (nextReset < periodEnd && nextReset >= now) {
+            const monthsDiff =
+              (periodEnd.getFullYear() - nextReset.getFullYear()) * 12 +
+              (periodEnd.getMonth() - nextReset.getMonth());
+            fullMonthsLeft = Math.max(0, monthsDiff);
+          } else if (nextReset >= periodEnd) {
+            fullMonthsLeft = 0;
+          } else if (nextReset < now && isYearly) {
+            const remainingTime = periodEnd.getTime() - now.getTime();
+            fullMonthsLeft = Math.floor(remainingTime / (1000 * 60 * 60 * 24 * 30));
+          }
+        }
+
+        const remainingCredits =
+          fullMonthsLeft * planData.monthly_credits + Math.max(0, currentCredits);
+        const discount = Math.floor((remainingCredits / totalCreditsPeriod) * pricePaid);
+        setProrationDiscount(discount);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsCalculatingProration(false);
+      }
+    };
+
+    fetchProration();
+  }, [user, action, supabase]);
 
   // Reset checkout khi thay đổi gói hoặc chu kỳ
   useEffect(() => {
@@ -109,7 +192,11 @@ function CheckoutPageContent() {
     const fetchPlans = async () => {
       try {
         const data = await getActivePlans(supabase);
-        setPlans(data.filter((p) => p.code !== "enterprise" && p.code !== "free"));
+        setPlans(
+          data.filter(
+            (p) => p.code !== ESubscriptionPlan.Enterprise && p.code !== ESubscriptionPlan.Free
+          )
+        );
       } catch (error) {
         console.error("Error fetching plans:", error);
       } finally {
@@ -127,7 +214,8 @@ function CheckoutPageContent() {
   }, [user, authLoading, router]);
 
   const selectedPlan = plans.find((p) => p.code === selectedPlanCode);
-  const price = selectedPlan ? getPriceFromPlan(selectedPlan, billingCycle) : 0;
+  const basePrice = selectedPlan ? getPriceFromPlan(selectedPlan, billingCycle) : 0;
+  const price = Math.max(0, basePrice - prorationDiscount);
 
   const handlePayment = async () => {
     if (!selectedPlan || price <= 0) {
@@ -157,6 +245,7 @@ function CheckoutPageContent() {
         body: JSON.stringify({
           planCode: selectedPlanCode,
           billingCycle,
+          action,
         }),
       });
 
@@ -271,10 +360,7 @@ function CheckoutPageContent() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Selected plan */}
-                <div
-                  className="flex cursor-pointer items-center justify-between rounded-xl border border-primary/50 bg-primary/5 p-4 transition-all hover:border-primary"
-                  onClick={() => setShowPlanPicker(!showPlanPicker)}
-                >
+                <div className="flex items-center justify-between rounded-xl border border-primary/50 bg-primary/5 p-4">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                       <Package className="h-5 w-5 text-primary" />
@@ -285,14 +371,6 @@ function CheckoutPageContent() {
                       </p>
                       <p className="text-sm text-muted-foreground">{selectedPlan?.description}</p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Thay đổi</span>
-                    <ChevronDown
-                      className={`h-4 w-4 text-muted-foreground transition-transform ${
-                        showPlanPicker ? "rotate-180" : ""
-                      }`}
-                    />
                   </div>
                 </div>
 
@@ -330,33 +408,21 @@ function CheckoutPageContent() {
                   </div>
                 )}
 
-                {/* Billing cycle toggle */}
                 <div className="flex gap-3">
-                  <button
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-xl border p-3 text-sm font-medium transition-all ${
-                      billingCycle === "monthly"
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border/60 text-muted-foreground hover:border-primary/40"
-                    }`}
-                    onClick={() => setBillingCycle("monthly")}
-                  >
-                    <Package className="h-4 w-4" />
-                    Gói tháng
-                  </button>
-                  <button
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-xl border p-3 text-sm font-medium transition-all ${
-                      billingCycle === "yearly"
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border/60 text-muted-foreground hover:border-primary/40"
-                    }`}
-                    onClick={() => setBillingCycle("yearly")}
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                    Gói năm
-                    <Badge variant="secondary" className="bg-green-500/20 text-xs text-green-600">
-                      -17%
-                    </Badge>
-                  </button>
+                  {billingCycle === ESubscriptionCycle.Monthly ? (
+                    <div className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-primary bg-primary/5 p-3 text-sm font-medium text-primary">
+                      <Package className="h-4 w-4" />
+                      Gói tháng
+                    </div>
+                  ) : (
+                    <div className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-primary bg-primary/5 p-3 text-sm font-medium text-primary">
+                      <CalendarDays className="h-4 w-4" />
+                      Gói năm
+                      <Badge variant="secondary" className="bg-green-500/20 text-xs text-green-600">
+                        -17%
+                      </Badge>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -408,12 +474,20 @@ function CheckoutPageContent() {
                     <>
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">
-                          Gói {selectedPlan.name} ({billingCycle === "monthly" ? "tháng" : "năm"})
+                          Gói {selectedPlan.name} (
+                          {billingCycle === ESubscriptionCycle.Monthly ? "tháng" : "năm"})
                         </span>
-                        <span className="font-medium">{formatVND(price)}đ</span>
+                        <span className="font-medium">{formatVND(basePrice)}đ</span>
                       </div>
 
-                      {billingCycle === "yearly" && price > 0 && (
+                      {prorationDiscount > 0 && (
+                        <div className="flex items-center justify-between text-green-600">
+                          <span>Trừ bù gói cũ (còn dư)</span>
+                          <span className="font-medium">- {formatVND(prorationDiscount)}đ</span>
+                        </div>
+                      )}
+
+                      {billingCycle === ESubscriptionCycle.Yearly && price > 0 && (
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Tương đương/tháng</span>
                           <span className="text-muted-foreground">
@@ -439,7 +513,9 @@ function CheckoutPageContent() {
                         className="bg-gradient-primary btn-glow shadow-glow-sm w-full hover:opacity-90"
                         size="lg"
                         onClick={handlePayment}
-                        disabled={isProcessing || !selectedPlan || price <= 0}
+                        disabled={
+                          isProcessing || !selectedPlan || price < 0 || isCalculatingProration
+                        }
                       >
                         {isProcessing ? (
                           <>
@@ -555,79 +631,6 @@ function CheckoutPageContent() {
     </div>
   );
 }
-
-const PayOSCheckout = memo(
-  ({
-    url,
-    returnUrl,
-    paymentId,
-    onCancelPayment,
-    onPayOSInternalExit,
-  }: {
-    url: string;
-    returnUrl: string;
-    paymentId: string;
-    onCancelPayment: () => void;
-    onPayOSInternalExit: (_event?: unknown) => void;
-  }) => {
-    const payOSConfig = {
-      RETURN_URL: returnUrl,
-      ELEMENT_ID: "payos-checkout-frame",
-      CHECKOUT_URL: url,
-      embedded: true,
-      onSuccess: (event: Record<string, unknown>) => {
-        console.log("PayOS onSuccess event:", event);
-        const params = new URLSearchParams({
-          paymentId: paymentId,
-          code: "00",
-          status: "PAID",
-          orderCode: String(event?.orderCode || ""),
-        });
-        window.location.href = `/api/payment/payos-return?${params.toString()}`;
-      },
-      onCancel: (event: Record<string, unknown>) => {
-        console.log("PayOS onCancel event:", event);
-        onPayOSInternalExit(event);
-      },
-      onExit: (event: Record<string, unknown>) => {
-        console.log("PayOS onExit event:", event);
-        onPayOSInternalExit(event);
-      },
-    } satisfies PayOSConfig;
-
-    const { open, exit } = usePayOS(payOSConfig);
-
-    useEffect(() => {
-      open();
-
-      return () => {
-        exit();
-      };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [url, returnUrl, paymentId]);
-
-    return (
-      <div className="relative flex w-full flex-col items-center justify-center bg-white">
-        <div
-          id="payos-checkout-frame"
-          className="relative z-20 flex h-[400px] w-full items-center justify-center overflow-hidden"
-          style={{ margin: "-10px 0" }}
-        ></div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onCancelPayment}
-          className="relative z-20 mb-4 mt-2 text-muted-foreground hover:text-foreground"
-        >
-          Hủy thanh toán
-        </Button>
-      </div>
-    );
-  }
-);
-
-PayOSCheckout.displayName = "PayOSCheckout";
 
 export default function CheckoutPage() {
   return (

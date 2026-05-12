@@ -50,7 +50,7 @@ function createAdminClient() {
 const supabase = createAdminClient();
 
 // ── Target user (change this to your user_id) ──
-const TARGET_USER_ID = "5876749c-0a8c-430e-a95b-8e263b847fed";
+const TARGET_USER_ID = "58601745-7d26-4289-88b1-43267c9ee426";
 
 async function main() {
   console.log("═══════════════════════════════════════════════════════════");

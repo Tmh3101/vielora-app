@@ -1,34 +1,20 @@
-import { Queue, type JobsOptions } from "bullmq";
+import { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { getRedisConnectionOptions } from "@/lib/config/redis";
 import { createJobRecord } from "@/lib/services/job.service";
 import { createAdminClient } from "@/lib/supabase/server";
-import type { CrawlJobConfig, DiscoverJobData, IndexerJobData } from "@/types";
-import { DISCOVER_QUEUE_NAME, INDEXER_QUEUE_NAME, JobName } from "@/lib/constants/job";
-
-export const RATE_LIMITER_CONFIG = {
-  max: 5,
-  duration: 2000,
-};
-
-const DEFAULT_JOB_OPTIONS: JobsOptions = {
-  removeOnComplete: {
-    age: 3600,
-    count: 1000,
-  },
-  removeOnFail: {
-    age: 86400,
-    count: 500,
-  },
-  attempts: 3,
-  backoff: {
-    type: "exponential",
-    delay: 2000,
-  },
-};
+import type { CrawlJobConfig, DiscoverJobData, IndexerJobData, PageCrawlerJobData } from "@/types";
+import {
+  DISCOVER_QUEUE_NAME,
+  INDEXER_QUEUE_NAME,
+  JobName,
+  PAGE_CRAWLER_QUEUE_NAME,
+} from "@/lib/constants/job";
+import { DEFAULT_JOB_OPTIONS } from "@/config/scraper";
 
 let discoverQueue: Queue<DiscoverJobData> | null = null;
 let indexerQueue: Queue<IndexerJobData> | null = null;
+let pageCrawlerQueue: Queue<PageCrawlerJobData> | null = null;
 
 export function getDiscoverQueue(): Queue<DiscoverJobData> {
   if (!discoverQueue) {
@@ -50,6 +36,17 @@ export function getIndexerQueue(): Queue<IndexerJobData> {
   }
 
   return indexerQueue;
+}
+
+export function getPageCrawlerQueue(): Queue<PageCrawlerJobData> {
+  if (!pageCrawlerQueue) {
+    pageCrawlerQueue = new Queue<PageCrawlerJobData>(PAGE_CRAWLER_QUEUE_NAME, {
+      connection: getRedisConnectionOptions(),
+      defaultJobOptions: DEFAULT_JOB_OPTIONS,
+    });
+  }
+
+  return pageCrawlerQueue;
 }
 
 export async function addDiscoverJob(params: {
@@ -146,31 +143,54 @@ export async function addIndexerJobs(
 
 export async function getQueueStatus(): Promise<{
   discover: { waiting: number; active: number; completed: number; failed: number };
+  pageCrawler: { waiting: number; active: number; completed: number; failed: number };
   indexer: { waiting: number; active: number; completed: number; failed: number };
 }> {
-  const [discover, indexer] = await Promise.all([getDiscoverQueue(), getIndexerQueue()]);
+  const [discover, pageCrawler, indexer] = await Promise.all([
+    getDiscoverQueue(),
+    getPageCrawlerQueue(),
+    getIndexerQueue(),
+  ]);
 
-  const [dWaiting, dActive, dCompleted, dFailed, iWaiting, iActive, iCompleted, iFailed] =
-    await Promise.all([
-      discover.getWaitingCount(),
-      discover.getActiveCount(),
-      discover.getCompletedCount(),
-      discover.getFailedCount(),
-      indexer.getWaitingCount(),
-      indexer.getActiveCount(),
-      indexer.getCompletedCount(),
-      indexer.getFailedCount(),
-    ]);
+  const [
+    dWaiting,
+    dActive,
+    dCompleted,
+    dFailed,
+    pWaiting,
+    pActive,
+    pCompleted,
+    pFailed,
+    iWaiting,
+    iActive,
+    iCompleted,
+    iFailed,
+  ] = await Promise.all([
+    discover.getWaitingCount(),
+    discover.getActiveCount(),
+    discover.getCompletedCount(),
+    discover.getFailedCount(),
+    pageCrawler.getWaitingCount(),
+    pageCrawler.getActiveCount(),
+    pageCrawler.getCompletedCount(),
+    pageCrawler.getFailedCount(),
+    indexer.getWaitingCount(),
+    indexer.getActiveCount(),
+    indexer.getCompletedCount(),
+    indexer.getFailedCount(),
+  ]);
 
   return {
     discover: { waiting: dWaiting, active: dActive, completed: dCompleted, failed: dFailed },
+    pageCrawler: { waiting: pWaiting, active: pActive, completed: pCompleted, failed: pFailed },
     indexer: { waiting: iWaiting, active: iActive, completed: iCompleted, failed: iFailed },
   };
 }
 
 export async function closeQueue(): Promise<void> {
-  await Promise.all([discoverQueue?.close(), indexerQueue?.close()]);
+  await Promise.all([discoverQueue?.close(), pageCrawlerQueue?.close(), indexerQueue?.close()]);
 
   discoverQueue = null;
+  pageCrawlerQueue = null;
   indexerQueue = null;
 }

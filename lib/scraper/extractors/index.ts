@@ -1,5 +1,5 @@
 import { extractStatic } from "./static";
-import { isCSRPage } from "@/lib/helper/crawl-website-helpers";
+import { isCSRPage } from "@/lib/helpers/crawl-website-helpers";
 import { extractDynamic } from "./dynamic";
 import type { CrawlResult, CrawlJob, RenderModeType } from "@/types";
 import { RenderMode as RenderModeEnum } from "@/lib/constants";
@@ -23,6 +23,11 @@ export async function extractContent(
 
   // Auto-detect: try static first, fall back to dynamic if CSR detected
   const staticResult = await extractStatic(job);
+
+  // If static extraction returns 404, skip dynamic extraction
+  if (staticResult.statusCode === 404) {
+    return staticResult;
+  }
 
   // If static extraction succeeded with good content, use it
   if (staticResult.success && staticResult.markdown.trim().length > 100) {

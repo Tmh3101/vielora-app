@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import vnpay from "@/lib/vnpay";
 import { ProductCode, VnpLocale } from "vnpay";
-import { ESubscriptionPlan } from "@/types";
+import {
+  ESubscriptionPlan,
+  ESubscriptionCycle,
+  EPaymentCurrency,
+  EPaymentType,
+  EPaymentStatus,
+  EPaymentProvider,
+} from "@/types";
 import { getPlanByCodeServer } from "@/lib/services/plan.service";
 import { getSubscriptionByUserIdServer } from "@/lib/services/subscription.service";
 import { createPaymentRecord } from "@/lib/services/payment.service";
@@ -30,14 +37,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { planCode, billingCycle } = body as {
       planCode: ESubscriptionPlan;
-      billingCycle: "monthly" | "yearly";
+      billingCycle: ESubscriptionCycle;
     };
 
     if (!planCode || !billingCycle) {
       return NextResponse.json({ error: "Missing planCode or billingCycle" }, { status: 400 });
     }
 
-    if (!["monthly", "yearly"].includes(billingCycle)) {
+    if (![ESubscriptionCycle.Monthly, ESubscriptionCycle.Yearly].includes(billingCycle)) {
       return NextResponse.json(
         { error: "Invalid billingCycle. Must be 'monthly' or 'yearly'" },
         { status: 400 }
@@ -73,10 +80,10 @@ export async function POST(request: NextRequest) {
     const payment = await createPaymentRecord(supabase, {
       user_id: user.id,
       amount: amount,
-      currency: "VND",
-      status: "pending",
-      payment_type: "subscription",
-      provider: "vnpay",
+      currency: EPaymentCurrency.VND,
+      status: EPaymentStatus.Pending,
+      payment_type: EPaymentType.Subscription,
+      provider: EPaymentProvider.VNPAY,
       plan_id: plan.id,
       metadata: {
         cycle: billingCycle,
@@ -95,7 +102,7 @@ export async function POST(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     // Remove diacritics for VNPay compatibility
-    const orderInfo = `Nang cap goi ${plan.name} - ${billingCycle === "monthly" ? "thang" : "nam"}`;
+    const orderInfo = `Nang cap goi ${plan.name} - ${billingCycle === ESubscriptionCycle.Monthly ? "thang" : "nam"}`;
 
     const paymentUrl = vnpay.buildPaymentUrl({
       vnp_Amount: amount,

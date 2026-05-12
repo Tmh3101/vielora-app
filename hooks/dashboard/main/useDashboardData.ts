@@ -84,44 +84,29 @@ export function useDashboardData({
     if (!user) return;
 
     try {
-      const botsData = await getBotsByUserId(supabase, user.id);
+      const [botsData, subData] = await Promise.all([
+        getBotsByUserId(supabase, user.id),
+        getSubscriptionByUserId(supabase, user.id),
+      ]);
+
       setBots(botsData);
-
-      if (botsData.length > 0) {
-        const indexedCounts = await getIndexedPageCountsByBotIds(
-          supabase,
-          botsData.map((b) => b.id)
-        );
-        setIndexedPagesByBot(indexedCounts);
-      } else {
-        setIndexedPagesByBot({});
-      }
-
-      const subData = await getSubscriptionByUserId(supabase, user.id);
       setSubscription(subData);
 
-      if (subData?.plan_id) {
-        const planData = await getPlanById(supabase, subData.plan_id);
-        setPlan(planData);
+      const botIds = botsData.map((b) => b.id);
+      const planId = subData?.plan_id;
 
-        const data = await getCreditSummary(supabase, user.id);
-        setCreditSummary(data ?? null);
-        setMessagesThisMonth(data?.messageCreditsUsedThisMonth ?? 0);
-      } else {
-        setPlan(null);
-        setCreditSummary(null);
-        setMessagesThisMonth(0);
-      }
+      const [indexedCounts, convCount, planData, creditData] = await Promise.all([
+        botIds.length > 0 ? getIndexedPageCountsByBotIds(supabase, botIds) : Promise.resolve({}),
+        botIds.length > 0 ? getTotalConversationCount(supabase, botIds) : Promise.resolve(0),
+        planId ? getPlanById(supabase, planId) : Promise.resolve(null),
+        planId ? getCreditSummary(supabase, user.id) : Promise.resolve(null),
+      ]);
 
-      if (botsData.length > 0) {
-        const convCount = await getTotalConversationCount(
-          supabase,
-          botsData.map((b) => b.id)
-        );
-        setTotalConversations(convCount);
-      } else {
-        setTotalConversations(0);
-      }
+      setIndexedPagesByBot(indexedCounts);
+      setTotalConversations(convCount);
+      setPlan(planData);
+      setCreditSummary(creditData ?? null);
+      setMessagesThisMonth(creditData?.messageCreditsUsedThisMonth ?? 0);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {

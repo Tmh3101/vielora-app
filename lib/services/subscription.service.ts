@@ -2,6 +2,7 @@ import type { ServiceClient } from "@/lib/services/types";
 import type { Tables } from "@/lib/supabase/types";
 import { getPlanById } from "@/lib/services/plan.service";
 import type { PlanRow } from "@/lib/services/plan.service";
+import { ESubscriptionStatus, ESubscriptionPlan } from "@/types";
 
 export type { PlanRow } from "@/lib/services/plan.service";
 export type SubscriptionRow = Tables<"subscriptions">;
@@ -12,7 +13,7 @@ export interface SubscriptionWithPlan {
 }
 
 export interface UserSubscriptionPlan {
-  planCode: string;
+  planCode: ESubscriptionPlan;
   botsLimit: number;
 }
 
@@ -27,6 +28,8 @@ export async function getSubscriptionByUserId(
     .from("subscriptions")
     .select("*")
     .eq("user_id", userId)
+    .order("current_period_end", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
@@ -62,13 +65,13 @@ export async function getUserSubscriptionPlan(
     .from("subscriptions")
     .select("plans!inner(code, bots_limit)")
     .eq("user_id", userId)
-    .eq("status", "active")
+    .eq("status", ESubscriptionStatus.Active)
     .single();
 
   if (error) return null;
   if (!data) return null;
 
-  const planInfoRaw = data.plans as unknown as { code: string; bots_limit: number }[];
+  const planInfoRaw = data.plans as unknown as { code: ESubscriptionPlan; bots_limit: number }[];
   const planInfo = Array.isArray(planInfoRaw) ? planInfoRaw[0] : planInfoRaw;
   if (!planInfo) return null;
   return {
@@ -88,15 +91,17 @@ export async function getUserSubscriptionPlan(
 export async function getSubscriptionByUserIdServer(
   client: ServiceClient,
   userId: string
-): Promise<Pick<SubscriptionRow, "id" | "plan_id" | "status"> | null> {
+): Promise<Pick<SubscriptionRow, "id" | "plan_id" | "status" | "current_period_end"> | null> {
   const { data, error } = await client
     .from("subscriptions")
-    .select("id, plan_id, status")
+    .select("id, plan_id, status, current_period_end")
     .eq("user_id", userId)
+    .order("current_period_end", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return data as Pick<SubscriptionRow, "id" | "plan_id" | "status"> | null;
+  return data as Pick<SubscriptionRow, "id" | "plan_id" | "status" | "current_period_end"> | null;
 }
 
 /**
@@ -117,18 +122,18 @@ export async function getSubscriptionByUserIdServerFull(
 export async function getUserActivePlanCodeServer(
   client: ServiceClient,
   userId: string
-): Promise<string | null> {
+): Promise<ESubscriptionPlan | null> {
   const { data, error } = await client
     .from("subscriptions")
     .select("plans!inner(code)")
     .eq("user_id", userId)
-    .eq("status", "active")
+    .eq("status", ESubscriptionStatus.Active)
     .single();
 
   if (error) return null;
   if (!data) return null;
 
-  const plan = data.plans as unknown as { code: string };
+  const plan = data.plans as unknown as { code: ESubscriptionPlan };
   return plan.code ?? null;
 }
 

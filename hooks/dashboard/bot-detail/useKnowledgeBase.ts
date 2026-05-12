@@ -6,16 +6,21 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/types";
 import {
   addKnowledge,
+  addKnowledgeFile,
   deleteKnowledge,
   editKnowledge,
   pollPipelineStatus,
   startDiscover,
   submitSelection,
 } from "@/lib/services/bot.service";
+import { useReindexDiscover } from "@/hooks/dashboard/bot-detail/useReindexDiscover";
 import { getCreditSummary } from "@/lib/services/credit.service";
 import { getPagePreviewByBotId } from "@/lib/services/page.service";
+import { getDiscoverSeedUrl } from "@/lib/helpers/crawl-website-helpers";
 import { CREDIT_PER_PAGE } from "@/config";
 import { EPageSourceType, EPageStatus, ESubscriptionPlan } from "@/types";
+import type { CrawlScopeType } from "@/types/scrape";
+import { CrawlScope } from "@/lib/constants";
 
 type SupabaseClient = ReturnType<typeof createBrowserSupabaseClient>;
 type BotType = Tables<"bots">;
@@ -69,17 +74,25 @@ export interface UseKnowledgeBaseResult {
   maxSelectablePagesByCredit: number;
   pendingPreviewPages: PageStatus[];
   selectablePreviewPages: PageStatus[];
+  isDiscovering: boolean;
+  reindexCurrentAction: string;
+  reindexCrawledCount: number;
+  reindexScope: CrawlScopeType;
+  hasStartedReindexDiscover: boolean;
   setReindexModalOpen: (open: boolean) => void;
+  setReindexScope: (scope: CrawlScopeType) => void;
   setAddDataSourceOpen: (open: boolean) => void;
   setEditKnowledgeOpen: (open: boolean) => void;
   setDeleteKnowledgeOpen: (open: boolean) => void;
   handleReindex: () => Promise<void>;
+  handleStartReindexDiscover: () => Promise<void>;
   handleUpdateSelected: () => Promise<void>;
   handleSelectAll: () => void;
   handleDeselectAll: () => void;
   handleTogglePage: (id: string, status: EPageStatus) => void;
   handleOpenAddDataSource: () => void;
   handleAddDataSource: (title: string, content: string) => Promise<void>;
+  handleAddFileDataSource: (file: File) => Promise<void>;
   handleOpenEditKnowledge: (page: PageType) => void;
   handleSaveEditKnowledge: (title: string, content: string) => Promise<void>;
   handleOpenDeleteKnowledge: (page: PageType) => void;
@@ -104,6 +117,9 @@ export function useKnowledgeBase({
   const [previewPages, setPreviewPages] = useState<PageStatus[]>([]);
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
   const [previewErrors, setPreviewErrors] = useState<Array<{ url: string; error: string }>>([]);
+  const [reindexDiscoverJobId, setReindexDiscoverJobId] = useState<string | null>(null);
+  const [reindexScope, setReindexScope] = useState<CrawlScopeType>(CrawlScope.FULL_WEBSITE);
+  const [hasStartedReindexDiscover, setHasStartedReindexDiscover] = useState(false);
 
   const [addDataSourceOpen, setAddDataSourceOpen] = useState(false);
   const [isSubmittingDataSource, setIsSubmittingDataSource] = useState(false);
@@ -118,10 +134,10 @@ export function useKnowledgeBase({
 
   const selectedPendingCount = useMemo(
     () =>
-      previewPages.filter((p) => selectedUrls.has(p.id) && p.status !== EPageStatus.Failed).length,
+      previewPages.filter((p) => selectedUrls.has(p.id) && p.status === EPageStatus.Pending).length,
     [previewPages, selectedUrls]
   );
-  const selectedUrlCount = selectedUrls.size;
+  const selectedUrlCount = selectedPendingCount;
   const selectedCreditsCost = selectedPendingCount * CREDIT_PER_PAGE;
   const maxSelectablePagesByCredit = Math.floor(totalCredits / CREDIT_PER_PAGE);
   const pendingPreviewPages = useMemo(
@@ -129,34 +145,14 @@ export function useKnowledgeBase({
     [previewPages]
   );
   const selectablePreviewPages = useMemo(
-    () => previewPages.filter((p) => p.status !== EPageStatus.Failed),
+    () => previewPages.filter((p) => p.status === EPageStatus.Pending),
     [previewPages]
   );
 
-  const handleReindex = useCallback(async () => {
+  const handleDiscovered = useCallback(async () => {
     if (!bot) return;
-
-    setReindexModalOpen(true);
-    setIsLoadingPreview(true);
-    setPreviewPages([]);
-    setSelectedUrls(new Set());
-    setPreviewErrors([]);
-
     try {
-      if (userId) {
-        const summary = await getCreditSummary(supabase, userId);
-        setTotalCredits(summary?.totalRemainingCredits ?? 0);
-      }
-
-      const { discoverJobId } = await startDiscover(supabase, {
-        url: bot.domain,
-        botId: bot.id,
-      });
-
-      await pollPipelineStatus(supabase, discoverJobId);
-
       const discoveredPages = await getPagePreviewByBotId(supabase, bot.id);
-
       const preview = discoveredPages
         .filter((p) => p.source_type === EPageSourceType.Website)
         .map((page) => ({
@@ -165,15 +161,12 @@ export function useKnowledgeBase({
           title: page.title || page.url,
           status: page.status as EPageStatus,
         })) satisfies PageStatus[];
-
       setPreviewPages(preview);
-
       setPreviewErrors(
         discoveredPages
           .filter((p) => p.status === EPageStatus.Failed)
           .map((p) => ({ url: p.url, error: p.error_message || "Failed to discover page" }))
       );
-
       setSelectedUrls(new Set());
     } catch (error) {
       console.error("Preview error:", error);
@@ -184,9 +177,80 @@ export function useKnowledgeBase({
       });
       setReindexModalOpen(false);
     } finally {
+      setReindexDiscoverJobId(null);
+      setHasStartedReindexDiscover(false);
+      setIsLoadingPreview(false);
+    }
+  }, [bot, supabase, toast]);
+
+  const {
+    isDiscovering,
+    currentAction: reindexCurrentAction,
+    crawledCount: reindexCrawledCount,
+  } = useReindexDiscover({
+    botId: bot?.id ?? null,
+    discoverJobId: reindexDiscoverJobId,
+    onDiscovered: handleDiscovered,
+  });
+
+  const handleReindex = useCallback(async () => {
+    if (!bot) return;
+
+    setReindexModalOpen(true);
+    setIsLoadingPreview(false);
+    setPreviewPages([]);
+    setSelectedUrls(new Set());
+    setPreviewErrors([]);
+    setReindexDiscoverJobId(null);
+    setHasStartedReindexDiscover(false);
+    setReindexScope(CrawlScope.FULL_WEBSITE);
+
+    try {
+      if (userId) {
+        const summary = await getCreditSummary(supabase, userId);
+        setTotalCredits(summary?.totalRemainingCredits ?? 0);
+      }
+    } catch (error) {
+      console.error("Preview error:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải danh sách trang. Vui lòng thử lại.",
+        variant: "destructive",
+      });
+      setReindexModalOpen(false);
       setIsLoadingPreview(false);
     }
   }, [bot, setTotalCredits, supabase, toast, userId]);
+
+  const handleStartReindexDiscover = useCallback(async () => {
+    if (!bot || isDiscovering || isLoadingPreview) return;
+
+    setIsLoadingPreview(true);
+    setPreviewPages([]);
+    setSelectedUrls(new Set());
+    setPreviewErrors([]);
+    setHasStartedReindexDiscover(true);
+
+    try {
+      const discoverUrl = getDiscoverSeedUrl(bot);
+      const { discoverJobId } = await startDiscover(supabase, {
+        url: discoverUrl,
+        botId: bot.id,
+        includeSubdomains: reindexScope === CrawlScope.FULL_WEBSITE,
+      });
+
+      setReindexDiscoverJobId(discoverJobId);
+    } catch (error) {
+      console.error("Preview error:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải danh sách trang. Vui lòng thử lại.",
+        variant: "destructive",
+      });
+      setHasStartedReindexDiscover(false);
+      setIsLoadingPreview(false);
+    }
+  }, [bot, isDiscovering, isLoadingPreview, reindexScope, supabase, toast]);
 
   const handleUpdateSelected = useCallback(async () => {
     if (!bot || selectedUrlCount === 0) return;
@@ -238,12 +302,8 @@ export function useKnowledgeBase({
   const handleSelectAll = useCallback(() => {
     const maxSelectablePending = Math.min(maxSelectablePagesByCredit, pendingPreviewPages.length);
     const pendingSelectedIds = pendingPreviewPages.slice(0, maxSelectablePending).map((p) => p.id);
-    const nonPendingSelectedIds = selectablePreviewPages
-      .filter((p) => p.status !== EPageStatus.Pending)
-      .map((p) => p.id);
-    const selectableUrls = new Set([...nonPendingSelectedIds, ...pendingSelectedIds]);
-    setSelectedUrls(selectableUrls);
-  }, [maxSelectablePagesByCredit, pendingPreviewPages, selectablePreviewPages]);
+    setSelectedUrls(new Set(pendingSelectedIds));
+  }, [maxSelectablePagesByCredit, pendingPreviewPages]);
 
   const handleDeselectAll = useCallback(() => {
     setSelectedUrls(new Set());
@@ -251,14 +311,14 @@ export function useKnowledgeBase({
 
   const handleTogglePage = useCallback(
     (id: string, status: EPageStatus) => {
-      if (status === EPageStatus.Failed) return;
+      if (status !== EPageStatus.Pending) return;
 
       const newSelected = new Set(selectedUrls);
       if (newSelected.has(id)) {
         newSelected.delete(id);
       } else {
         const selectedPendingAfterToggle = previewPages.filter(
-          (p) => (newSelected.has(p.id) || p.id === id) && p.status !== EPageStatus.Failed
+          (p) => p.status === EPageStatus.Pending && (newSelected.has(p.id) || p.id === id)
         ).length;
         if (selectedPendingAfterToggle > maxSelectablePagesByCredit) {
           return;
@@ -324,6 +384,41 @@ export function useKnowledgeBase({
         toast({
           title: "Lỗi",
           description: error instanceof Error ? error.message : "Không thể thêm nguồn dữ liệu.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSubmittingDataSource(false);
+      }
+    },
+    [bot, fetchData, supabase, toast]
+  );
+
+  const handleAddFileDataSource = useCallback(
+    async (file: File) => {
+      if (!bot) return;
+
+      setIsSubmittingDataSource(true);
+      try {
+        await addKnowledgeFile(supabase, {
+          botId: bot.id,
+          file,
+        });
+
+        toast({
+          title: "Thành công",
+          description: "Đã tải tệp lên và đưa vào hàng chờ index.",
+        });
+
+        setAddDataSourceOpen(false);
+
+        setTimeout(() => {
+          void fetchData();
+        }, 2000);
+      } catch (error) {
+        console.error("Add file data source error:", error);
+        toast({
+          title: "Lỗi",
+          description: error instanceof Error ? error.message : "Không thể tải tệp dữ liệu.",
           variant: "destructive",
         });
       } finally {
@@ -465,17 +560,25 @@ export function useKnowledgeBase({
     maxSelectablePagesByCredit,
     pendingPreviewPages,
     selectablePreviewPages,
+    isDiscovering,
+    reindexCurrentAction,
+    reindexCrawledCount,
+    reindexScope,
+    hasStartedReindexDiscover,
     setReindexModalOpen,
+    setReindexScope,
     setAddDataSourceOpen,
     setEditKnowledgeOpen,
     setDeleteKnowledgeOpen,
     handleReindex,
+    handleStartReindexDiscover,
     handleUpdateSelected,
     handleSelectAll,
     handleDeselectAll,
     handleTogglePage,
     handleOpenAddDataSource,
     handleAddDataSource,
+    handleAddFileDataSource,
     handleOpenEditKnowledge,
     handleSaveEditKnowledge,
     handleOpenDeleteKnowledge,

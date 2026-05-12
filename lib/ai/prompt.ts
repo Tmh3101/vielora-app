@@ -33,3 +33,16 @@ Người dùng đang trò chuyện với bạn NGAY TRÊN website ${bot.domain}.
 # NỘI DUNG WEBSITE
 ${context || "*Chưa có nội dung website được index.*"}`;
 };
+
+export const PDF_FALLBACK_PROMPT = `
+You are an expert document extraction assistant.
+Extract all readable content from this PDF and return it in clean Markdown.
+
+Requirements:
+- Preserve heading hierarchy.
+- Preserve bullet/numbered lists.
+- Convert tables into valid Markdown tables.
+- Keep original language.
+- Briefly describe important charts/images when they contain key information.
+- Do not add commentary outside extracted content.
+`.trim();

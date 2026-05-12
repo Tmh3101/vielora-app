@@ -1,5 +1,21 @@
 import { ApiResponse } from "./utils";
 
+export type WidgetSettings = {
+  primaryColor: string;
+  textColor: string;
+  position: string;
+  welcomeMessage: string;
+  suggestedQuestions?: string[]; // Array of suggested questions (max 3, max 200 chars each)
+  chatBackgroundType?: "solid" | "gradient" | "image";
+  chatBackgroundValue?: string;
+  chatBackgroundOpacity?: number;
+  chatIconType?: "preset" | "custom";
+  chatIconPreset?: string;
+  chatIconUrl?: string | null;
+  chatIconColor?: string;
+  chatIconBgColor?: string;
+};
+
 export type InitRequest = {
   botId: string;
   visitorId?: string;
@@ -14,17 +30,15 @@ export type Message = {
 export type InitData = {
   id: string;
   name: string;
+  botName: string;
   avatarUrl: string | null;
   status: string;
   domain: string;
   quotaExceeded: boolean;
   messagesRemaining: number;
-  settings: {
-    primaryColor: string;
-    textColor: string;
-    position: string;
-    welcomeMessage: string;
-  };
+  isAvailable: boolean;
+  statusMessage: string | null;
+  settings: WidgetSettings;
   // Include existing conversation if found
   conversationId: string | null;
   messages: Message[];

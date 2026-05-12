@@ -74,6 +74,7 @@ DO $$ BEGIN
       'render_error',
       'empty_content',
       'url_error',
+      'not_found',
       'unknown_error'
     );
 EXCEPTION
@@ -168,16 +169,20 @@ CREATE TABLE public.bots (
 	verified_at timestamptz NULL,
 	last_crawl_at timestamptz NULL,
 	crawl_settings jsonb DEFAULT '{"language": "vi", "maxPages": 100, "excludePatterns": [], "includePatterns": []}'::jsonb NULL,
-	widget_settings jsonb DEFAULT '{"position": "bottom-right", "primaryColor": "#3B82F6", "welcomeMessage": "Xin chào! Tôi có thể giúp gì cho bạn?"}'::jsonb NULL,
+	widget_settings jsonb DEFAULT '{"position": "bottom-right", "primaryColor": "#3B82F6", "welcomeMessage": "Xin chào! Tôi có thể giúp gì cho bạn?", "suggestedQuestions": []}'::jsonb NULL,
 	created_at timestamptz DEFAULT now() NOT NULL,
 	updated_at timestamptz DEFAULT now() NOT NULL,
 	avatar_url text NULL, -- URL of the bot avatar image stored in Supabase Storage
 	rate_limit_per_day int4 NULL, -- Maximum messages a single visitor can send per day (24h window)
 	rate_limit_per_ip int4 NULL, -- Maximum messages from a single IP per day for DDoS protection
 	is_stopped boolean NOT NULL DEFAULT false, -- Whether the bot is manually stopped by the owner
-	CONSTRAINT bots_pkey PRIMARY KEY (id)
+	slug text NULL, -- URL-friendly unique identifier for standalone chat page
+	is_public boolean NOT NULL DEFAULT false, -- Whether the bot is accessible via public standalone link
+	CONSTRAINT bots_pkey PRIMARY KEY (id),
+	CONSTRAINT bots_slug_key UNIQUE (slug)
 );
 CREATE INDEX idx_bots_rate_limits ON public.bots USING btree (id, rate_limit_per_day, rate_limit_per_ip);
+CREATE INDEX idx_bots_slug ON public.bots USING btree (slug) WHERE slug IS NOT NULL;
 
 -- Table Triggers
 
@@ -281,7 +286,7 @@ CREATE TABLE public.pages (
 	crawled_at timestamptz DEFAULT now() NOT NULL,
 	CONSTRAINT pages_pkey PRIMARY KEY (id),
 	CONSTRAINT pages_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.bots(id) ON DELETE CASCADE,
-	CONSTRAINT pages_source_type_check CHECK (source_type IN ('website', 'manual_text'))
+	CONSTRAINT pages_source_type_check CHECK (source_type IN ('website', 'manual_text', 'file'))
 );
 
 CREATE INDEX idx_pages_bot_id_url ON public.pages (bot_id, url);
@@ -503,6 +508,8 @@ CREATE POLICY "usage_logs_select_own" ON public.usage_logs FOR SELECT USING (
 CREATE POLICY "jobs_select_own" ON public.jobs FOR SELECT USING (
   EXISTS (SELECT 1 FROM public.bots WHERE bots.id = jobs.bot_id AND bots.user_id = auth.uid())
 );
+
+ALTER publication supabase_realtime ADD TABLE public.bots;
 
 -- 5. MESSAGES (Liên kết qua conversation_id -> bot_id)
 CREATE POLICY "messages_all_own" ON public.messages FOR ALL USING (

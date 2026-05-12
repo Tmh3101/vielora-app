@@ -13,7 +13,7 @@ import {
   extractCleanHtml,
   htmlToMarkdown,
   classifyError,
-} from "@/lib/helper/crawl-website-helpers";
+} from "@/lib/helpers/crawl-website-helpers";
 import { SCRAPE_DEFAULT_TIMEOUT, DEFAULT_USER_AGENT } from "@/config";
 /**
  * Main extraction function

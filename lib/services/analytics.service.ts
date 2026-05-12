@@ -1,278 +1,447 @@
+import { CREDIT_PER_MESSAGE } from "@/config";
 import type { ServiceClient } from "@/lib/services/types";
-import type { Tables } from "@/lib/supabase/types";
-import {
-  getConversationsByBotId,
-  getMessagesByConversationIds,
-} from "@/lib/services/conversations.service";
+import { EUsageAction } from "@/types";
+import { DAY_MS } from "@/lib/constants/analytics";
 
-export interface AnalyticsData {
-  messagesToday: number;
-  messagesMonth: number;
-  conversationsCount: number;
-  noAnswerCount: number;
-  topQuestions: Array<{ content: string; count: number }>;
+export interface AnalyticsRange {
+  from: string;
+  to: string;
+  previousFrom: string;
+  previousTo: string;
 }
 
-export interface ChartDataPoint {
+export interface AnalyticsKpis {
+  totalConversations: number;
+  totalMessages: number;
+  fallbackCount: number;
+  fallbackRate: number;
+  creditsUsed: number;
+}
+
+export interface AnalyticsComparisonItem {
+  current: number;
+  previous: number;
+  delta: number;
+  deltaPercent: number | null;
+}
+
+export interface AnalyticsComparison {
+  conversations: AnalyticsComparisonItem;
+  messages: AnalyticsComparisonItem;
+  fallbacks: AnalyticsComparisonItem;
+  creditsUsed: AnalyticsComparisonItem;
+}
+
+export interface AnalyticsTrendPoint {
   date: string;
   messages: number;
   conversations: number;
 }
 
-export interface AnalyticsWithCharts extends AnalyticsData {
-  chartData: ChartDataPoint[];
+export interface AnalyticsHeatmapCell {
+  day: number;
+  hour: number;
+  value: number;
 }
 
-export interface FetchAnalyticsOptions {
-  botId: string;
-  chartPeriod?: "today" | "7days" | "30days" | "year";
+export interface RecentQuestionInsight {
+  content: string;
+  createdAt: string;
+  answer: string;
+  hasFallback: boolean;
 }
 
-/**
- * Fetch comprehensive analytics data for a bot.
- */
-export async function fetchBotAnalytics(
-  client: ServiceClient,
-  options: FetchAnalyticsOptions
-): Promise<AnalyticsWithCharts> {
-  const { botId, chartPeriod = "7days" } = options;
+export interface BotAnalyticsResponse {
+  kpis: AnalyticsKpis;
+  comparison: AnalyticsComparison;
+  trends: AnalyticsTrendPoint[];
+  heatmap: AnalyticsHeatmapCell[];
+  recentQuestions: RecentQuestionInsight[];
+  range: AnalyticsRange;
+}
 
-  try {
-    const conversations = await getConversationsByBotId(client, botId);
+interface ConversationTimestampRow {
+  id: string;
+  started_at: string;
+}
 
-    if (conversations.length === 0) {
-      return {
-        messagesToday: 0,
-        messagesMonth: 0,
-        conversationsCount: 0,
-        noAnswerCount: 0,
-        topQuestions: [],
-        chartData: generateEmptyChartData(chartPeriod),
-      };
-    }
+interface MessageAnalyticsRow {
+  conversation_id: string;
+  content: string;
+  created_at: string;
+  role: string;
+  no_answer: boolean | null;
+}
 
-    const conversationIds = conversations.map((c) => c.id);
-    const allMessages = await getMessagesByConversationIds(client, conversationIds);
-
-    const analytics = calculateBasicAnalytics(allMessages);
-    const chartData = generateChartData(conversations, allMessages, chartPeriod);
-
-    return {
-      ...analytics,
-      conversationsCount: conversations.length,
-      chartData,
-    };
-  } catch (error) {
-    console.error("Error fetching bot analytics:", error);
-    throw error;
-  }
+interface UsageLogRow {
+  count: number | null;
 }
 
 /**
- * Get analytics summary for a bot (numbers only, no chart data).
+ * Compute ISO timestamp range for the current window and the immediately preceding window of equal duration.
+ *
+ * @param from - Start of the current window
+ * @param to - End of the current window
+ * @returns An object with ISO strings: `from` and `to` for the current window, and `previousFrom` and `previousTo` for the previous window. `previousTo` is set to one millisecond before `from` and the previous window spans the same duration as the current window.
  */
-export async function fetchAnalyticsSummary(
-  client: ServiceClient,
-  botId: string
-): Promise<AnalyticsData> {
-  const fullAnalytics = await fetchBotAnalytics(client, { botId });
-  const { chartData, ...summary } = fullAnalytics;
-  return summary;
-}
-
-/**
- * Calculate basic analytics from messages.
- */
-function calculateBasicAnalytics(
-  messages: Tables<"messages">[]
-): Omit<AnalyticsData, "conversationsCount"> {
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-
-  const monthStart = new Date();
-  monthStart.setUTCDate(1);
-  monthStart.setUTCHours(0, 0, 0, 0);
-
-  const userMessages = messages.filter((m) => m.role === "user");
-  const todayMessages = userMessages.filter((m) => new Date(m.created_at) >= todayStart);
-  const monthMessages = userMessages.filter((m) => new Date(m.created_at) >= monthStart);
-
-  const noAnswerMessages = messages.filter((m) => m.no_answer === true);
-
-  const recentUserMessages = userMessages.slice(0, 50);
-  const questionCounts: Record<string, number> = {};
-
-  recentUserMessages.forEach((m) => {
-    const question = m.content;
-    questionCounts[question] = (questionCounts[question] || 0) + 1;
-  });
-
-  const topQuestions = Object.entries(questionCounts)
-    .map(([content, count]) => ({ content, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+export function buildAnalyticsRange(from: Date, to: Date): AnalyticsRange {
+  const currentFrom = new Date(from);
+  const currentTo = new Date(to);
+  const periodDurationMs = currentTo.getTime() - currentFrom.getTime();
+  const previousTo = new Date(currentFrom.getTime() - 1);
+  const previousFrom = new Date(previousTo.getTime() - periodDurationMs);
 
   return {
-    messagesToday: todayMessages.length,
-    messagesMonth: monthMessages.length,
-    noAnswerCount: noAnswerMessages.length,
-    topQuestions,
+    from: currentFrom.toISOString(),
+    to: currentTo.toISOString(),
+    previousFrom: previousFrom.toISOString(),
+    previousTo: previousTo.toISOString(),
   };
 }
 
 /**
- * Generate chart data for the specified period.
+ * Compute KPI totals and rates for a given time window from message and conversation data.
+ *
+ * @param messages - Message rows to analyze; only entries with `role === "user"` are considered. Each row may include `no_answer`.
+ * @param conversationsCount - Total number of conversations in the analyzed window.
+ * @param creditsUsed - Total credits consumed in the analyzed window.
+ * @returns An object containing `totalConversations`, `totalMessages`, `fallbackCount`, `fallbackRate` (percentage rounded to one decimal place), and `creditsUsed`.
  */
-function generateChartData(
-  conversations: Array<Pick<Tables<"conversations">, "id" | "started_at">>,
-  messages: Array<Pick<Tables<"messages">, "id" | "created_at" | "conversation_id" | "role">>,
-  period: "today" | "7days" | "30days" | "year"
-): ChartDataPoint[] {
-  const chartData: ChartDataPoint[] = [];
+export function calculateAnalyticsKpis(
+  messages: MessageAnalyticsRow[],
+  conversationsCount: number,
+  creditsUsed: number
+): AnalyticsKpis {
+  const userMessages = messages.filter((message) => message.role === "user");
+  const fallbackCount = userMessages.filter((message) => message.no_answer === true).length;
+  const totalMessages = userMessages.length;
 
-  if (period === "today") {
-    for (let i = 23; i >= 0; i--) {
-      const date = new Date();
-      date.setHours(date.getHours() - i, 0, 0, 0);
-
-      const nextHour = new Date(date);
-      nextHour.setHours(date.getHours() + 1);
-
-      const hourMessages = messages.filter(
-        (m) =>
-          m.role === "user" && new Date(m.created_at) >= date && new Date(m.created_at) < nextHour
-      ).length;
-
-      const hourConversations = conversations.filter((c) => {
-        const conversationDate = new Date(c.started_at);
-        return conversationDate >= date && conversationDate < nextHour;
-      }).length;
-
-      chartData.push({
-        date: date.toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }),
-        messages: hourMessages,
-        conversations: hourConversations,
-      });
-    }
-  } else if (period === "year") {
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date();
-      date.setMonth(date.getMonth() - i);
-      date.setDate(1);
-      date.setUTCHours(0, 0, 0, 0);
-
-      const nextMonth = new Date(date);
-      nextMonth.setMonth(date.getMonth() + 1);
-
-      const monthMessages = messages.filter(
-        (m) =>
-          m.role === "user" && new Date(m.created_at) >= date && new Date(m.created_at) < nextMonth
-      ).length;
-
-      const monthConversations = conversations.filter((c) => {
-        const conversationDate = new Date(c.started_at);
-        return conversationDate >= date && conversationDate < nextMonth;
-      }).length;
-
-      chartData.push({
-        date: `${date.getMonth() + 1}/${date.getFullYear()}`,
-        messages: monthMessages,
-        conversations: monthConversations,
-      });
-    }
-  } else {
-    const days = period === "7days" ? 7 : 30;
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      date.setUTCHours(0, 0, 0, 0);
-
-      const nextDay = new Date(date);
-      nextDay.setDate(date.getDate() + 1);
-
-      const dayMessages = messages.filter(
-        (m) =>
-          m.role === "user" && new Date(m.created_at) >= date && new Date(m.created_at) < nextDay
-      ).length;
-
-      const dayConversations = conversations.filter((c) => {
-        const conversationDate = new Date(c.started_at);
-        return conversationDate >= date && conversationDate < nextDay;
-      }).length;
-
-      const currentYear = new Date().getFullYear();
-      const dateYear = date.getFullYear();
-      const showYear = dateYear !== currentYear;
-
-      chartData.push({
-        date: showYear
-          ? `${date.getDate()}/${date.getMonth() + 1}/${dateYear}`
-          : `${date.getDate()}/${date.getMonth() + 1}`,
-        messages: dayMessages,
-        conversations: dayConversations,
-      });
-    }
-  }
-
-  return chartData;
+  return {
+    totalConversations: conversationsCount,
+    totalMessages,
+    fallbackCount,
+    fallbackRate:
+      totalMessages > 0 ? Number(((fallbackCount / totalMessages) * 100).toFixed(1)) : 0,
+    creditsUsed,
+  };
 }
 
 /**
- * Generate empty chart data for when there's no data.
+ * Calculate absolute and percentage change from a previous value to a current value.
+ *
+ * @returns An object with `current` and `previous` values, `delta` (current − previous), and `deltaPercent` — the percentage change rounded to one decimal place; `deltaPercent` is `null` when `previous` is 0.
  */
-function generateEmptyChartData(period: "today" | "7days" | "30days" | "year"): ChartDataPoint[] {
-  const chartData: ChartDataPoint[] = [];
+export function calculateComparison(current: number, previous: number): AnalyticsComparisonItem {
+  const delta = current - previous;
 
-  if (period === "today") {
-    for (let i = 23; i >= 0; i--) {
-      const date = new Date();
-      date.setHours(date.getHours() - i, 0, 0, 0);
+  return {
+    current,
+    previous,
+    delta,
+    deltaPercent: previous === 0 ? null : Number(((delta / previous) * 100).toFixed(1)),
+  };
+}
 
-      chartData.push({
-        date: date.toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }),
-        messages: 0,
-        conversations: 0,
-      });
-    }
-  } else if (period === "year") {
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date();
-      date.setMonth(date.getMonth() - i);
-      date.setDate(1);
+/**
+ * Builds a daily time series of message and conversation counts for the specified date range.
+ *
+ * @param conversations - Conversation rows to aggregate (each must include `started_at`)
+ * @param messages - Message rows to aggregate (each must include `created_at` and `role`)
+ * @param from - Start of the inclusive range
+ * @param to - End of the inclusive range
+ * @returns An array of daily points where each point's `date` is formatted as `DD/MM` and `messages` and `conversations` are the counts for that day
+ */
+export function buildTrendSeries(
+  conversations: ConversationTimestampRow[],
+  messages: MessageAnalyticsRow[],
+  from: Date,
+  to: Date
+): AnalyticsTrendPoint[] {
+  const points: AnalyticsTrendPoint[] = [];
+  const userMessageTimestamps = messages
+    .filter((message) => message.role === "user")
+    .map((message) => new Date(message.created_at).getTime());
+  const conversationTimestamps = conversations.map((conversation) =>
+    new Date(conversation.started_at).getTime()
+  );
 
-      chartData.push({
-        date: `${date.getMonth() + 1}/${date.getFullYear()}`,
-        messages: 0,
-        conversations: 0,
-      });
-    }
-  } else {
-    const days = period === "7days" ? 7 : 30;
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
+  for (let bucketStart = from.getTime(); bucketStart <= to.getTime(); bucketStart += DAY_MS) {
+    const bucketEnd = Math.min(bucketStart + DAY_MS, to.getTime() + 1);
+    const pointDate = new Date(bucketStart);
 
-      const currentYear = new Date().getFullYear();
-      const dateYear = date.getFullYear();
-      const showYear = dateYear !== currentYear;
+    points.push({
+      date: pointDate.toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+      }),
+      messages: userMessageTimestamps.filter(
+        (timestamp) => timestamp >= bucketStart && timestamp < bucketEnd
+      ).length,
+      conversations: conversationTimestamps.filter(
+        (timestamp) => timestamp >= bucketStart && timestamp < bucketEnd
+      ).length,
+    });
+  }
 
-      chartData.push({
-        date: showYear
-          ? `${date.getDate()}/${date.getMonth() + 1}/${dateYear}`
-          : `${date.getDate()}/${date.getMonth() + 1}`,
-        messages: 0,
-        conversations: 0,
+  return points;
+}
+
+/**
+ * Builds a 7×24 heatmap of user message counts grouped by day of week and hour within the given time range.
+ *
+ * Filters out non-user messages and only counts messages whose `created_at` timestamp is greater than or equal to `from`
+ * and less than or equal to `to`. The result contains one cell for each day (0–6) and hour (0–23).
+ *
+ * @param messages - Array of message rows to aggregate; only rows with `role === "user"` are counted
+ * @param from - Start of the time range (inclusive)
+ * @param to - End of the time range (inclusive)
+ * @returns An array of heatmap cells where each cell contains `day`, `hour`, and `value` (message count for that slot)
+ */
+export function buildHeatmapSeries(
+  messages: MessageAnalyticsRow[],
+  from: Date,
+  to: Date
+): AnalyticsHeatmapCell[] {
+  const cells = new Map<string, number>();
+  const fromTime = from.getTime();
+  const toTime = to.getTime();
+
+  messages.forEach((message) => {
+    if (message.role !== "user") return;
+
+    const messageDate = new Date(message.created_at);
+    const timestamp = messageDate.getTime();
+
+    if (timestamp < fromTime || timestamp > toTime) return;
+
+    const key = `${messageDate.getDay()}-${messageDate.getHours()}`;
+    cells.set(key, (cells.get(key) ?? 0) + 1);
+  });
+
+  const heatmap: AnalyticsHeatmapCell[] = [];
+  for (let day = 0; day < 7; day += 1) {
+    for (let hour = 0; hour < 24; hour += 1) {
+      heatmap.push({
+        day,
+        hour,
+        value: cells.get(`${day}-${hour}`) ?? 0,
       });
     }
   }
 
-  return chartData;
+  return heatmap;
+}
+
+/**
+ * Produce a list of the most recent user questions.
+ *
+ * @param messages - Array of message rows; only items with `role === "user"` are considered
+ * @param limit - Maximum number of questions to return (default: 6)
+ * @returns An array of recent questions ordered newest first; each item contains `content`, the original `createdAt` timestamp, and `hasFallback` indicating whether the message had no answer
+ */
+export function buildRecentQuestions(
+  messages: MessageAnalyticsRow[],
+  limit = 100
+): RecentQuestionInsight[] {
+  const sortedMessages = messages
+    .slice()
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .filter((message) => message.role === "user")
+    .slice(0, limit);
+
+  return sortedMessages.map((message) => {
+    const questionTime = new Date(message.created_at).getTime();
+    const nearestAssistantReply = messages
+      .filter(
+        (item) =>
+          item.role === "assistant" &&
+          item.conversation_id === message.conversation_id &&
+          new Date(item.created_at).getTime() >= questionTime
+      )
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
+
+    return {
+      content: message.content,
+      createdAt: message.created_at,
+      answer: nearestAssistantReply?.content ?? "Bot chưa có câu trả lời cho câu hỏi này.",
+      hasFallback: message.no_answer === true,
+    };
+  });
+}
+
+/**
+ * Sum the `count` values from usage log rows, treating `null` counts as 1.
+ *
+ * @param logs - Array of usage log rows; if a row's `count` is `null` it is counted as 1
+ * @returns The total sum of counts
+ */
+function sumUsageCounts(logs: UsageLogRow[]): number {
+  return logs.reduce((sum, log) => sum + (log.count ?? 1), 0);
+}
+
+/**
+ * Fetches conversation ids and start timestamps for a bot within an ISO timestamp range.
+ *
+ * Queries the `conversations` table for rows where `bot_id` equals `botId` and
+ * `started_at` is between `fromIso` and `toIso` (inclusive), ordered by `started_at`
+ * ascending.
+ *
+ * @param botId - The bot identifier to filter conversations by
+ * @param fromIso - Inclusive start of the time range as an ISO timestamp
+ * @param toIso - Inclusive end of the time range as an ISO timestamp
+ * @returns An array of conversation rows containing `id` and `started_at`; returns an empty array when no rows match
+ * @throws Error when the database query returns an error (message forwarded)
+ */
+async function getConversationRows(
+  client: ServiceClient,
+  botId: string,
+  fromIso: string,
+  toIso: string
+): Promise<ConversationTimestampRow[]> {
+  const { data, error } = await client
+    .from("conversations")
+    .select("id, started_at")
+    .eq("bot_id", botId)
+    .gte("started_at", fromIso)
+    .lte("started_at", toIso)
+    .order("started_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Fetches message rows for the specified bot within the inclusive time range.
+ *
+ * @param botId - The bot's identifier used to filter conversations.
+ * @param fromIso - Inclusive start of the time range as an ISO 8601 string.
+ * @param toIso - Inclusive end of the time range as an ISO 8601 string.
+ * @returns An array of message rows containing `content`, `created_at`, `role`, and `no_answer`.
+ * @throws Error when the underlying database query returns an error.
+ */
+async function getMessageRows(
+  client: ServiceClient,
+  botId: string,
+  fromIso: string,
+  toIso: string
+): Promise<MessageAnalyticsRow[]> {
+  const { data, error } = await client
+    .from("messages")
+    .select(
+      `
+      conversation_id,
+      content,
+      created_at,
+      role,
+      no_answer,
+      conversations!inner(bot_id)
+    `
+    )
+    .eq("conversations.bot_id", botId)
+    .gte("created_at", fromIso)
+    .lte("created_at", toIso)
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => ({
+    conversation_id: row.conversation_id,
+    content: row.content,
+    created_at: row.created_at,
+    role: row.role,
+    no_answer: row.no_answer,
+  }));
+}
+
+/**
+ * Fetches usage log rows for chat-message actions for a bot within a time range.
+ *
+ * @param botId - Bot identifier to filter logs
+ * @param fromIso - Inclusive start timestamp in ISO format
+ * @param toIso - Inclusive end timestamp in ISO format
+ * @returns An array of usage log rows; each row may include a `count` field
+ * @throws Error when the database query returns an error
+ */
+async function getUsageRows(
+  client: ServiceClient,
+  botId: string,
+  fromIso: string,
+  toIso: string
+): Promise<UsageLogRow[]> {
+  const { data, error } = await client
+    .from("usage_logs")
+    .select("count")
+    .eq("bot_id", botId)
+    .eq("action", EUsageAction.ChatMessage)
+    .gte("created_at", fromIso)
+    .lte("created_at", toIso);
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Assembles analytics for a bot over a specified time window.
+ *
+ * @param botId - The bot's identifier.
+ * @param from - Start of the current analytics window (inclusive).
+ * @param to - End of the current analytics window (inclusive).
+ * @returns An object containing:
+ *  - `kpis`: aggregated totals for the current window (conversations, user messages, fallback count/rate, credits used),
+ *  - `comparison`: current vs previous window comparisons with absolute delta and percent delta,
+ *  - `trends`: daily series of message and conversation counts across the current window,
+ *  - `heatmap`: 7×24 day/hour activity grid for user messages,
+ *  - `recentQuestions`: most recent user messages with fallback flags,
+ *  - `range`: ISO timestamps for the current and computed previous windows.
+ */
+export async function getBotAnalytics(
+  client: ServiceClient,
+  botId: string,
+  from: Date,
+  to: Date
+): Promise<BotAnalyticsResponse> {
+  const range = buildAnalyticsRange(from, to);
+
+  const [
+    currentConversations,
+    previousConversations,
+    currentMessages,
+    previousMessages,
+    currentUsageLogs,
+    previousUsageLogs,
+  ] = await Promise.all([
+    getConversationRows(client, botId, range.from, range.to),
+    getConversationRows(client, botId, range.previousFrom, range.previousTo),
+    getMessageRows(client, botId, range.from, range.to),
+    getMessageRows(client, botId, range.previousFrom, range.previousTo),
+    getUsageRows(client, botId, range.from, range.to),
+    getUsageRows(client, botId, range.previousFrom, range.previousTo),
+  ]);
+
+  const currentCreditsUsed = sumUsageCounts(currentUsageLogs) * CREDIT_PER_MESSAGE;
+  const previousCreditsUsed = sumUsageCounts(previousUsageLogs) * CREDIT_PER_MESSAGE;
+  const kpis = calculateAnalyticsKpis(
+    currentMessages,
+    currentConversations.length,
+    currentCreditsUsed
+  );
+  const previousKpis = calculateAnalyticsKpis(
+    previousMessages,
+    previousConversations.length,
+    previousCreditsUsed
+  );
+
+  return {
+    kpis,
+    comparison: {
+      conversations: calculateComparison(kpis.totalConversations, previousKpis.totalConversations),
+      messages: calculateComparison(kpis.totalMessages, previousKpis.totalMessages),
+      fallbacks: calculateComparison(kpis.fallbackCount, previousKpis.fallbackCount),
+      creditsUsed: calculateComparison(kpis.creditsUsed, previousKpis.creditsUsed),
+    },
+    trends: buildTrendSeries(currentConversations, currentMessages, from, to),
+    heatmap: buildHeatmapSeries(currentMessages, from, to),
+    recentQuestions: buildRecentQuestions(currentMessages),
+    range,
+  };
 }

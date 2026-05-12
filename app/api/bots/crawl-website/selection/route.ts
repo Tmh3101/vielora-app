@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addIndexerJobs } from "@/lib/scraper";
 import { corsHeaders } from "@/lib/constants";
-import { authenticateRequest, isAuthError } from "@/lib/helper/auth";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
 import { EBotStatus, EPageStatus, ETransactionType } from "@/types";
 import { CREDIT_PER_PAGE } from "@/config";
 import { deductCredits, refundCredits, CreditDeductionResult } from "@/lib/services/credit.service";
@@ -55,9 +55,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<SelectionResp
     }
 
     const candidatePages = await getPagesByBotIdServer(supabase, botId);
+    const pagesById = new Map(candidatePages.map((page) => [page.id, page]));
 
-    const discoveredPageIds = new Set((candidatePages || []).map((p) => p.id));
-    const invalidSelected = selectedPageIds.filter((id) => !discoveredPageIds.has(id));
+    const invalidSelected = selectedPageIds.filter((id) => !pagesById.has(id));
     if (invalidSelected.length > 0) {
       return NextResponse.json(
         {
@@ -68,7 +68,20 @@ export async function POST(req: NextRequest): Promise<NextResponse<SelectionResp
       );
     }
 
-    const discoveredIds = Array.from(discoveredPageIds);
+    const nonPendingSelected = selectedPageIds.filter(
+      (id) => pagesById.get(id)?.status !== EPageStatus.Pending
+    );
+    if (nonPendingSelected.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "selectedPageIds must be in pending state",
+        },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    const discoveredIds = candidatePages.map((page) => page.id);
     const selectedSet = new Set(selectedPageIds);
     const ignoredPageIds = discoveredIds.filter((id) => !selectedSet.has(id));
     const requiredCredits = selectedPageIds.length * CREDIT_PER_PAGE;

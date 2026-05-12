@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { addIndexerJob } from "@/lib/scraper";
 import { corsHeaders } from "@/lib/constants";
-import { authenticateRequest, isAuthError } from "@/lib/helper/auth";
+import { hashContent } from "@/lib/helpers/crawl-website-helpers";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
 import {
   EPageStatus,
   EBotStatus,
@@ -11,10 +12,13 @@ import {
   ESubscriptionPlan,
 } from "@/types";
 import { MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH, CREDIT_PER_PAGE } from "@/config";
+import { MAX_KNOWLEDGE_FILE_SIZE } from "@/config/knowledge";
 import { deductCredits, refundCredits } from "@/lib/services/credit.service";
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
 import { getBotByIdServer, updateBotStatusServer } from "@/lib/services/bot.service";
 import { insertPageServer } from "@/lib/services/page.service";
+import { uploadKnowledgeFile, deleteKnowledgeFile } from "@/lib/supabase/upload";
+import { extractTextFromFile } from "@/lib/scraper/extractors/files";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
@@ -24,8 +28,9 @@ export async function OPTIONS() {
 const ALLOWED_PLANS = [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro];
 
 interface KnowledgeRequest {
-  botId: string;
-  isManual: boolean;
+  botId?: string;
+  isManual?: boolean;
+  mode?: "manual" | "file";
   title?: string;
   content?: string;
   url?: string;
@@ -43,8 +48,30 @@ interface KnowledgeResponse {
 
 export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResponse>> {
   try {
-    const body: KnowledgeRequest = await req.json();
-    const { botId, isManual, title, content, url } = body;
+    const contentType = req.headers.get("content-type") || "";
+    const isMultipart = contentType.includes("multipart/form-data");
+
+    let body: KnowledgeRequest = {};
+    let uploadedFile: File | null = null;
+
+    if (isMultipart) {
+      const formData = await req.formData();
+      body = {
+        botId: String(formData.get("botId") || ""),
+        mode: "file",
+      };
+      const fileField = formData.get("file");
+      if (fileField instanceof File) {
+        uploadedFile = fileField;
+      }
+    } else {
+      body = (await req.json()) as KnowledgeRequest;
+    }
+
+    const { botId, title, content, url } = body;
+    const mode = body.mode ?? "manual";
+    const isManual = mode === "manual";
+    const isFileMode = mode === "file";
 
     // Validate required fields
     if (!botId) {
@@ -79,15 +106,28 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
       );
     }
 
-    if (typeof isManual !== "boolean") {
+    if (!isManual && !isFileMode) {
       return NextResponse.json(
-        { success: false, message: "isManual (boolean) is required" },
+        { success: false, message: "mode must be either manual or file" },
         { status: 400, headers: corsHeaders }
       );
     }
 
     // Validate manual-specific fields
-    if (isManual) {
+    if (isFileMode) {
+      if (!uploadedFile) {
+        return NextResponse.json(
+          { success: false, message: "file is required for file mode" },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+      if (uploadedFile.size > MAX_KNOWLEDGE_FILE_SIZE) {
+        return NextResponse.json(
+          { success: false, message: "File is too large. Maximum file size is 10MB." },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+    } else if (isManual) {
       if (!title?.trim()) {
         return NextResponse.json(
           { success: false, message: "title is required for manual text entries" },
@@ -138,8 +178,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
       );
     }
 
-    if (isManual) {
-      // Deduct credits before adding knowledge
+    if (isManual || isFileMode) {
       const requiredCredits = CREDIT_PER_PAGE;
       const deductionResult = await deductCredits(supabase, {
         userId: bot.user_id,
@@ -158,25 +197,52 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
         );
       }
 
-      // Handle manual text entry
       const pageId = randomUUID();
-      const pseudoUrl = `manual://${pageId}`;
+      const sourceType = isFileMode ? EPageSourceType.File : EPageSourceType.ManualText;
+      let pageUrl = `manual://${pageId}`;
+      let pageTitle = title?.trim() || "";
+      let normalizedContent = content?.trim() || "";
+      let rawContent: string | null = null;
 
-      // Insert the page record
       try {
+        if (isFileMode && uploadedFile) {
+          const uploadResult = await uploadKnowledgeFile(supabase, uploadedFile, botId);
+          if (!uploadResult.success || !uploadResult.url) {
+            throw new Error(uploadResult.error || "Failed to upload file");
+          }
+
+          const fileBuffer = Buffer.from(await uploadedFile.arrayBuffer());
+          normalizedContent = await extractTextFromFile(
+            fileBuffer,
+            uploadedFile.name,
+            uploadedFile.type
+          );
+          pageTitle = uploadedFile.name;
+          pageUrl = `file://${pageId}`;
+          rawContent = uploadResult.url;
+        }
+
         await insertPageServer(supabase, {
           id: pageId,
           bot_id: botId,
-          url: pseudoUrl,
-          title: title!.trim(),
-          content: content!.trim(),
-          source_type: EPageSourceType.ManualText,
+          url: pageUrl,
+          title: pageTitle,
+          content: normalizedContent,
+          raw_content: rawContent ?? normalizedContent,
+          content_hash: hashContent(normalizedContent),
+          source_type: sourceType,
           status: EPageStatus.PendingIndex,
           crawled_at: new Date().toISOString(),
         });
       } catch (insertErr) {
         const insertError = insertErr as Error;
-        // Refund credits on failure
+
+        if (isFileMode && rawContent) {
+          await deleteKnowledgeFile(supabase, rawContent).catch((err) =>
+            console.error("[KnowledgeAPI] Failed to cleanup orphaned file", err)
+          );
+        }
+
         await refundCredits(supabase, {
           userId: bot.user_id,
           deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
@@ -190,13 +256,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
         );
       }
 
-      // Enqueue indexer job
       const jobId = await addIndexerJob({
         botId,
         pageId,
       });
 
-      // Update bot status to indexing if not already ready
       if (bot.status !== EBotStatus.Ready) {
         await updateBotStatusServer(supabase, botId, EBotStatus.Indexing);
       }
@@ -207,7 +271,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
           data: {
             pageId,
             jobId,
-            sourceType: EPageSourceType.ManualText,
+            sourceType,
           },
         },
         { headers: corsHeaders }

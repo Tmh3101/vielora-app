@@ -325,7 +325,11 @@ export async function getCreditSummary(
     .from("credit_transactions")
     .select("amount")
     .eq("user_id", userId)
-    .in("transaction_type", [ETransactionType.IndexPages, ETransactionType.IndexPagesRefund])
+    .in("transaction_type", [
+      ETransactionType.IndexPages,
+      ETransactionType.AddKnowledge,
+      ETransactionType.ChatMessage,
+    ])
     .gte("created_at", periodStart);
 
   if (indexError) {

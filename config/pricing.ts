@@ -12,8 +12,8 @@ export const planOrder: readonly PlanCode[] = ["free", "standard", "pro", "enter
 
 const unifiedPlanFeatures: Partial<Record<PlanCode, string[]>> = {
   free: [],
-  standard: ["Tùy chỉnh kiến thức chatbot"],
-  pro: ["Tùy chỉnh kiến thức chatbot"],
+  standard: ["Tùy chỉnh kiến thức chatbot", "Tạo các câu hỏi gợi ý"],
+  pro: ["Tùy chỉnh kiến thức chatbot", "Tạo các câu hỏi gợi ý"],
 };
 
 export const planFeatures: Record<PricingVariant, Partial<Record<PlanCode, string[]>>> = {

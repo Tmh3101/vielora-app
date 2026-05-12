@@ -5,8 +5,14 @@ import {
   EPaymentStatus,
   EPaymentType,
   ESubscriptionStatus,
+  EPaymentCurrency,
 } from "@/types/enums";
-import { sendPaymentConfirmationEmail, getUserEmailById } from "@/lib/services/email.service";
+import {
+  sendPaymentConfirmationEmail,
+  sendPAYGPurchaseEmail,
+  getUserEmailById,
+} from "@/lib/services/email.service";
+import { PaymentAction } from "@/lib/constants/payment";
 
 export type PaymentRow = Tables<"payments">;
 
@@ -51,10 +57,90 @@ export async function handlePaymentSuccess(
     return { success: true, message: "Already processed" };
   }
 
-  // For PAYG payments, we might want to handle them differently in the future
-  // TODO: Implement PAYG processing logic
+  // Khóa Atomic (Pessimistic Lock giả lập):
+  // Cập nhật trạng thái payment sang Completed ngay lập tức kèm theo điều kiện status = Pending.
+  // Nếu Webhook và Redirect chạy cùng lúc, chỉ có 1 request cập nhật thành công và nhận được data.
+  // Request còn lại sẽ nhận về null và thoát sớm.
+  const { data: lockedPayment, error: lockError } = await client
+    .from("payments")
+    .update({ status: EPaymentStatus.Completed })
+    .eq("id", paymentId)
+    .eq("status", EPaymentStatus.Pending)
+    .select("id")
+    .maybeSingle();
+
+  if (lockError) {
+    throw new Error(`Failed to lock payment: ${lockError.message}`);
+  }
+
+  // Nếu không trả về dòng nào, nghĩa là một process khác đã cập nhật payment này thành công trước đó vài mili-giây.
+  if (!lockedPayment) {
+    console.log(`[Payment Lock] Payment ${paymentId} already processed by another thread.`);
+    return { success: true, message: "Already processed by another thread" };
+  }
+
   if (payment.payment_type === EPaymentType.PayAsYouGo) {
-    return { success: true, message: "PAYG processing skipped for now" };
+    const metadata = payment.metadata as Record<string, unknown>;
+    const creditsAdded = metadata?.credits ? Number(metadata.credits) : 0;
+    const packageName = (metadata?.packageName as string) || "Gói Nạp Lẻ";
+
+    if (creditsAdded <= 0) {
+      throw new Error(`Invalid credits amount in payment metadata`);
+    }
+
+    // Fetch wallet
+    const { data: wallet, error: walletError } = await client
+      .from("wallets")
+      .select("payg_credits, total_credits")
+      .eq("user_id", payment.user_id)
+      .maybeSingle();
+
+    if (walletError) throw new Error(`Failed to fetch wallet: ${walletError.message}`);
+    if (!wallet) throw new Error(`Wallet not found for user ${payment.user_id}`);
+
+    const newPaygCredits = wallet.payg_credits + creditsAdded;
+
+    // Update wallet
+    const { error: updateWalletError } = await client
+      .from("wallets")
+      .update({ payg_credits: newPaygCredits })
+      .eq("user_id", payment.user_id);
+
+    if (updateWalletError) {
+      throw new Error(`Failed to update wallet credits: ${updateWalletError.message}`);
+    }
+
+    // Insert transaction
+    const transaction: CreditTransactionInsert = {
+      user_id: payment.user_id,
+      payment_id: payment.id,
+      amount: creditsAdded,
+      transaction_type: "payg_purchase",
+      description: `Nạp ${creditsAdded} credits`,
+    };
+
+    const { error: transactionError } = await client
+      .from("credit_transactions")
+      .insert(transaction);
+
+    if (transactionError) {
+      throw new Error(`Failed to insert credit transaction: ${transactionError.message}`);
+    }
+
+    // Send email
+    const userInfo = await getUserEmailById(client, payment.user_id);
+    if (userInfo) {
+      await sendPAYGPurchaseEmail(userInfo.email, userInfo.fullName, {
+        packageName,
+        amount: payment.amount as number,
+        currency: (metadata?.currency as string) ?? EPaymentCurrency.VND,
+        txnId: payment.id.slice(0, 8).toUpperCase(),
+        creditsAdded,
+        newTotalCredits: (wallet.total_credits || 0) + creditsAdded,
+      });
+    }
+
+    return { success: true, message: "PAYG processed successfully" };
   }
 
   if (!payment.plan_id) {
@@ -77,10 +163,21 @@ export async function handlePaymentSuccess(
     throw new Error(`Plan ${payment.plan_id} not found`);
   }
 
+  const metadataObj =
+    typeof payment.metadata === "string" ? JSON.parse(payment.metadata) : payment.metadata;
+  const metadataAction = (metadataObj as Record<string, unknown>)?.action;
+  const action =
+    payment.payment_type === EPaymentType.SubscriptionRenew ||
+    metadataAction === PaymentAction.Renew
+      ? PaymentAction.Renew
+      : PaymentAction.Upgrade;
+
   const { data: subscription, error: subscriptionError } = await client
     .from("subscriptions")
-    .select("id")
+    .select("id, current_period_start, current_period_end")
     .eq("user_id", payment.user_id)
+    .order("current_period_end", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (subscriptionError) {
@@ -91,8 +188,30 @@ export async function handlePaymentSuccess(
     throw new Error(`Subscription not found for user ${payment.user_id}`);
   }
 
-  const periodStartDate = new Date();
-  const periodEndDate = new Date(periodStartDate);
+  let periodStartDate: Date;
+  let periodEndDate: Date;
+  let nextCreditResetAt: Date | undefined = undefined;
+  let shouldResetCredits = false;
+
+  if (action === PaymentAction.Renew) {
+    // Gia hạn: Cộng dồn thời gian từ ngày kết thúc cũ
+    periodStartDate = new Date(subscription.current_period_start);
+    periodEndDate = new Date(subscription.current_period_end);
+
+    // Nếu đã hết hạn từ lâu thì tính từ hôm nay và reset credit
+    if (periodEndDate < new Date()) {
+      periodStartDate = new Date();
+      periodEndDate = new Date();
+      nextCreditResetAt = new Date();
+      shouldResetCredits = true;
+    }
+  } else {
+    // Nâng cấp: Ghi đè bắt đầu từ hôm nay và reset credit
+    periodStartDate = new Date();
+    periodEndDate = new Date();
+    nextCreditResetAt = new Date(); // Sẽ cộng thêm 1 tháng cho lần reset credit tiếp theo
+    shouldResetCredits = true;
+  }
 
   if (cycle === ESubscriptionCycle.Monthly) {
     periodEndDate.setMonth(periodEndDate.getMonth() + 1);
@@ -103,37 +222,48 @@ export async function handlePaymentSuccess(
   const periodStartIso = periodStartDate.toISOString();
   const periodEndIso = periodEndDate.toISOString();
 
+  if (nextCreditResetAt) {
+    if (cycle === ESubscriptionCycle.Monthly) {
+      nextCreditResetAt.setMonth(nextCreditResetAt.getMonth() + 1);
+    } else {
+      // Gói năm nhưng credit vẫn reset theo tháng
+      nextCreditResetAt.setMonth(nextCreditResetAt.getMonth() + 1);
+    }
+  }
+
+  // Bắt đầu cập nhật thông tin
+  const updatePayload: TablesUpdate<"subscriptions"> = {
+    status: ESubscriptionStatus.Active,
+    plan_id: plan.id,
+    billing_cycle: cycle,
+    current_period_start: periodStartIso,
+    current_period_end: periodEndIso,
+  };
+
+  if (nextCreditResetAt) {
+    updatePayload.next_credit_reset_at = nextCreditResetAt.toISOString();
+  }
+
   const { error: subscriptionUpdateError } = await client
     .from("subscriptions")
-    .update({
-      status: ESubscriptionStatus.Active,
-      plan_id: plan.id,
-      billing_cycle: cycle,
-      current_period_start: periodStartIso,
-      current_period_end: periodEndIso,
-    })
+    .update(updatePayload)
     .eq("id", subscription.id);
 
   if (subscriptionUpdateError) {
     throw new Error(`Failed to update subscription: ${subscriptionUpdateError.message}`);
   }
 
-  const { error: walletError } = await client
-    .from("wallets")
-    .update({ subscription_credits: plan.monthly_credits })
-    .eq("user_id", payment.user_id);
+  // Chỉ reset credit nếu là upgrade hoặc renew gói đã hết hạn
+  if (shouldResetCredits) {
+    const { error: walletError } = await client
+      .from("wallets")
+      .update({ subscription_credits: plan.monthly_credits })
+      .eq("user_id", payment.user_id);
 
-  if (walletError) {
-    throw new Error(`Failed to update wallet credits: ${walletError.message}`);
-  }
-
-  const { error: paymentUpdateError } = await client
-    .from("payments")
-    .update({ status: EPaymentStatus.Completed })
-    .eq("id", paymentId);
-
-  if (paymentUpdateError) {
-    throw new Error(`Failed to mark payment as completed: ${paymentUpdateError.message}`);
+    if (walletError) {
+      // Revert is ideally done with transactions, but since we use REST, we just throw error here
+      throw new Error(`Failed to update wallet credits: ${walletError.message}`);
+    }
   }
 
   const transaction: CreditTransactionInsert = {
@@ -141,7 +271,10 @@ export async function handlePaymentSuccess(
     payment_id: payment.id,
     amount: plan.monthly_credits,
     transaction_type: "subscription_renewal",
-    description: `Gia hạn gói ${plan.name} chu kỳ ${cycle}`,
+    description:
+      action === PaymentAction.Renew
+        ? `Gia hạn gói ${plan.name} chu kỳ ${cycle}`
+        : `Nâng cấp gói ${plan.name} chu kỳ ${cycle}`,
   };
 
   const { error: transactionError } = await client.from("credit_transactions").insert(transaction);
@@ -164,7 +297,8 @@ export async function handlePaymentSuccess(
       planName: plan.name,
       billingCycle: cycle,
       amount: payment.amount as number,
-      currency: ((payment.metadata as Record<string, unknown>)?.currency as string) ?? "VND",
+      currency:
+        ((payment.metadata as Record<string, unknown>)?.currency as string) ?? EPaymentCurrency.VND,
       txnId: payment.id.slice(0, 8).toUpperCase(),
       botsLimit: 0, // Will be resolved from plan
       monthlyCredits: plan.monthly_credits,
@@ -307,4 +441,68 @@ export async function getPendingPayOSPaymentsByUser(
 
   if (error) throw new Error(error.message);
   return (data ?? []) as Pick<PaymentRow, "id" | "provider_transaction_id">[];
+}
+
+/**
+ * Tính toán số tiền được giảm giá (Proration) dựa trên lượng Credit tiêu thụ thực tế.
+ */
+export async function calculateCreditBasedProration(
+  client: ServiceClient,
+  userId: string
+): Promise<number> {
+  const { data: sub, error: subError } = await client
+    .from("subscriptions")
+    .select("*, plans(monthly_credits, pricing)")
+    .eq("user_id", userId)
+    .eq("status", ESubscriptionStatus.Active)
+    .order("current_period_end", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (subError || !sub || !sub.plans) return 0;
+
+  const planData = Array.isArray(sub.plans) ? sub.plans[0] : sub.plans;
+  if (!planData || planData.monthly_credits <= 0) return 0; // free plan
+
+  const now = new Date();
+  const periodEnd = new Date(sub.current_period_end);
+  if (now >= periodEnd) return 0;
+
+  const { data: wallet } = await client
+    .from("wallets")
+    .select("subscription_credits")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const currentCredits = wallet?.subscription_credits ?? 0;
+
+  const pricing = planData.pricing as Record<string, Record<string, number>> | null;
+  const pricePaid = pricing?.VND?.[sub.billing_cycle || ESubscriptionCycle.Monthly] ?? 0;
+  if (pricePaid <= 0) return 0;
+
+  const isYearly = sub.billing_cycle === ESubscriptionCycle.Yearly;
+  const totalCreditsPeriod = planData.monthly_credits * (isYearly ? 12 : 1);
+
+  let fullMonthsLeft = 0;
+  if (sub.next_credit_reset_at) {
+    const nextReset = new Date(sub.next_credit_reset_at);
+    if (nextReset < periodEnd && nextReset >= now) {
+      const monthsDiff =
+        (periodEnd.getFullYear() - nextReset.getFullYear()) * 12 +
+        (periodEnd.getMonth() - nextReset.getMonth());
+      fullMonthsLeft = Math.max(0, monthsDiff);
+    } else if (nextReset >= periodEnd) {
+      // If next reset is at or after period end, no full months left
+      fullMonthsLeft = 0;
+    } else if (nextReset < now && isYearly) {
+      // Fallback calculation just in case next_credit_reset_at is in the past
+      const remainingTime = periodEnd.getTime() - now.getTime();
+      fullMonthsLeft = Math.floor(remainingTime / (1000 * 60 * 60 * 24 * 30));
+    }
+  }
+
+  const remainingCredits = fullMonthsLeft * planData.monthly_credits + Math.max(0, currentCredits);
+
+  const discount = Math.floor((remainingCredits / totalCreditsPeriod) * pricePaid);
+  return discount;
 }

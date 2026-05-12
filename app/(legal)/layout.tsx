@@ -13,12 +13,10 @@ export default function LegalLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" suppressHydrationWarning>
-      <body className={`bg-background text-foreground antialiased`}>
-        <Header isLegalLayout={true} />
-        <main className="container mx-auto max-w-6xl px-4 py-28 sm:px-6 lg:px-8">{children}</main>
-        <Footer isLegalLayout={true} />
-      </body>
-    </html>
+    <>
+      <Header isLegalLayout={true} />
+      <main className="container mx-auto max-w-6xl px-4 py-28 sm:px-6 lg:px-8">{children}</main>
+      <Footer isLegalLayout={true} />
+    </>
   );
 }

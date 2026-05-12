@@ -50,5 +50,10 @@ export function createAdminClient() {
 
   return createClient<Database>(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    global: {
+      fetch: (fetchUrl, options) => {
+        return fetch(fetchUrl, { ...options, cache: "no-store" });
+      },
+    },
   });
 }

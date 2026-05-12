@@ -31,19 +31,17 @@ import { UpgradeModal } from "@/components/UpgradeModal";
 import { useBotData } from "@/hooks/dashboard/bot-detail/useBotData";
 import { useBotSettings } from "@/hooks/dashboard/bot-detail/useBotSettings";
 import { useKnowledgeBase } from "@/hooks/dashboard/bot-detail/useKnowledgeBase";
-import { useChatHistory } from "@/hooks/dashboard/bot-detail/useChatHistory";
 import { StopBotDialog } from "@/components/dashboard/bot-detail/modals/StopBotDialog";
 import { ReindexModal } from "@/components/dashboard/bot-detail/modals/ReindexModal";
 import { AddKnowledgeModal } from "@/components/dashboard/bot-detail/modals/AddKnowledgeModal";
 import { EditKnowledgeModal } from "@/components/dashboard/bot-detail/modals/EditKnowledgeModal";
 import { DeleteKnowledgeDialog } from "@/components/dashboard/bot-detail/modals/DeleteKnowledgeDialog";
-import { QuestionDetailDialog } from "@/components/dashboard/bot-detail/modals/QuestionDetailDialog";
 import { OverviewTab } from "@/components/dashboard/bot-detail/tabs/OverviewTab";
 import { KnowledgeBaseTab } from "@/components/dashboard/bot-detail/tabs/KnowledgeBaseTab";
 import { AppearanceTab } from "@/components/dashboard/bot-detail/tabs/AppearanceTab";
 import { IntegrationTab } from "@/components/dashboard/bot-detail/tabs/IntegrationTab";
 import { SettingsTab } from "@/components/dashboard/bot-detail/tabs/SettingsTab";
-import { getEmbededScript } from "@/lib/helper";
+import { getEmbededScript } from "@/lib/helpers/get-embed-script";
 
 type TabType =
   | "overview"
@@ -54,6 +52,13 @@ type TabType =
   | "settings"
   | "install";
 
+/**
+ * Render the bot detail page with sidebar navigation, mobile header, tabbed content (Overview, Playground, Knowledge, Appearance, Install, Settings), and all related dialogs/modals for managing a bot.
+ *
+ * Renders loading state while authentication or bot data is loading, returns null if the bot is not found, and initializes appearance/settings and knowledge-base flows when bot data becomes available.
+ *
+ * @returns The React element for the Bot detail page UI containing navigation, tab panels, and management modals
+ */
 export default function BotDetailPage() {
   const params = useParams();
   const botId = params.botId as string;
@@ -63,29 +68,6 @@ export default function BotDetailPage() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
-
-  const {
-    messagesMonth,
-    topQuestions,
-    messageChartData,
-    conversationChartData,
-    messageChartPeriod,
-    conversationChartPeriod,
-    questionDetailOpen,
-    questionDetail,
-    isLoadingQuestionDetail,
-    setMessageChartPeriod,
-    setConversationChartPeriod,
-    setQuestionDetailOpen,
-    fetchAnalytics,
-    handleOpenQuestionDetail,
-    parseMarkdown,
-  } = useChatHistory({
-    botId,
-    userId: user?.id,
-    supabase,
-    toast,
-  });
 
   const {
     bot,
@@ -105,7 +87,6 @@ export default function BotDetailPage() {
     supabase,
     router,
     toast,
-    onAfterFetch: fetchAnalytics,
   });
 
   const {
@@ -113,29 +94,51 @@ export default function BotDetailPage() {
     textColor,
     position,
     welcomeMessage,
+    suggestedQuestions,
+    chatBackgroundType,
+    chatBackgroundValue,
+    chatBackgroundOpacity,
+    chatIconType,
+    chatIconPreset,
+    chatIconUrl,
+    chatIconColor,
+    chatIconBgColor,
     editBotName,
     avatarUrl,
     rateLimitPerDay,
     rateLimitPerIp,
+    slug,
+    isPublic,
     isSaving,
     stopModalOpen,
     isStoppingBot,
     upgradeModalOpen,
     upgradeModalMessage,
     setPrimaryColor,
-    setTextColor,
     setPosition,
     setWelcomeMessage,
+    setSuggestedQuestions,
     setEditBotName,
     setAvatarUrl,
+    setChatBackgroundType,
+    setChatBackgroundValue,
+    setChatBackgroundOpacity,
+    setChatIconType,
+    setChatIconPreset,
+    setChatIconUrl,
+    setChatIconColor,
+    setChatIconBgColor,
     setRateLimitPerDay,
     setRateLimitPerIp,
+    setSlug,
+    setIsPublic,
     setStopModalOpen,
     setUpgradeModalOpen,
     openUpgradeModal,
     initializeFromBot,
     handleSaveAppearance,
     handleSaveRateLimit,
+    handleSaveSlugSettings,
     handleStopBot,
     handleStartBot,
   } = useBotSettings({
@@ -172,17 +175,25 @@ export default function BotDetailPage() {
     selectedCreditsCost,
     maxSelectablePagesByCredit,
     selectablePreviewPages,
+    isDiscovering,
+    reindexCurrentAction,
+    reindexCrawledCount,
+    reindexScope,
+    hasStartedReindexDiscover,
     setReindexModalOpen,
+    setReindexScope,
     setAddDataSourceOpen,
     setEditKnowledgeOpen,
     setDeleteKnowledgeOpen,
     handleReindex,
+    handleStartReindexDiscover,
     handleUpdateSelected,
     handleSelectAll,
     handleDeselectAll,
     handleTogglePage,
     handleOpenAddDataSource,
     handleAddDataSource,
+    handleAddFileDataSource,
     handleOpenEditKnowledge,
     handleSaveEditKnowledge,
     handleOpenDeleteKnowledge,
@@ -392,21 +403,7 @@ export default function BotDetailPage() {
           </div>
 
           {/* Overview Tab */}
-          {activeTab === "overview" && (
-            <OverviewTab
-              bot={bot}
-              pagesCount={pages.length}
-              messagesMonth={messagesMonth}
-              messageChartData={messageChartData}
-              conversationChartData={conversationChartData}
-              messageChartPeriod={messageChartPeriod}
-              conversationChartPeriod={conversationChartPeriod}
-              topQuestions={topQuestions}
-              setMessageChartPeriod={setMessageChartPeriod}
-              setConversationChartPeriod={setConversationChartPeriod}
-              onOpenQuestionDetail={handleOpenQuestionDetail}
-            />
-          )}
+          {activeTab === "overview" && <OverviewTab bot={bot} pagesCount={pages.length} />}
 
           {/* Playground Tab */}
           {activeTab === "playground" && <BotPlayground botId={bot.id} position={position} />}
@@ -433,13 +430,31 @@ export default function BotDetailPage() {
               textColor={textColor}
               position={position}
               welcomeMessage={welcomeMessage}
+              suggestedQuestions={suggestedQuestions}
+              chatBackgroundType={chatBackgroundType}
+              chatBackgroundValue={chatBackgroundValue}
+              chatBackgroundOpacity={chatBackgroundOpacity}
+              chatIconType={chatIconType}
+              chatIconPreset={chatIconPreset}
+              chatIconUrl={chatIconUrl}
+              chatIconColor={chatIconColor}
+              chatIconBgColor={chatIconBgColor}
               isSaving={isSaving}
+              currentPlan={planCode}
               setEditBotName={setEditBotName}
               setAvatarUrl={setAvatarUrl}
               setPrimaryColor={setPrimaryColor}
-              setTextColor={setTextColor}
               setPosition={setPosition}
               setWelcomeMessage={setWelcomeMessage}
+              setSuggestedQuestions={setSuggestedQuestions}
+              setChatBackgroundType={setChatBackgroundType}
+              setChatBackgroundValue={setChatBackgroundValue}
+              setChatBackgroundOpacity={setChatBackgroundOpacity}
+              setChatIconType={setChatIconType}
+              setChatIconPreset={setChatIconPreset}
+              setChatIconUrl={setChatIconUrl}
+              setChatIconColor={setChatIconColor}
+              setChatIconBgColor={setChatIconBgColor}
               onSaveAppearance={handleSaveAppearance}
             />
           )}
@@ -468,11 +483,16 @@ export default function BotDetailPage() {
               isStoppingBot={isStoppingBot}
               rateLimitPerDay={rateLimitPerDay}
               rateLimitPerIp={rateLimitPerIp}
+              slug={slug}
+              isPublic={isPublic}
               setRateLimitPerDay={setRateLimitPerDay}
               setRateLimitPerIp={setRateLimitPerIp}
+              setSlug={setSlug}
+              setIsPublic={setIsPublic}
               setStopModalOpen={setStopModalOpen}
               onStartBot={handleStartBot}
               onSaveRateLimit={handleSaveRateLimit}
+              onSaveSlugSettings={handleSaveSlugSettings}
               onVerified={fetchData}
             />
           )}
@@ -491,6 +511,11 @@ export default function BotDetailPage() {
         onOpenChange={setReindexModalOpen}
         isLoadingPreview={isLoadingPreview}
         isReindexing={isReindexing}
+        isDiscovering={isDiscovering}
+        currentAction={reindexCurrentAction}
+        crawledCount={reindexCrawledCount}
+        reindexScope={reindexScope}
+        hasStartedDiscover={hasStartedReindexDiscover}
         previewPages={previewPages}
         selectedUrls={selectedUrls}
         previewErrors={previewErrors}
@@ -502,6 +527,8 @@ export default function BotDetailPage() {
         selectablePreviewPagesCount={selectablePreviewPages.length}
         onSelectAll={handleSelectAll}
         onDeselectAll={handleDeselectAll}
+        onScopeChange={setReindexScope}
+        onStartDiscover={handleStartReindexDiscover}
         onTogglePage={handleTogglePage}
         onConfirm={handleUpdateSelected}
         renderStatusBadge={getStatusBadge}
@@ -512,7 +539,8 @@ export default function BotDetailPage() {
         onOpenChange={setAddDataSourceOpen}
         isSubmitting={isSubmittingDataSource}
         totalCredits={totalCredits}
-        onConfirm={handleAddDataSource}
+        onConfirmManual={handleAddDataSource}
+        onConfirmFile={handleAddFileDataSource}
       />
 
       <EditKnowledgeModal
@@ -537,14 +565,6 @@ export default function BotDetailPage() {
         open={upgradeModalOpen}
         onOpenChange={setUpgradeModalOpen}
         {...upgradeModalMessage}
-      />
-
-      <QuestionDetailDialog
-        open={questionDetailOpen}
-        onOpenChange={setQuestionDetailOpen}
-        isLoading={isLoadingQuestionDetail}
-        details={questionDetail}
-        parseMarkdown={parseMarkdown}
       />
     </div>
   );

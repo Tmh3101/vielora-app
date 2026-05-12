@@ -1,6 +1,29 @@
+import type { JobsOptions } from "bullmq";
+
 export const SCRAPE_DEFAULT_TIMEOUT = 30000;
 
-export const MAX_PAGES = 100;
+export const RATE_LIMITER_CONFIG = {
+  max: 5,
+  duration: 2000,
+};
+
+export const DEFAULT_JOB_OPTIONS: JobsOptions = {
+  removeOnComplete: {
+    age: 3600,
+    count: 1000,
+  },
+  removeOnFail: {
+    age: 86400,
+    count: 500,
+  },
+  attempts: 3,
+  backoff: {
+    type: "exponential",
+    delay: 2000,
+  },
+};
+
+export const MAX_PAGES = 500;
 export const MAX_DEPTH = 2;
 
 export const DEFAULT_USER_AGENT =
@@ -64,3 +87,104 @@ export const SOFT_404_TITLE_PATTERNS = [
   "trang không tồn tại",
   "không tồn tại",
 ];
+
+export const LOAD_MORE_KEYWORDS = [
+  "xem thêm",
+  "load more",
+  "show more",
+  "xem tiếp",
+  "tải thêm",
+  "view more",
+];
+
+/**
+ * File extensions to exclude (non-HTML resources)
+ */
+export const EXCLUDED_EXTENSIONS = [
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".zip",
+  ".rar",
+  ".7z",
+  ".tar",
+  ".gz",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".webp",
+  ".svg",
+  ".ico",
+  ".mp3",
+  ".mp4",
+  ".avi",
+  ".mov",
+  ".wmv",
+  ".flv",
+  ".webm",
+  ".wav",
+  ".ogg",
+  ".css",
+  ".js",
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".eot",
+  ".xml",
+  ".json",
+  ".rss",
+  ".atom",
+];
+
+/**
+ * URL patterns to always exclude (auth, actions, etc.)
+ */
+export const EXCLUDED_PATTERNS = [
+  "/login",
+  "/logout",
+  "/signin",
+  "/signout",
+  "/signup",
+  "/register",
+  "/cart",
+  "/checkout",
+  "/admin",
+  "/wp-admin",
+  "/account",
+  "/my-account",
+  "/password",
+  "/reset",
+  "/unsubscribe",
+  "/delete",
+  "/api/",
+  "/feed",
+  "/rss",
+  "?action=",
+  "?logout",
+  "javascript:",
+  "mailto:",
+  "tel:",
+  "data:",
+];
+
+export const PAAS_SUFFIXES = [
+  "vercel.app",
+  "onrender.com",
+  "up.railway.app",
+  "herokuapp.com",
+  "netlify.app",
+  "github.io",
+  "webflow.io",
+  "pages.dev",
+  "firebaseapp.com",
+];
+
+export const KNOWN_SLDS = ["co", "com", "org", "net", "gov", "edu", "ac", "vn", "com.vn", "edu.vn"];
+
+export const MAX_PAGES_PER_BROWSER = 100;
+export const CLOSE_TIMEOUT_MS = 5000;

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { createBot, startDiscover, updateBotStatus } from "@/lib/services/bot.service";
 import { uploadBotAvatar } from "@/lib/supabase/upload";
+import { normalizeSeedUrl } from "@/lib/helpers/url-helpers";
 import { EBotStatus } from "@/types";
 
 export interface BotAvatarInput {
@@ -16,6 +17,7 @@ export interface CreateBotAndStartDiscoverInput {
   websiteUrl: string;
   botName: string;
   botAvatar: BotAvatarInput;
+  includeSubdomains: boolean;
 }
 
 export interface UseBotCreationReturn {
@@ -30,7 +32,7 @@ export function useBotCreation(): UseBotCreationReturn {
   const createBotAndStartDiscover = async (
     input: CreateBotAndStartDiscoverInput
   ): Promise<string> => {
-    const { userId, websiteUrl, botName, botAvatar } = input;
+    const { userId, websiteUrl, botName, botAvatar, includeSubdomains } = input;
 
     setIsCreating(true);
 
@@ -42,6 +44,18 @@ export function useBotCreation(): UseBotCreationReturn {
 
       const domain = new URL(formattedUrl).hostname;
       const bot = await createBot(supabase, { userId, name: botName, domain });
+      const seedUrl = normalizeSeedUrl(formattedUrl);
+      const crawlSettings =
+        bot.crawl_settings &&
+        typeof bot.crawl_settings === "object" &&
+        !Array.isArray(bot.crawl_settings)
+          ? (bot.crawl_settings as Record<string, unknown>)
+          : {};
+
+      await supabase
+        .from("bots")
+        .update({ crawl_settings: { ...crawlSettings, seedUrl } } as never)
+        .eq("id", bot.id);
 
       if (botAvatar.file) {
         const uploadResult = await uploadBotAvatar(botAvatar.file, bot.id);
@@ -60,6 +74,7 @@ export function useBotCreation(): UseBotCreationReturn {
           await startDiscover(supabase, {
             botId: bot.id,
             url: formattedUrl,
+            includeSubdomains,
           });
         } catch {
           // Step 2 will surface pipeline failure via polling.

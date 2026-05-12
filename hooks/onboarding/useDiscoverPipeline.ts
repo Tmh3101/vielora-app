@@ -3,69 +3,73 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { getJobById } from "@/lib/services/job.service";
 import { getDiscoveredPagesByBotId, type DiscoveredPage } from "@/lib/services/page.service";
 import { startDiscover } from "@/lib/services/bot.service";
-import { EBotStatus, EJobStatus } from "@/types";
+import { EBotStatus, JobTrackerMode } from "@/types";
+import { ONBOARDING_DISCOVERED_PAGES_KEY } from "@/lib/constants/react-query-key";
 import { buildCurationRows, type CurationRow } from "@/components/onboarding/utils";
-
-interface DiscoverJobLookupResult {
-  id: string;
-}
-
-interface BotStateLookupResult {
-  domain: string | null;
-  status: EBotStatus | null;
-}
+import { useJobTracker } from "@/hooks/onboarding/useJobTracker";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { CrawlScope } from "@/lib/constants";
 
 export interface UseDiscoverPipelineReturn {
   botStatus: EBotStatus;
-  trainingProgress: number;
   pagesFailed: number;
   pipelineError: string | null;
   curationRows: CurationRow[];
   isLoadingPages: boolean;
   retryDiscover: () => Promise<void>;
+  currentAction: string;
+  crawledCount: number;
 }
 
 export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const crawlScope = useOnboardingStore((state) => state.crawlScope);
 
   const [botStatus, setBotStatus] = useState<EBotStatus>(EBotStatus.Pending);
-  const [trainingProgress, setTrainingProgress] = useState(0);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [pagesFailed, setPagesFailed] = useState(0);
   const [pipelineError, setPipelineError] = useState<string | null>(null);
-  const [manualDiscoverJobId, setManualDiscoverJobId] = useState<string | null>(null);
   const [botDomain, setBotDomain] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadBotState = async () => {
-      const { data, error } = await supabase
+    if (!botId) return;
+
+    console.log("[UI: DiscoverPipeline] Initialized with botId:", botId);
+    let cancelled = false;
+
+    const loadInitialState = async () => {
+      const { data, error: botError } = await supabase
         .from("bots")
         .select("status, domain")
         .eq("id", botId)
         .maybeSingle();
 
-      if (error || !data) {
-        setBotStatus(EBotStatus.Pending);
-        return;
-      }
+      if (cancelled) return;
 
-      const botData = data as unknown as BotStateLookupResult;
-      setBotDomain(botData.domain ?? null);
-      setBotStatus(botData.status ?? EBotStatus.Pending);
-      if (botData.status === EBotStatus.Discovering) {
-        setTrainingProgress(10);
+      if (botError) {
+        console.error("[UI: DiscoverPipeline] Fetch bot error:", botError);
+        setPipelineError(botError.message);
+      } else if (data) {
+        const botData = data as { status: string; domain: string | null };
+        setBotStatus(botData.status as EBotStatus);
+        setBotDomain(botData.domain);
       }
     };
 
-    void loadBotState();
+    void loadInitialState();
+    return () => {
+      cancelled = true;
+    };
   }, [botId, supabase]);
 
-  const discoverJobIdQuery = useQuery({
-    queryKey: ["onboarding-discover-job-id", botId],
-    queryFn: async (): Promise<string | null> => {
-      const { data, error } = await supabase
+  useEffect(() => {
+    if (!botId || activeJobId) return;
+    let cancelled = false;
+
+    const fetchJobId = async () => {
+      const { data: jobData, error: jobError } = await supabase
         .from("jobs")
         .select("id")
         .eq("bot_id", botId)
@@ -74,100 +78,114 @@ export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
         .limit(1)
         .maybeSingle();
 
-      if (error || !data) return null;
-      return (data as DiscoverJobLookupResult).id;
-    },
-    enabled: !!botId && botStatus === EBotStatus.Discovering && !manualDiscoverJobId,
-    refetchInterval: (query) => (query.state.data ? false : 1000),
-    retry: 1,
-  });
+      if (cancelled) return;
 
-  const discoverJobId = manualDiscoverJobId ?? discoverJobIdQuery.data ?? null;
+      if (jobError) {
+        console.error("[UI: DiscoverPipeline] Fetch jobId error:", jobError);
+      }
 
+      const job = jobData as { id: string } | null;
+      if (job?.id) {
+        console.log("[UI: DiscoverPipeline] Found activeJobId:", job.id);
+        setActiveJobId(job.id);
+      } else {
+        console.log("[UI: DiscoverPipeline] Job Discover not found, retrying...");
+      }
+    };
+
+    void fetchJobId();
+    const interval = setInterval(() => {
+      void fetchJobId();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [botId, activeJobId, supabase]);
+
+  // Poll bot status every 3s; stop when terminal status reached
   useEffect(() => {
-    if (!discoverJobIdQuery.data) return;
-    const timer = window.setTimeout(() => {
-      setManualDiscoverJobId(discoverJobIdQuery.data);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [discoverJobIdQuery.data]);
+    if (!botId) return;
+    let cancelled = false;
 
-  const discoverJobQuery = useQuery({
-    queryKey: ["onboarding-discover-job", discoverJobId],
-    queryFn: () => getJobById(supabase, discoverJobId!),
-    enabled: !!discoverJobId && botStatus === EBotStatus.Discovering,
-    refetchInterval: (query) => {
-      const s = query.state.data?.status;
-      if (s === EJobStatus.Completed || s === EJobStatus.Failed) return false;
-      return 2500;
-    },
-    retry: 2,
-  });
+    const poll = async () => {
+      const { data } = await supabase.from("bots").select("status").eq("id", botId).maybeSingle();
+      if (cancelled) return;
+      const newStatus = (data as { status?: EBotStatus } | null)?.status;
+      if (!newStatus) return;
+      setBotStatus((prev) => {
+        if (prev === newStatus) return prev;
+        if (newStatus === EBotStatus.Failed) {
+          setPipelineError((e) => e ?? "Discover encountered an error. Please try again.");
+        } else {
+          setPipelineError(null);
+        }
+        return newStatus;
+      });
+    };
 
-  useEffect(() => {
-    const job = discoverJobQuery.data;
-    if (!job) return;
+    const interval = setInterval(() => void poll(), 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [botId, supabase]);
 
-    const timer = window.setTimeout(() => {
-      if (job.status === EJobStatus.Active || job.status === EJobStatus.Pending) {
-        setTrainingProgress(Math.min(Math.max(job.progress ?? 10, 10), 90));
-      }
-
-      if (job.status === EJobStatus.Completed) {
-        setBotStatus(EBotStatus.Discovered);
-        setTrainingProgress(100);
-        setPipelineError(null);
-      }
-
-      if (job.status === EJobStatus.Failed) {
-        setBotStatus(EBotStatus.Failed);
-        setPipelineError(job.error_message || "Discover thất bại. Vui lòng thử lại.");
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [discoverJobQuery.data]);
+  // Job Tracker in Discover Worker
+  const jobTracker = useJobTracker({ mode: JobTrackerMode.Job, jobId: activeJobId });
 
   const discoveredPagesQuery = useQuery({
-    queryKey: ["onboarding-discovered-pages", botId],
+    queryKey: [ONBOARDING_DISCOVERED_PAGES_KEY, botId],
     queryFn: (): Promise<DiscoveredPage[]> => getDiscoveredPagesByBotId(supabase, botId),
     enabled: !!botId && botStatus === EBotStatus.Discovered,
     retry: 1,
   });
 
   useEffect(() => {
-    if (botStatus !== EBotStatus.Discovered) return;
-    discoveredPagesQuery.refetch();
+    if (botStatus === EBotStatus.Discovered) {
+      discoveredPagesQuery.refetch();
+    }
   }, [botStatus, discoveredPagesQuery]);
 
   const retryDiscover = async (): Promise<void> => {
     if (!botDomain) {
-      setPipelineError("Không thể xác định domain để chạy lại discover.");
+      setPipelineError("Cannot determine domain to retry discover.");
       return;
     }
 
     setPipelineError(null);
     setPagesFailed(0);
     setBotStatus(EBotStatus.Discovering);
-    setTrainingProgress(10);
-    setManualDiscoverJobId(null);
+    setActiveJobId(null);
 
     const formattedUrl = botDomain.startsWith("http") ? botDomain : `https://${botDomain}`;
-    const { discoverJobId: jobId } = await startDiscover(supabase, {
-      botId,
-      url: formattedUrl,
-    });
-
-    setManualDiscoverJobId(jobId);
+    try {
+      const { discoverJobId: jobId } = await startDiscover(supabase, {
+        botId,
+        url: formattedUrl,
+        includeSubdomains: crawlScope === CrawlScope.FULL_WEBSITE,
+      });
+      setActiveJobId(jobId);
+    } catch (err) {
+      setPipelineError(err instanceof Error ? err.message : "Cannot initiate Discover.");
+    }
   };
+
+  const jobPipelineError =
+    botStatus === EBotStatus.Failed
+      ? (jobTracker.error ?? "Discover failed. Please try again.")
+      : null;
+  const visiblePipelineError = pipelineError ?? jobPipelineError;
 
   return {
     botStatus,
-    trainingProgress,
     pagesFailed,
-    pipelineError,
+    pipelineError: visiblePipelineError,
     curationRows: buildCurationRows(discoveredPagesQuery.data || []),
     isLoadingPages: discoveredPagesQuery.isLoading,
     retryDiscover,
+    currentAction: jobTracker.currentAction || "Đang khởi tạo...",
+    crawledCount: jobTracker.uniqueActionCount,
   };
 }

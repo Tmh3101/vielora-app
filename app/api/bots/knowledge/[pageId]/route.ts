@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addIndexerJob } from "@/lib/scraper";
-import { hashContent } from "@/lib/helper/crawl-website-helpers";
-import { authenticateRequest, isAuthError } from "@/lib/helper/auth";
+import { hashContent } from "@/lib/helpers/crawl-website-helpers";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
 import { corsHeaders } from "@/lib/constants";
 import { EPageStatus, EPageSourceType, ETransactionType, ESubscriptionPlan } from "@/types";
 import { CREDIT_PER_PAGE } from "@/config";
 import { deductCredits, refundCredits } from "@/lib/services/credit.service";
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
+import { deleteKnowledgeFile } from "@/lib/supabase/upload";
 import {
   getPageByIdServer,
   getPageWithOwnerById,
@@ -50,6 +51,45 @@ export async function DELETE(req: NextRequest, { params }: RouteParams): Promise
         { success: false, message: "Page not found" },
         { status: 404, headers: corsHeaders }
       );
+    }
+
+    const isFileKnowledge =
+      page.source_type === EPageSourceType.File || page.url.startsWith("file://");
+
+    if (isFileKnowledge) {
+      const filePath = page.raw_content?.trim();
+      if (!filePath) {
+        console.error("[KnowledgeAPI] Missing storage path for file knowledge", {
+          pageId,
+          botId: page.bot_id,
+          sourceType: page.source_type,
+          url: page.url,
+        });
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Failed to delete knowledge file: missing storage path.",
+          },
+          { status: 500, headers: corsHeaders }
+        );
+      }
+
+      const deleteStorageResult = await deleteKnowledgeFile(supabase, filePath);
+      if (!deleteStorageResult.success) {
+        console.error("[KnowledgeAPI] Delete knowledge file error", {
+          pageId,
+          botId: page.bot_id,
+          filePath,
+          error: deleteStorageResult.error,
+        });
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Failed to delete knowledge file: ${deleteStorageResult.error || "Unknown storage error."}`,
+          },
+          { status: 500, headers: corsHeaders }
+        );
+      }
     }
 
     // Transaction: Delete associated document chunks first

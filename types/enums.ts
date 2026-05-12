@@ -56,6 +56,8 @@ export enum EPaymentStatus {
 
 export enum EPaymentType {
   Subscription = "subscription",
+  SubscriptionUpgrade = "subscription_upgrade",
+  SubscriptionRenew = "subscription_renew",
   PayAsYouGo = "payg",
 }
 
@@ -81,17 +83,20 @@ export enum ETransactionType {
   UpdateKnowledgeRefund = "update_knowledge_refund",
   PlanDowngrade = "plan_downgrade",
   MonthlyReset = "monthly_reset",
+  PaygPurchase = "payg_purchase",
 }
 
 export enum EPageSourceType {
   Website = "website",
   ManualText = "manual_text",
+  File = "file",
 }
 
 export enum EPageErrorType {
   NetworkError = "network_error", // DNS failure, connection refused
   TimeoutError = "timeout_error", // Request / navigation timed out
   HttpError = "http_error", // Non-2xx HTTP status (404, 500, etc.)
+  NotFound = "not_found", // HTTP 404 Not Found
   RateLimited = "rate_limited", // HTTP 429 Too Many Requests
   Blocked = "blocked", // HTTP 403 / bot-detection block
   ParseError = "parse_error", // HTML / DOM parsing failed

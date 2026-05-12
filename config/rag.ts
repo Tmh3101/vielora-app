@@ -1,7 +1,7 @@
 // Configuration
 export const CHUNK_SIZE = 1000; // Target chunk size in characters (roughly ~250 tokens)
 export const CHUNK_OVERLAP = 150; // Overlap between chunks for context continuity (in characters ~ 40 tokens)
-export const MIN_CHUNK_SIZE = 50; // Minimum chunk size to avoid creating too small chunks
+export const MIN_CHUNK_SIZE = 10; // Minimum chunk size to avoid creating too small chunks
 
 export const RATE_LIMIT_DELAY = 1000; // Delay between embedding requests (1 second for Google Free Tier)
 export const EMBEDDING_DIMENSIONS = 768;
@@ -18,11 +18,16 @@ export const ERROR_RESPONSE =
 export const NO_ANSWER_PHRASES = ["không có đủ thông tin", "không tìm thấy"];
 
 export const GENERATION_CONFIG = {
-  temperature: 0.3, // RAG NÊN ĐỂ TEMPERATURE THẤP (0.1 - 0.3) ĐỂ TRÁNH BỊA ĐẶT (Hallucination)
-  topP: 0.95, // Tăng topP để có câu trả lời đa dạng hơn, nhưng vẫn giữ chất lượng
-  topK: 40, // Tăng topK để mô hình có nhiều lựa chọn hơn khi tạo câu trả lời, giúp tăng tính sáng tạo
-  maxOutputTokens: 512, // Tăng maxOutputTokens để cho phép câu trả lời dài hơn, đặc biệt khi có nhiều thông tin từ tài liệu tham khảo
+  temperature: 0.3, // Keep RAG temperature low (0.1 - 0.3) to reduce hallucinations
+  topP: 0.95, // Higher topP allows more diverse responses while maintaining quality
+  topK: 40, // Higher topK gives the model more candidate tokens for more flexible generation
+  maxOutputTokens: 512, // Higher maxOutputTokens allows longer answers, especially when many references are used
 };
 
-// Giới hạn độ dài chat của người dùng
+// Limit the maximum length of user chat input
 export const MAX_CHAT_INPUT = 200;
+
+// Batch and retry configuration for embedding generation
+export const BATCH_SIZE = 100;
+export const MAX_RETRIES = 5;
+export const INITIAL_BACKOFF_MS = 2000;
