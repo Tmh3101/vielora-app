@@ -11,38 +11,31 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 const baseUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  process.env.NEXT_PUBLIC_BASE_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://vielora.vn");
 
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
-  title: "Vielora - Xây dựng chatbot thông minh cho doanh nghiệp",
-  description:
-    "Tạo chatbot AI hỗ trợ khách hàng tự động từ nội dung website của bạn. Dễ dàng tích hợp, không cần code.",
-  authors: [{ name: "Vielora" }],
-  icons: {
-    icon: "/images/favicon.png",
-    shortcut: "/images/favicon.png",
-    apple: "/images/favicon.png",
+  title: {
+    default: "Vielora - Nền tảng SaaS xây dựng AI Chatbot",
+    template: "%s | Vielora",
   },
+  description:
+    "Chỉ cần nhập URL website, AI sẽ tự động học nội dung và tạo chatbot thông minh. Giải pháp CSKH 24/7 không cần code.",
+
   openGraph: {
-    title: "Vielora - Xây dựng chatbot thông minh cho doanh nghiệp",
-    description: "Tạo chatbot AI hỗ trợ khách hàng tự động từ nội dung website của bạn.",
-    type: "website",
-    url: baseUrl,
+    title: "Vielora - Nền tảng SaaS xây dựng AI Chatbot",
+    description:
+      "Chỉ cần nhập URL website, AI sẽ tự động học nội dung và tạo chatbot thông minh trong 5 phút.",
+    url: "./",
     siteName: "Vielora",
-    images: [
-      {
-        url: "/ogi.png",
-        width: 1200,
-        height: 630,
-        alt: "Vielora",
-      },
-    ],
+    locale: "vi_VN",
+    type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    images: ["/ogi.png"],
+    title: "Vielora - AI Chatbot",
+    description: "Tạo AI Chatbot thông minh từ dữ liệu website.",
   },
 };
 

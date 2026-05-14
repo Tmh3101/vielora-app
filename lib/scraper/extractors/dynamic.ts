@@ -76,7 +76,7 @@ export async function extractDynamic(job: CrawlJob): Promise<CrawlResult> {
     });
 
     const response = await page.goto(url, {
-      waitUntil: "domcontentloaded",
+      waitUntil: "networkidle2",
       timeout,
     });
 
@@ -100,25 +100,38 @@ export async function extractDynamic(job: CrawlJob): Promise<CrawlResult> {
       };
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    // Wait for SPA content to render (React, Vue, Next.js, etc.)
-    // Check if #root or #app has actual content
+    // Wait for SPA content to render (React, Vue, Next.js, Nuxt, etc.)
+    // Wait for root element AND for loading spinners to disappear
     try {
       await page.waitForFunction(
         () => {
+          const loadingSelectors = [
+            ".animate-spin",
+            ".loading",
+            ".spinner",
+            ".skeleton",
+            '[class*="loading-"]',
+            '[class*="skeleton-"]',
+          ];
+          const isLoading = loadingSelectors.some((s) => document.querySelector(s) !== null);
+          if (isLoading) return false;
+
           const root =
             document.querySelector("#root") ||
             document.querySelector("#app") ||
-            document.querySelector("#__next");
+            document.querySelector("#__next") ||
+            document.querySelector("#__nuxt") ||
+            document.querySelector("main") ||
+            document.querySelector("article");
+
           if (!root) return true;
 
-          const hasContent = root.children.length > 0 || root.textContent?.trim().length || 0 > 50;
-          const hasLinks = document.querySelectorAll("a[href]").length > 3;
+          const hasContent = (root.textContent || "").trim().length > 100;
+          const hasLinks = document.querySelectorAll("a[href]").length > 5;
 
           return hasContent || hasLinks;
         },
-        { timeout: 10000 }
+        { timeout: 15000 }
       );
     } catch {
       // SPA wait timeout, continue with current content

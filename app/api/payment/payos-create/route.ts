@@ -136,7 +136,13 @@ export async function POST(request: NextRequest) {
               "User created new payment"
             );
           } catch (e) {
-            console.log("Failed to cancel PayOS order (may already expired):", e);
+            if (e?.code === "101") {
+              console.log(
+                `Pending order ${pending.provider_transaction_id} already expired or not found on PayOS.`
+              );
+            } else {
+              console.log("Failed to cancel PayOS order:", e);
+            }
           }
         }
         // Update DB
@@ -170,6 +176,9 @@ export async function POST(request: NextRequest) {
     });
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+    console.log("Created payment record:", payment);
+    console.log("App URL:", appUrl);
 
     if (amount <= PAYOS_MIN_AMOUNT_VND && action === PaymentAction.Upgrade) {
       await handlePaymentSuccess(supabase, payment.id);

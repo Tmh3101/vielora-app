@@ -85,7 +85,7 @@ DO $$ BEGIN
     CREATE TYPE public.pricing_plan AS ENUM ('free', 'standard', 'pro', 'enterprise');
     CREATE TYPE public.billing_cycle AS ENUM ('monthly', 'yearly', 'none');
     CREATE TYPE public.payment_status AS ENUM ('pending', 'completed', 'failed', 'refunded');
-    CREATE TYPE public.payment_type AS ENUM ('subscription', 'payg');
+    CREATE TYPE public.payment_type AS ENUM ('subscription', 'payg', 'subscription_upgrade', 'subscription_renew');
     CREATE TYPE public.job_status AS ENUM ('pending', 'active', 'completed', 'failed');
     CREATE TYPE public.transaction_type AS ENUM (
       'subscription_renewal',
@@ -96,8 +96,10 @@ DO $$ BEGIN
       'add_knowledge',
       'add_knowledge_refund',
       'update_knowledge',
+      'update_knowledge_refund',
       'plan_downgrade',
-      'monthly_reset'
+      'monthly_reset',
+      'payg_purchase'
     );
 EXCEPTION
     WHEN duplicate_object THEN null;
@@ -290,11 +292,13 @@ CREATE TABLE public.pages (
 );
 
 CREATE INDEX idx_pages_bot_id_url ON public.pages (bot_id, url);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_pages_bot_id_url_unique ON public.pages (bot_id, url);
+CREATE INDEX IF NOT EXISTS idx_pages_bot_id_url_unique ON public.pages (bot_id, url);
 CREATE INDEX IF NOT EXISTS idx_pages_bot_status ON public.pages (bot_id, status);
+CREATE INDEX IF NOT EXISTS idx_pages_bot_error_type ON public.pages (bot_id, error_type);
 CREATE INDEX IF NOT EXISTS idx_pages_bot_crawled_at_desc ON public.pages (bot_id, crawled_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pages_source_type ON public.pages (source_type);
 CREATE INDEX IF NOT EXISTS idx_pages_bot_id_source_type ON public.pages (bot_id, source_type);
+
 
 
 -- public.usage_logs definition
@@ -440,6 +444,24 @@ CREATE INDEX IF NOT EXISTS idx_jobs_status     ON public.jobs (status);
 CREATE INDEX IF NOT EXISTS idx_jobs_name       ON public.jobs (name);
 CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON public.jobs (created_at DESC);
 
+-- public.credit_packages definition
+
+CREATE TABLE public.credit_packages (
+	id uuid DEFAULT gen_random_uuid() NOT NULL,
+	name text NOT NULL,
+	credits_amount int4 NOT NULL,
+	price int4 NOT NULL,
+	is_active bool DEFAULT true NOT NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	updated_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT credit_packages_pkey PRIMARY KEY (id)
+);
+
+create trigger update_credit_packages_updated_at before
+update
+    on
+    public.credit_packages for each row execute function update_updated_at_column();
+
 -- public.bots foreign keys
 
 ALTER TABLE public.bots ADD CONSTRAINT bots_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
@@ -474,6 +496,7 @@ ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.credit_packages ENABLE ROW LEVEL SECURITY;
 
 -- 1. PLANS (Public Read-only)
 CREATE POLICY "plans_select_all" ON public.plans FOR SELECT USING (true);
@@ -519,3 +542,6 @@ CREATE POLICY "messages_all_own" ON public.messages FOR ALL USING (
     WHERE c.id = messages.conversation_id AND b.user_id = auth.uid()
   )
 );
+
+-- 6. CREDIT PACKAGES (Public Read-only for active packages)
+CREATE POLICY "credit_packages_select_active" ON public.credit_packages FOR SELECT USING (is_active = true);

@@ -29,6 +29,14 @@ x-worker-env: &worker-env
   GOOGLE_API_KEY: "${GOOGLE_API_KEY}"
   EMBEDDING_MODEL: "${EMBEDDING_MODEL:-gemini-embedding-001}"
   CHAT_MODEL: "${CHAT_MODEL:-gemini-2.5-flash-lite}"
+  # PayOS
+  PAYOS_CLIENT_ID: "${PAYOS_CLIENT_ID}"
+  PAYOS_API_KEY: "${PAYOS_API_KEY}"
+  PAYOS_CHECKSUM_KEY: "${PAYOS_CHECKSUM_KEY}"
+  PAYOS_TEST_MODE: "${PAYOS_TEST_MODE}"
+  # Resend
+  RESEND_API_KEY: "${RESEND_API_KEY}"
+  RESEND_FROM_EMAIL: "${RESEND_FROM_EMAIL}"
 
 services:
   # 1. REDIS — Message broker (shared by both topologies)
@@ -59,6 +67,7 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
         NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
+        NEXT_PUBLIC_DEMO_BOT_ID: "${NEXT_PUBLIC_DEMO_BOT_ID}"
     container_name: vielora-worker
     restart: unless-stopped
     command: >
@@ -82,6 +91,7 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
         NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
+        NEXT_PUBLIC_DEMO_BOT_ID: "${NEXT_PUBLIC_DEMO_BOT_ID}"
     container_name: vielora-cron
     restart: unless-stopped
     command: ["npm", "run", "cron"]
@@ -104,6 +114,7 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
         NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
+        NEXT_PUBLIC_DEMO_BOT_ID: "${NEXT_PUBLIC_DEMO_BOT_ID}"
     container_name: vielora-web
     restart: unless-stopped
     ports:
@@ -112,6 +123,8 @@ services:
       <<: *worker-env
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
       NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
+      NEXT_PUBLIC_DEMO_BOT_ID: "${NEXT_PUBLIC_DEMO_BOT_ID}"
+
     networks:
       - vielora-network
     profiles:

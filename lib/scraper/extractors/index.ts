@@ -29,13 +29,16 @@ export async function extractContent(
     return staticResult;
   }
 
-  // If static extraction succeeded with good content, use it
-  if (staticResult.success && staticResult.markdown.trim().length > 100) {
+  // If static extraction succeeded with substantial content, use it
+  if (staticResult.success && staticResult.markdown.trim().length > 300) {
     return staticResult;
   }
 
-  // Check if it's a CSR page that needs browser rendering
-  if (staticResult.html && isCSRPage(staticResult.html)) {
+  // Check if it's a CSR page OR if content is very thin (likely a loading skeleton)
+  if (
+    staticResult.html &&
+    (isCSRPage(staticResult.html) || staticResult.markdown.trim().length < 150)
+  ) {
     return extractDynamic(job);
   }
 

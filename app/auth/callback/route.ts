@@ -7,10 +7,13 @@ import { sendWelcomeEmail } from "@/lib/services/email.service";
  * OAuth PKCE callback handler.
  */
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
+  const { searchParams } = new URL(request.url);
 
-  const next = searchParams.get("next") ?? "/dashboard";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  const code = searchParams.get("code");
+  const nextParam = searchParams.get("next") ?? "/dashboard";
+  const next = nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/dashboard";
 
   if (code) {
     const cookieStore = cookies();
@@ -55,11 +58,11 @@ export async function GET(request: Request) {
         // Welcome email is non-critical — don't block auth flow
       }
 
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(new URL(next, appUrl));
     } else {
       console.error("[AuthCallback] Exchange Error:", error.message);
     }
   }
 
-  return NextResponse.redirect(`${origin}/auth?error=oauth_failed`);
+  return NextResponse.redirect(new URL("/auth?error=oauth_failed", appUrl));
 }

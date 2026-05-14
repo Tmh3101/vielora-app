@@ -66,7 +66,13 @@ export async function POST(request: NextRequest) {
               "User created new payment"
             );
           } catch (e) {
-            console.log("Failed to cancel PayOS order (may already expired):", e);
+            if (e?.code === "101") {
+              console.log(
+                `Pending order ${pending.provider_transaction_id} already expired or not found on PayOS.`
+              );
+            } else {
+              console.log("Failed to cancel PayOS order:", e);
+            }
           }
         }
         // Update DB

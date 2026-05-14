@@ -87,7 +87,7 @@ export async function POST(
     const { name, avatarUrl, widgetSettings } = body;
 
     // If suggestedQuestions is being set, check plan
-    if (widgetSettings?.suggestedQuestions !== undefined) {
+    if (widgetSettings?.suggestedQuestions && widgetSettings.suggestedQuestions.length > 0) {
       const planCode = await getUserActivePlanCodeServer(supabase, user.id);
 
       if (!planCode) {
@@ -143,7 +143,7 @@ export async function POST(
           welcomeMessage: widgetSettings.welcomeMessage,
         }),
         ...(widgetSettings.suggestedQuestions !== undefined && {
-          suggestedQuestions: widgetSettings.suggestedQuestions || [],
+          suggestedQuestions: widgetSettings.suggestedQuestions ?? [],
         }),
         ...(widgetSettings.chatBackgroundType !== undefined && {
           chatBackgroundType: widgetSettings.chatBackgroundType,

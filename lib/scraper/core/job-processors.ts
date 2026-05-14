@@ -93,6 +93,9 @@ export const processDiscoverJob = async (job: Job<DiscoverJobData>): Promise<voi
   const seedDepthByUrl = new Map<string, number>();
   seedDepthByUrl.set(normalizedStartUrl, 0);
   const sitemapUrls = await fetchSitemapUrls(normalizedStartUrl, maxPages);
+
+  console.log("[DiscoverJob] Fetched sitemap URLs:", sitemapUrls);
+
   for (const sitemapUrl of sitemapUrls) {
     const normalizedSitemapUrl = normalizeUrl(sitemapUrl);
     if (!normalizedSitemapUrl || seedDepthByUrl.has(normalizedSitemapUrl)) continue;
@@ -136,6 +139,12 @@ export const processDiscoverJob = async (job: Job<DiscoverJobData>): Promise<voi
       countPagesByBotIdAndStatusesServer(supabase, botId, DISCOVERED_PAGE_STATUSES),
       redis.scard(seenKey),
     ]);
+
+    console.log("[DiscoverJob] Polling progress", {
+      pending: pendingRaw,
+      discoveredCount,
+      seenCount,
+    });
 
     const pendingJobs = Number.parseInt(pendingRaw ?? "0", 10);
     if (pendingJobs <= 0) {
@@ -187,8 +196,20 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
       createdAt: Date.now(),
     };
 
+    console.log("[PageCrawlerJob] Processing URL:", {
+      botId,
+      currentUrl,
+      depth,
+      discoverJobId,
+      renderMode,
+    });
+
     let result: CrawlResult;
-    const pageTimeoutMs = (config?.timeout ?? 30000) * 2;
+    const pageTimeoutMs = (config?.timeout ?? 30000) * 3;
+
+    console.log(
+      `[PageCrawlerJob] Starting content extraction for URL: ${currentUrl} with timeout ${pageTimeoutMs}ms`
+    );
     try {
       result = await Promise.race([
         extractContent(crawlJob, renderMode),
@@ -211,6 +232,14 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
         processingTimeMs: 0,
       };
     }
+
+    console.log("[PageCrawlerJob] Extracted content for URL:", {
+      success: result.success,
+      currentUrl,
+      title: result.title,
+      contentLength: result.markdown.length,
+      linksCount: result.links.length,
+    });
 
     if (!result.success || isSoft404(result.title, result.markdown)) {
       return;
@@ -250,6 +279,12 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
       includePatterns: config?.includePatterns,
       excludePatterns: config?.excludePatterns,
       preExtractedLinks: result.links,
+    });
+
+    console.log("[PageCrawlerJob] Processed links for URL:", {
+      currentUrl,
+      validUrls: linkResult.validUrls,
+      filteredCount: linkResult.filteredCount,
     });
 
     const remainingSlots = Math.max(maxPages - seenCount, 0);

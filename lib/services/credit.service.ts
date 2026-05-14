@@ -1,6 +1,5 @@
 import type { ServiceClient } from "@/lib/services/types";
-import { CREDIT_PER_MESSAGE } from "@/config";
-import { ETransactionType, EUsageAction } from "@/types";
+import { ETransactionType } from "@/types";
 import { sendLowCreditsWarningEmail, getUserEmailById } from "@/lib/services/email.service";
 
 const MAX_DEDUCTION_RETRIES = 3;
@@ -320,54 +319,46 @@ export async function getCreditSummary(
   const totalCreditsThisMonth = plan?.monthly_credits ?? 0;
   const periodStart = subscription.current_period_start;
 
-  // 2. Lấy credits đã dùng cho indexing trong kỳ
-  const { data: indexTransactions, error: indexError } = await client
+  // 2. Lấy tất cả credit transactions liên quan đến usage trong kỳ
+  const indexCategoryTypes = [
+    ETransactionType.IndexPages,
+    ETransactionType.IndexPagesRefund,
+    ETransactionType.AddKnowledge,
+    ETransactionType.AddKnowledgeRefund,
+    ETransactionType.UpdateKnowledge,
+    ETransactionType.UpdateKnowledgeRefund,
+  ];
+
+  const chatCategoryTypes = [ETransactionType.ChatMessage, ETransactionType.ChatMessageRefund];
+
+  const relevantTypes = [...indexCategoryTypes, ...chatCategoryTypes];
+
+  const { data: transactions, error: txError } = await client
     .from("credit_transactions")
-    .select("amount")
+    .select("amount, transaction_type")
     .eq("user_id", userId)
-    .in("transaction_type", [
-      ETransactionType.IndexPages,
-      ETransactionType.AddKnowledge,
-      ETransactionType.ChatMessage,
-    ])
+    .in("transaction_type", relevantTypes)
     .gte("created_at", periodStart);
 
-  if (indexError) {
-    throw new Error(`Failed to fetch index transactions: ${indexError.message}`);
+  if (txError) {
+    throw new Error(`Failed to fetch credit transactions: ${txError.message}`);
   }
 
-  const indexCreditsNet = (indexTransactions ?? []).reduce((sum, tx) => sum + tx.amount, 0);
+  // 3. Phân loại và tính toán credits đã dùng
+  let indexCreditsNet = 0;
+  let chatCreditsNet = 0;
+
+  (transactions ?? []).forEach((tx) => {
+    if (indexCategoryTypes.includes(tx.transaction_type as ETransactionType)) {
+      indexCreditsNet += tx.amount;
+    } else if (chatCategoryTypes.includes(tx.transaction_type as ETransactionType)) {
+      chatCreditsNet += tx.amount;
+    }
+  });
+
+  // amount là số âm khi trừ credits, nên dùng - để ra số dương đã sử dụng
   const indexCreditsUsedThisMonth = Math.max(0, -indexCreditsNet);
-
-  // 3. Lấy số tin nhắn đã gửi trong kỳ để tính credits nhắn tin
-  // Lọc qua bot_id (bots.user_id = userId) vì usage_logs không còn lưu user_id trực tiếp
-  const { data: userBots, error: botsError } = await client
-    .from("bots")
-    .select("id")
-    .eq("user_id", userId);
-
-  if (botsError) {
-    throw new Error(`Failed to fetch user bots: ${botsError.message}`);
-  }
-
-  const botIds = (userBots ?? []).map((b) => b.id);
-
-  const { count: messageCount, error: messageError } =
-    botIds.length > 0
-      ? await client
-          .from("usage_logs")
-          .select("id", { count: "exact", head: true })
-          .in("bot_id", botIds)
-          .eq("action", EUsageAction.ChatMessage)
-          .gte("created_at", periodStart)
-      : { count: 0, error: null };
-
-  if (messageError) {
-    throw new Error(`Failed to fetch message usage logs: ${messageError.message}`);
-  }
-
-  const messageCreditsUsedThisMonth = (messageCount ?? 0) * CREDIT_PER_MESSAGE;
-
+  const messageCreditsUsedThisMonth = Math.max(0, -chatCreditsNet);
   const creditsUsedThisMonth = indexCreditsUsedThisMonth + messageCreditsUsedThisMonth;
 
   // 4. Lấy thông tin wallet (credits còn lại)

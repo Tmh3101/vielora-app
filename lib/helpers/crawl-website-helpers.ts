@@ -6,7 +6,7 @@ import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import type { PageMetadata } from "@/types/scrape";
 import { EPageErrorType } from "@/types/enums";
-import { SOFT_404_TITLE_PATTERNS, LOAD_MORE_KEYWORDS } from "@/config/scraper";
+import { SOFT_404_TITLE_PATTERNS, LOAD_MORE_KEYWORDS, DEFAULT_USER_AGENT } from "@/config/scraper";
 import { extractBaseDomain } from "@/lib/scraper/core/link-processor";
 import type { Tables } from "@/lib/supabase/types";
 import { normalizeSeedUrl, normalizeUrl } from "./url-helpers";
@@ -115,6 +115,17 @@ const CSR_MARKERS = [
   '<div id="__nuxt"></div>',
 ];
 
+const LOADING_MARKERS = [
+  ".animate-spin",
+  ".loading",
+  ".spinner",
+  ".skeleton",
+  '[class*="loading-"]',
+  '[class*="skeleton-"]',
+  ".loading-state",
+  "#loading-state",
+];
+
 const SITEMAP_CANDIDATES = ["/sitemap.xml", "/sitemap_index.xml"];
 
 /**
@@ -206,12 +217,16 @@ function findLongestContentDiv($: CheerioAPI): string | null {
   let longestDiv: Cheerio<Element> | null = null;
   let maxTextLength = 0;
 
-  $("body > div").each((_, el) => {
+  $("body div").each((_, el) => {
     const $el = $(el);
+
+    // Skip if it's a known non-content container
+    if ($el.is(EXCLUDE_NON_MAIN_TAGS.join(", "))) return;
+
     const textContent = $el.text().replace(/\s+/g, " ").trim();
     const textLength = textContent.length;
 
-    if (textLength > maxTextLength && textLength > 100) {
+    if (textLength > maxTextLength && textLength > 50) {
       maxTextLength = textLength;
       longestDiv = $el as Cheerio<Element>;
     }
@@ -221,11 +236,38 @@ function findLongestContentDiv($: CheerioAPI): string | null {
 }
 
 /**
+ * Identify the best content container based on common CMS/Builder classes
+ */
+function findBestContainer($: CheerioAPI): string | null {
+  const commonSelectors = [
+    ".elementor-section-wrap",
+    ".elementor-section",
+    ".wp-block-group",
+    ".entry-content",
+    ".post-content",
+    ".page-content",
+    "#content",
+    ".content",
+    ".site-content",
+  ];
+
+  for (const selector of commonSelectors) {
+    const $el = $(selector).first();
+    if ($el.length && $el.text().trim().length > 200) {
+      return $el.html();
+    }
+  }
+
+  return null;
+}
+
+/**
  * Clean HTML and extract main content
  * Uses a cascading fallback strategy to find the best content container:
  * 1. Semantic tags (<main>, <article>)
- * 2. Longest text content div (heuristic for SPA/modern sites)
- * 3. Body/full HTML (last resort)
+ * 2. Common CMS/Builder containers
+ * 3. Longest text content div (heuristic for SPA/modern sites)
+ * 4. Body/full HTML (last resort)
  */
 export function extractCleanHtml(
   $: CheerioAPI,
@@ -261,19 +303,24 @@ export function extractCleanHtml(
     })
     .remove();
 
-  // Cascading fallback: semantic tags → longest div → body
+  // Cascading fallback strategy
   const mainContent = $("main").html();
-  if (mainContent && mainContent.trim().length > 50) {
+  if (mainContent && mainContent.trim().length > 200) {
     return mainContent;
   }
 
   const articleContent = $("article").html();
-  if (articleContent && articleContent.trim().length > 50) {
+  if (articleContent && articleContent.trim().length > 200) {
     return articleContent;
   }
 
+  const bestContainer = findBestContainer($);
+  if (bestContainer && bestContainer.trim().length > 200) {
+    return bestContainer;
+  }
+
   const longestDivContent = findLongestContentDiv($);
-  if (longestDivContent && longestDivContent.trim().length > 50) {
+  if (longestDivContent && longestDivContent.trim().length > 100) {
     return longestDivContent;
   }
 
@@ -331,6 +378,10 @@ export function htmlToMarkdown(html: string): string {
  */
 export function isCSRPage(html: string): boolean {
   const $ = cheerio.load(html);
+
+  // Check for loading markers first - if found, it's definitely CSR/needs more time
+  const hasLoadingMarker = LOADING_MARKERS.some((selector) => $(selector).length > 0);
+  if (hasLoadingMarker) return true;
 
   // Remove script/style/noscript
   $("script, style, noscript, link, meta").remove();
@@ -393,7 +444,7 @@ export function isSoft404(title: string, markdown: string): boolean {
 }
 
 export async function fetchSitemapUrls(startUrl: string, maxPages: number): Promise<string[]> {
-  const results = new Set<string>();
+  const candidates = new Set<string>();
   const root = new URL(startUrl);
 
   for (const path of SITEMAP_CANDIDATES) {
@@ -413,20 +464,86 @@ export async function fetchSitemapUrls(startUrl: string, maxPages: number): Prom
           if (/^\/[a-z]\//.test(new URL(normalized).pathname)) continue;
           // Skip URLs with query parameters
           if (new URL(normalized).search !== "") continue;
-          results.add(normalized);
-          if (results.size >= maxPages) {
-            return Array.from(results);
-          }
+          candidates.add(normalized);
+          if (candidates.size >= maxPages * 2) break; // Get a few more for sampling
         } catch {
           // skip invalid loc
         }
       }
     } catch {
-      // ignore sitemap fetch errors and fallback to crawl
+      // ignore sitemap fetch errors
     }
   }
 
-  return Array.from(results);
+  if (candidates.size === 0) return [];
+
+  const candidateList = Array.from(candidates);
+
+  // Validation: Sample up to 5 URLs to check for dead/garbage links
+  const sampleSize = Math.min(candidateList.length, 5);
+  const samples = [];
+  const shuffled = [...candidateList].sort(() => 0.5 - Math.random());
+  for (let i = 0; i < sampleSize; i++) {
+    samples.push(shuffled[i]);
+  }
+
+  console.log(`[Sitemap] Validating sitemap for ${startUrl} by sampling ${sampleSize} URLs...`);
+
+  const validationResults = await Promise.all(
+    samples.map(async (url) => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const res = await fetch(url, {
+          method: "GET",
+          signal: controller.signal,
+          headers: { "User-Agent": DEFAULT_USER_AGENT },
+        });
+
+        if (!res.ok) {
+          clearTimeout(timeoutId);
+          console.log(`[Sitemap] Sample ${url} returned ${res.status}`);
+          // 403/401 might be valid but protected, everything else (like 404) is a failure
+          return false;
+        }
+
+        // Check for soft 404 in title
+        const html = await res.text();
+        clearTimeout(timeoutId);
+
+        const $ = cheerio.load(html);
+        const title = $("title").text().trim().toLowerCase();
+        const isSoft = SOFT_404_TITLE_PATTERNS.some((p) => title.includes(p.toLowerCase()));
+
+        if (isSoft) {
+          console.log(`[Sitemap] Sample ${url} is a Soft 404 (Title: "${title}")`);
+          return false;
+        }
+
+        return true;
+      } catch (err) {
+        console.log(
+          `[Sitemap] Sample ${url} failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+        return false;
+      }
+    })
+  );
+
+  const failCount = validationResults.filter((r) => !r).length;
+  const failRate = failCount / sampleSize;
+
+  if (failRate >= 0.5) {
+    console.warn(
+      `[Sitemap] High failure rate detected (${(failRate * 100).toFixed(0)}%). Discarding sitemap to prevent queue poisoning.`
+    );
+    return [];
+  }
+
+  // Limit sitemap URLs to 20% of maxPages to ensure we have room for links found on the homepage
+  const limit = Math.floor(maxPages * 0.2);
+  console.log(`[Sitemap] Validation passed for ${startUrl}. Enqueueing first ${limit} URLs.`);
+  return candidateList.slice(0, limit);
 }
 
 /**

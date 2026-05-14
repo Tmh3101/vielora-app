@@ -111,6 +111,7 @@ export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
 
     const poll = async () => {
       const { data } = await supabase.from("bots").select("status").eq("id", botId).maybeSingle();
+      console.log("[UI: DiscoverPipeline] Polled bot status:", data);
       if (cancelled) return;
       const newStatus = (data as { status?: EBotStatus } | null)?.status;
       if (!newStatus) return;

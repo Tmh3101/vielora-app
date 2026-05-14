@@ -292,9 +292,9 @@ export default function BotDetailPage() {
         {/* Bot Info */}
         <div className="border-b border-border/50 p-4">
           <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10">
+            <Avatar className="h-10 w-10 rounded-2xl">
               <AvatarImage src={bot.avatar_url || undefined} alt={bot.name} />
-              <AvatarFallback className="bg-primary/10 text-primary">
+              <AvatarFallback className="rounded-2xl bg-primary/10 text-primary">
                 <Bot className="h-5 w-5" />
               </AvatarFallback>
             </Avatar>
