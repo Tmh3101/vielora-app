@@ -1,0 +1,24 @@
+{% schema %}
+{
+  "name": "Vielora Chatbot",
+  "target": "body",
+  "settings": [
+    {
+      "type": "text",
+      "id": "bot_id",
+      "label": "Vielora Bot ID",
+      "info": "Nhập ID của bot lấy từ bảng điều khiển Vielora."
+    }
+  ]
+}
+{% endschema %}
+
+{% if block.settings.bot_id != blank %}
+  <script 
+    src="https://vielora.vn/widget.js"
+    data-bot-id="{{ block.settings.bot_id }}"
+    data-base-url="https://vielora.vn"
+    id="vielora-script"
+    defer
+  ></script>
+{% endif %}

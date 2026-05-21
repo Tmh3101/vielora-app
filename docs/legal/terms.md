@@ -4,7 +4,7 @@ Cập nhật lần cuối: **Ngày 12 tháng 03 năm 2026**
 
 Chào mừng bạn đến với Vielora - Nền tảng xây dựng AI Chatbot. Vielora là một sản phẩm dịch vụ được phát triển, sở hữu và vận hành độc quyền bởi **Công ty Titops DX4U** (sau đây gọi chung là "Titops DX4U", "chúng tôi", "của chúng tôi").
 
-Việc bạn đăng ký tài khoản, truy cập hoặc sử dụng các dịch vụ, phần mềm, API, mã nhúng (widget) của nền tảng Vielora đồng nghĩa với việc bạn đã đọc, hiểu và đồng ý bị ràng buộc bởi các Điều khoản và Điều kiện sử dụng này với Công ty Titops DX4U. Nếu bạn không đồng ý với bất kỳ điều khoản nào, vui lòng không sử dụng dịch vụ của chúng tôi.
+Việc bạn đăng ký tài khoản, truy cập hoặc sử dụng các dịch vụ, phần mềm, API, mã nhúng (widget), plugin WordPress Vielora Chatbot hoặc các thành phần tích hợp khác của nền tảng Vielora đồng nghĩa với việc bạn đã đọc, hiểu và đồng ý bị ràng buộc bởi các Điều khoản và Điều kiện sử dụng này với Công ty Titops DX4U. Nếu bạn không đồng ý với bất kỳ điều khoản nào, vui lòng không sử dụng dịch vụ của chúng tôi.
 
 _(Lưu ý pháp lý: Trong toàn bộ văn bản này, mọi quyền lợi, trách nhiệm và miễn trừ áp dụng cho nền tảng "Vielora" cũng đồng thời áp dụng trực tiếp cho pháp nhân chủ quản là Công ty Titops DX4U)._
 
@@ -72,4 +72,4 @@ Nếu bạn có bất kỳ câu hỏi nào về Điều khoản sử dụng này
 
 **Công ty Titops DX4U**
 
-- **Email hỗ trợ:** dx4u@titops.com
+- **Email hỗ trợ:** contact@vielora.vn

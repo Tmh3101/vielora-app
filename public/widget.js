@@ -1,8 +1,8 @@
-(function(window, document) {
+(function (window, document) {
   'use strict';
 
   var Vielora = window.Vielora || window.ChatBotAI || {};
-  
+
   var config = {
     botId: null,
     baseUrl: null,
@@ -53,31 +53,31 @@
     inputBg: '#f8fafc'
   };
 
-  var fingerprintPromise = null;  
+  var fingerprintPromise = null;
   function loadFingerprintJS() {
     if (fingerprintPromise) return fingerprintPromise;
-    
-    fingerprintPromise = new Promise(function(resolve) {
+
+    fingerprintPromise = new Promise(function (resolve) {
       var script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js';
       script.async = true;
-      
-      script.onload = function() {
+
+      script.onload = function () {
         if (window.FingerprintJS) {
           window.FingerprintJS.load()
-            .then(function(fp) { return fp.get(); })
-            .then(function(result) { resolve(result.visitorId); })
-            .catch(function() { resolve(null); });
+            .then(function (fp) { return fp.get(); })
+            .then(function (result) { resolve(result.visitorId); })
+            .catch(function () { resolve(null); });
         } else {
           resolve(null);
         }
       };
-      
-      script.onerror = function() { resolve(null); };
-      setTimeout(function() { resolve(null); }, 5000);
+
+      script.onerror = function () { resolve(null); };
+      setTimeout(function () { resolve(null); }, 5000);
       document.head.appendChild(script);
     });
-    
+
     return fingerprintPromise;
   }
 
@@ -95,7 +95,7 @@
     } catch (e) {
       console.log('Vielora: FingerprintJS fallback');
     }
-    
+
     var id = 'visitor_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
     localStorage.setItem('vielora_visitor_id', id);
     return id;
@@ -107,7 +107,7 @@
 
     config.botId = botId;
     config.baseUrl = options?.baseUrl || '';
-    
+
     if (config.baseUrl.endsWith('/')) {
       config.baseUrl = config.baseUrl.slice(0, -1);
     }
@@ -117,14 +117,14 @@
     try {
       var response = await fetch(config.baseUrl + '/api/widget/init', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-bot-id': config.botId,
           'x-visitor-id': state.visitorId
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           botId: config.botId,
-          visitorId: state.visitorId 
+          visitorId: state.visitorId
         })
       });
 
@@ -132,7 +132,7 @@
         var errorData = await response.json();
         if (errorData.retryAfter) {
           console.log('Vielora: Rate limit, retry in ' + errorData.retryAfter + 's');
-          setTimeout(function() {
+          setTimeout(function () {
             state.isInitialized = false;
             initWidget(config.botId, { baseUrl: config.baseUrl });
           }, (errorData.retryAfter || 60) * 1000);
@@ -142,7 +142,7 @@
         }
         return;
       }
-      
+
       if (response.status === 403) {
         console.error('Vielora: Domain not allowed (Origin Check Failed)');
         return;
@@ -158,30 +158,30 @@
         state.statusMessage = data.data.statusMessage;
         state.botName = data.data.name || null;
         state.avatarUrl = data.data.avatarUrl || null;
-        
+
         // Inject JSON-LD Schema for SEO
         injectVieloraContactSchema(data.data.botName);
-        
+
         if (data.data.conversationId) {
           state.conversationId = data.data.conversationId;
           state.messages = data.data.messages || [];
         }
 
         renderWidget();
-        
+
         if (state.messages.length > 0) {
           loadPreviousMessages();
-          setTimeout(function() {
+          setTimeout(function () {
             if (!state.suggestedQuestionsShown && config.settings.suggestedQuestions && config.settings.suggestedQuestions.length > 0) {
               addSuggestedQuestions(config.settings.suggestedQuestions);
             }
           }, 600);
         } else {
-          setTimeout(function() {
+          setTimeout(function () {
             var messages = document.getElementById('chatbotai-messages');
             if (messages && state.isAvailable) {
               addMessage(config.settings.welcomeMessage, 'bot');
-              
+
               if (config.settings.suggestedQuestions && config.settings.suggestedQuestions.length > 0) {
                 addSuggestedQuestions(config.settings.suggestedQuestions);
               }
@@ -285,11 +285,11 @@
     var positionSetting = config.settings.position || 'bottom-right';
     var parsedPos = parsePosition(positionSetting);
     var isLegacyPosition = parsedPos.legacy;
-    
+
     var positionStyle = '';
     var customX = null;
     var customY = null;
-    
+
     var EDGE_OFFSET = 40;
 
     if (isLegacyPosition) {
@@ -310,7 +310,7 @@
       var BASE_MAX_Y = FRAME_HEIGHT - FRAME_PADDING - ICON_SIZE;
       var BASE_RANGE_X = BASE_MAX_X - BASE_MIN_X;
       var BASE_RANGE_Y = BASE_MAX_Y - BASE_MIN_Y;
-      
+
       var viewportWidth = window.innerWidth;
       var viewportHeight = window.innerHeight;
       var viewportRangeX = Math.max(0, viewportWidth - ICON_SIZE - (EDGE_OFFSET * 2));
@@ -323,7 +323,7 @@
 
       customX = EDGE_OFFSET + (normalizedX * viewportRangeX);
       customY = EDGE_OFFSET + (normalizedY * viewportRangeY);
-      
+
       if (customX < (viewportWidth / 2)) {
         positionStyle = 'left: ' + Math.round(customX) + 'px;';
       } else {
@@ -331,9 +331,9 @@
       }
       positionStyle += ' top: ' + Math.round(customY) + 'px;';
     }
-    
+
     var isMobile = window.innerWidth < 480;
-    
+
     var chatPositionStyle = '';
     if (isLegacyPosition) {
       if (positionSetting === 'bottom-left') {
@@ -348,10 +348,10 @@
       } else {
         chatPositionStyle = 'right: ' + Math.round(Math.max(0, viewportWidth - customX - 64)) + 'px;';
       }
-      
+
       var chatWindowHeight = UI.chatHeight;
       var spaceNeeded = customY + 56 + 10 + chatWindowHeight;
-      
+
       if (spaceNeeded <= viewportHeight) {
         chatPositionStyle += ' top: ' + Math.round(customY + 66) + 'px;';
       } else {
@@ -359,11 +359,11 @@
         chatPositionStyle += ' top: ' + Math.round(topPosition) + 'px;';
       }
     }
-    
+
     var triggerIconHTML = '';
     var triggerBgColor = '';
     var iconColor = '';
-    
+
     if (config.settings.chatIconType === 'preset') {
       triggerBgColor = config.settings.chatIconBgColor || config.settings.primaryColor || '#3B82F6';
       iconColor = config.settings.chatIconColor || getIconColorBasedOnBg(triggerBgColor);
@@ -378,7 +378,7 @@
       var defaultSVG = getIconSVG('messagecircle');
       triggerIconHTML = defaultSVG.replace(/<svg/, '<svg style="color: ' + iconColor + ';"');
     }
-    
+
     return `
       <div id="chatbotai-bubble" style="${positionStyle} position: fixed; z-index: 2147483647;">
         <button id="chatbotai-trigger" style="
@@ -399,14 +399,14 @@
         display: none; flex-direction: column; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       ">
         <div id="chatbotai-header" style="padding: 14px 16px 10px 16px; background-color: ${config.settings.primaryColor}; color: white; display: flex; align-items: center; gap: 12px;">
-          ${state.avatarUrl ? 
-            `<div style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+          ${state.avatarUrl ?
+        `<div style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); overflow: hidden; display: flex; align-items: center; justify-content: center;">
                <img src="${state.avatarUrl}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; transform: scale(1.3);" />
-             </div>` : 
-            `<div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center;">
+             </div>` :
+        `<div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center;">
                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v4m0 12v4M2 12h4m12 0h4"></path></svg>
              </div>`
-          }
+      }
           <div style="flex: 1;">
             <div style="font-weight: 600; font-size: 16px; margin-bottom: -2px;">${state.botName || "Trợ lý ảo"}</div>
             <div style="font-size: 12px; opacity: 0.9; display: flex; align-items: center; gap: 6px; line-height: 1;">
@@ -578,20 +578,20 @@
     var suggestedButtons = document.getElementById('chatbotai-suggested-buttons');
 
     if (suggestedButtons) {
-      suggestedButtons.addEventListener('wheel', function(e) {
+      suggestedButtons.addEventListener('wheel', function (e) {
         if (e.deltaY === 0 && e.deltaX === 0) return;
         e.preventDefault();
         suggestedButtons.scrollLeft += e.deltaY + e.deltaX;
       }, { passive: false });
     }
 
-    trigger.addEventListener('click', function() {
+    trigger.addEventListener('click', function () {
       state.isOpen = !state.isOpen;
       chat.style.display = state.isOpen ? 'flex' : 'none';
-      
+
       if (state.isOpen) {
         applyBackgroundStyle();
-        setTimeout(function(){ 
+        setTimeout(function () {
           input.focus();
           var messages = document.getElementById('chatbotai-messages');
           if (messages) {
@@ -603,7 +603,7 @@
         var container = document.getElementById('chatbotai-suggested-container');
         if (container) {
           setSuggestedQuestionsDisplay(false);
-          setTimeout(function() {
+          setTimeout(function () {
             if (!state.suggestedQuestionsShown && config.settings.suggestedQuestions && config.settings.suggestedQuestions.length > 0) {
               var btnsDiv = document.getElementById('chatbotai-suggested-buttons');
               if (btnsDiv && btnsDiv.children.length > 0) {
@@ -615,14 +615,14 @@
       }
     });
 
-    close.addEventListener('click', function() {
+    close.addEventListener('click', function () {
       state.isOpen = false;
       chat.style.display = 'none';
       setSuggestedQuestionsDisplay(false);
     });
 
     send.addEventListener('click', sendMessage);
-    input.addEventListener('keypress', function(e) {
+    input.addEventListener('keypress', function (e) {
       if (e.key === 'Enter') sendMessage();
     });
   }
@@ -658,7 +658,7 @@
     try {
       var response = await fetch(config.baseUrl + '/api/widget/chat', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-bot-id': config.botId,
           'x-visitor-id': state.visitorId
@@ -701,18 +701,18 @@
     var messages = document.getElementById('chatbotai-messages');
     var div = document.createElement('div');
     div.className = 'chatbotai-message ' + role;
-    
+
     var contentDiv = document.createElement('div');
     if (role === 'bot') {
       contentDiv.innerHTML = parseMarkdown(text);
     } else {
       contentDiv.textContent = text;
     }
-    
+
     div.appendChild(contentDiv);
     messages.appendChild(div);
-    
-    setTimeout(function() {
+
+    setTimeout(function () {
       messages.scrollTop = messages.scrollHeight;
     }, 50);
   }
@@ -720,43 +720,43 @@
   function addSuggestedQuestions(questions) {
     if (!questions || questions.length === 0) return;
     if (state.suggestedQuestionsShown) return;
-    
+
     var container = document.getElementById('chatbotai-suggested-container');
     var buttonsDiv = document.getElementById('chatbotai-suggested-buttons');
-    
+
     if (!container || !buttonsDiv) return;
-    
+
     buttonsDiv.innerHTML = '';
-    
-    questions.forEach(function(question, index) {
+
+    questions.forEach(function (question, index) {
       if (!question.trim()) return;
-      
+
       var btn = document.createElement('button');
       btn.textContent = question;
       btn.style.cssText = 'display: inline-flex !important; align-items: center !important; justify-content: center !important; flex-shrink: 0; white-space: nowrap; padding: 4px 10px; height: 28px; min-height: 28px; border: 1px solid ' + UI.inputBorder + '; border-radius: 9999px; background: white; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08); cursor: pointer; font-size: 12px; font-weight: 500; color: #334155; transition: all 0.2s; opacity: 0.98; line-height: 1 !important; box-sizing: border-box;';
-      
-      btn.onmouseover = function() {
+
+      btn.onmouseover = function () {
         this.style.background = '#f3f4f6';
         this.style.borderColor = config.settings.primaryColor;
         this.style.boxShadow = '0 4px 12px rgba(15, 23, 42, 0.12)';
       };
-      btn.onmouseout = function() {
+      btn.onmouseout = function () {
         this.style.background = 'white';
         this.style.borderColor = '#e5e7eb';
         this.style.boxShadow = '0 2px 8px rgba(15, 23, 42, 0.08)';
       };
-      
-      btn.onclick = function() {
+
+      btn.onclick = function () {
         state.suggestedQuestionsShown = true;
         setSuggestedQuestionsDisplay(false);
         var input = document.getElementById('chatbotai-input');
         input.value = question;
         sendMessage();
       };
-      
+
       buttonsDiv.appendChild(btn);
     });
-    
+
     setSuggestedQuestionsDisplay(true);
   }
 
@@ -775,21 +775,21 @@
     if (typing) typing.remove();
   }
 
-function parseMarkdown(text) {
+  function parseMarkdown(text) {
     if (!text) return '';
-    
+
     var result = text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
     result = result.replace(
-      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, 
+      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
       '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline; text-underline-offset: 2px; font-weight: 500;">$1</a>'
     );
 
     result = result.replace(
-      /(^|\s)(https?:\/\/[^\s<]+)/g, 
+      /(^|\s)(https?:\/\/[^\s<]+)/g,
       '$1<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline; text-underline-offset: 2px; font-weight: 500;">$2</a>'
     );
 
@@ -797,37 +797,37 @@ function parseMarkdown(text) {
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/`([^`]+)`/g, '<code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-size: 0.9em;">$1</code>')
       .replace(/\n/g, '<br>');
-      
+
     return result;
   }
 
   function loadPreviousMessages() {
     var messagesContainer = document.getElementById('chatbotai-messages');
     if (!messagesContainer || !state.messages.length) return;
-    
+
     messagesContainer.innerHTML = '';
     var separator = document.createElement('div');
     separator.style.cssText = 'text-align: center; color: #9ca3af; font-size: 11px; padding: 10px 0;';
     separator.textContent = 'Lịch sử trò chuyện';
     messagesContainer.appendChild(separator);
 
-    state.messages.forEach(function(msg) {
+    state.messages.forEach(function (msg) {
       var role = msg.role === 'assistant' ? 'bot' : msg.role;
       var div = document.createElement('div');
       div.className = 'chatbotai-message ' + role;
-      
+
       var contentDiv = document.createElement('div');
       if (role === 'bot') {
         contentDiv.innerHTML = parseMarkdown(msg.content);
       } else {
         contentDiv.textContent = msg.content;
       }
-      
+
       div.appendChild(contentDiv);
       messagesContainer.appendChild(div);
     });
-    
-    setTimeout(function() {
+
+    setTimeout(function () {
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }, 100);
   }
@@ -842,7 +842,7 @@ function parseMarkdown(text) {
     var orgName = botName || window.location.hostname;
     var currentOrigin = window.location.origin;
     var currentUrl = window.location.href;
-    
+
     var schema = {
       "@context": "https://schema.org",
       "@graph": [
@@ -869,39 +869,50 @@ function parseMarkdown(text) {
     document.head.appendChild(script);
   }
 
-  
+
   Vielora.init = initWidget;
   window.Vielora = Vielora;
   window.ChatBotAI = Vielora;
 
+  // Tự động tìm và khởi tạo nếu có thẻ script chứa data-bot-id
   function autoInit() {
+    // Tránh Double-Init nếu người dùng đã gọi Vielora.init() thủ công
+    if (state.isInitialized) return;
+
     var currentScript = document.currentScript;
     if (!currentScript) {
+      // Fallback cho trình duyệt cũ hoặc khi async script không giữ được currentScript
       currentScript = document.querySelector('script[data-bot-id]');
     }
 
     if (currentScript) {
       var botId = currentScript.getAttribute('data-bot-id');
-      var baseUrl = currentScript.getAttribute('data-base-url');
+      // Đọc data-base-url, nếu không có thì fallback về URL của production API
+      var baseUrl = currentScript.getAttribute('data-base-url') || 'https://vielora.vn';
 
       if (botId) {
+        // Tái sử dụng hàm initWidget nội bộ
         initWidget(botId, { baseUrl: baseUrl });
       }
     }
   }
 
+  // Xử lý hàng đợi khởi tạo thủ công (Manual Init queue)
   var queue = (window.Vielora && window.Vielora.q) || (window.ChatBotAI && window.ChatBotAI.q);
   if (Array.isArray(queue)) {
-    queue.forEach(function(args) {
+    queue.forEach(function (args) {
       initWidget(args[0], args[1]);
     });
     if (window.Vielora) window.Vielora.q = null;
   }
 
+  // Kích hoạt auto-init dựa trên trạng thái tải trang
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    autoInit();
+    // setTimeout để đảm bảo các script khác có thời gian cấu hình manual (nếu cần)
+    setTimeout(autoInit, 1);
   } else {
     document.addEventListener('DOMContentLoaded', autoInit);
+    window.addEventListener('load', autoInit); // Fallback chắc chắn kích hoạt
   }
 
 })(window, document);

@@ -28,6 +28,7 @@ Trong mô hình dịch vụ của nền tảng Vielora, trách nhiệm pháp lý
 - **Định danh thiết bị:** Chúng tôi sử dụng FingerprintJS để tạo mã định danh duy nhất nhằm mục đích quản lý giới hạn tin nhắn và nhận diện các cuộc hội thoại cũ.
 - **Dữ liệu cuộc trò chuyện:** Nội dung các tin nhắn được gửi qua Widget và các câu trả lời do AI tạo ra.
 - **Dữ liệu kỹ thuật:** Địa chỉ IP truy cập, tên miền website nơi widget được nhúng nhằm mục đích bảo mật chống DDoS và xác thực CORS.
+- **Dữ liệu từ plugin WordPress Vielora Chatbot:** Khi chủ website nhập Bot ID và kích hoạt plugin, website sẽ tải mã widget từ `https://vielora.vn/widget.js`. Plugin truyền Bot ID đã cấu hình để Vielora xác định đúng chatbot cần hiển thị. Khi khách truy cập tương tác với widget, nội dung tin nhắn, thông tin kỹ thuật và dữ liệu nhận diện cuộc hội thoại có thể được gửi về hệ thống Vielora để xử lý phản hồi chatbot.
 
 ## 3. Mục đích sử dụng dữ liệu
 
@@ -58,6 +59,7 @@ Chúng tôi không bán hoặc cho thuê dữ liệu cá nhân của bạn cho b
 ## 6. Lưu trữ và Bảo vệ dữ liệu
 
 - Dữ liệu của bạn được lưu trữ trên các máy chủ đám mây an toàn.
+- Dữ liệu hội thoại, dữ liệu bot và dữ liệu kỹ thuật được lưu trữ trong thời gian cần thiết để cung cấp dịch vụ, phục vụ bảo mật, xử lý khiếu nại, tuân thủ nghĩa vụ pháp lý hoặc cho đến khi chủ tài khoản yêu cầu xóa theo các chức năng có sẵn trên Dashboard.
 - Việc trừ Tín dụng (Credits) được bảo vệ bằng cơ chế khóa để ngăn chặn các cuộc tấn công khai thác lỗ hổng xử lý đồng thời.
 - Các Worker cào dữ liệu (Scraper) hoạt động trong môi trường độc lập, cô lập để đảm bảo không rò rỉ bộ nhớ hoặc dữ liệu chéo giữa các khách hàng.
 
@@ -78,4 +80,4 @@ Nếu bạn có bất kỳ câu hỏi, khiếu nại hoặc yêu cầu nào liê
 
 **Công ty Titops DX4U**
 
-- **Email hỗ trợ:** dx4u@gmail.com
+- **Email hỗ trợ:** contact@vielora.vn

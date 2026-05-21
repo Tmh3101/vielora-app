@@ -27,15 +27,24 @@ export const metadata: Metadata = {
     title: "Vielora - Nền tảng SaaS xây dựng AI Chatbot",
     description:
       "Chỉ cần nhập URL website, AI sẽ tự động học nội dung và tạo chatbot thông minh trong 5 phút.",
-    url: "./",
+    url: "/",
     siteName: "Vielora",
     locale: "vi_VN",
     type: "website",
+    images: [
+      {
+        url: "/ogi.png",
+        width: 1200,
+        height: 630,
+        alt: "Vielora AI Chatbot",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Vielora - AI Chatbot",
     description: "Tạo AI Chatbot thông minh từ dữ liệu website.",
+    images: ["/ogi.png"],
   },
 };
 
