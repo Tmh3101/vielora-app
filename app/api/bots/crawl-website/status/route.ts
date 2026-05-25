@@ -29,6 +29,7 @@ interface QueueStatusResponse {
   success: boolean;
   data: {
     discover: { pending: number; active: number; completed: number; failed: number };
+    pageCrawler: { pending: number; active: number; completed: number; failed: number };
     indexer: { pending: number; active: number; completed: number; failed: number };
   };
 }
@@ -112,10 +113,19 @@ export async function GET(
     const jobRows = await getAllJobStats(supabase);
 
     const empty = { pending: 0, active: 0, completed: 0, failed: 0 };
-    const queueStatus = { discover: { ...empty }, indexer: { ...empty } };
+    const queueStatus = {
+      discover: { ...empty },
+      pageCrawler: { ...empty },
+      indexer: { ...empty },
+    };
 
     for (const row of jobRows) {
-      const queue = row.name === "discover" ? queueStatus.discover : queueStatus.indexer;
+      const queue =
+        row.name === "discover"
+          ? queueStatus.discover
+          : row.name === "page_crawl"
+            ? queueStatus.pageCrawler
+            : queueStatus.indexer;
       const s = row.status as keyof typeof empty;
       if (s in queue) queue[s] += 1;
     }

@@ -113,6 +113,7 @@ export function startIndexerWorker(): Worker<IndexerJobData> {
 
 export function startPageCrawlerWorker(): Worker<PageCrawlerJobData> {
   if (pageCrawlerWorker) return pageCrawlerWorker;
+  const trackingClient = createAdminClient();
 
   pageCrawlerWorker = new Worker<PageCrawlerJobData>(
     PAGE_CRAWLER_QUEUE_NAME,
@@ -133,6 +134,27 @@ export function startPageCrawlerWorker(): Worker<PageCrawlerJobData> {
 
   pageCrawlerWorker.on("error", (error) => {
     console.error("[PageCrawlerWorker] Error:", error.message);
+  });
+
+  pageCrawlerWorker.on("active", (job) => {
+    if (job.data.mode !== "single_url_knowledge" || !job.id) return;
+    void updateJobState(trackingClient, job.id, EJobStatus.Active);
+  });
+
+  pageCrawlerWorker.on("completed", (job) => {
+    if (job.data.mode !== "single_url_knowledge" || !job.id) return;
+    void updateJobState(trackingClient, job.id, EJobStatus.Completed);
+  });
+
+  pageCrawlerWorker.on("failed", (job, err) => {
+    if (job?.data.mode !== "single_url_knowledge" || !job.id) return;
+    void updateJobState(trackingClient, job.id, EJobStatus.Failed, err.message);
+  });
+
+  pageCrawlerWorker.on("progress", (job, progress) => {
+    if (job.data.mode !== "single_url_knowledge" || !job.id) return;
+    const { percent, currentUrl } = normalizeWorkerProgress(progress);
+    publishProgress(getJobProgressStreamId(job.id), percent, currentUrl);
   });
 
   return pageCrawlerWorker;

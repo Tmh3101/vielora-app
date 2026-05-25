@@ -232,13 +232,12 @@ export async function PUT(
       );
     }
 
-    // Determine if we need to change source_type
-    // If original was 'website', convert to 'manual_text' to prevent crawler overwrite
-    const newSourceType =
-      page.source_type === EPageSourceType.Website ? EPageSourceType.ManualText : page.source_type;
-
-    // Generate new URL if converting from website to manual_text
-    const newUrl = page.source_type === EPageSourceType.Website ? `manual://${pageId}` : page.url;
+    // If original content came from the web, convert edits to manual text.
+    const shouldConvertToManual =
+      page.source_type === EPageSourceType.Website ||
+      page.source_type === EPageSourceType.SingleUrl;
+    const newSourceType = shouldConvertToManual ? EPageSourceType.ManualText : page.source_type;
+    const newUrl = shouldConvertToManual ? `manual://${pageId}` : page.url;
 
     // Deduct credits before updating knowledge
     const requiredCredits = CREDIT_PER_PAGE;

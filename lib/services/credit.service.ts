@@ -61,15 +61,6 @@ export async function deductCredits(
       return { success: false, message: "Insufficient credits." };
     }
 
-    // Check if subscription credits are sufficient or PAYG is enabled
-    if (wallet.subscription_credits < creditAmount && !wallet.is_payg_enabled) {
-      return {
-        success: false,
-        message:
-          "Insufficient subscription credits. Please upgrade your plan or enable Pay-as-you-go.",
-      };
-    }
-
     // Calculate deduction split
     const deductedFromSubscription = Math.min(wallet.subscription_credits, creditAmount);
     const deductedFromPayg = creditAmount - deductedFromSubscription;
@@ -278,11 +269,71 @@ export interface CreditSummary {
   usagePercent: number;
 }
 
+function addMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  const dayOfMonth = result.getDate();
+  result.setMonth(result.getMonth() + months);
+  // If the day of the month changed, it means we overflowed (e.g., Jan 31 -> March 3).
+  // Setting the date to 0 moves it to the last day of the intended month.
+  if (result.getDate() !== dayOfMonth) {
+    result.setDate(0);
+  }
+  return result;
+}
+
+function isValidDate(date: Date): boolean {
+  return !Number.isNaN(date.getTime());
+}
+
+interface CreditUsageWindowParams {
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  nextCreditResetAt: string;
+}
+
+function getCreditUsageWindow(
+  params: CreditUsageWindowParams,
+  now = new Date()
+): { startIso: string; endIso: string } {
+  const periodStart = new Date(params.currentPeriodStart);
+  const periodEnd = new Date(params.currentPeriodEnd);
+  const nextCreditResetAt = new Date(params.nextCreditResetAt);
+
+  let windowEnd = isValidDate(nextCreditResetAt)
+    ? nextCreditResetAt
+    : addMonths(isValidDate(periodStart) ? periodStart : now, 1);
+
+  if (isValidDate(periodEnd) && windowEnd > periodEnd) {
+    windowEnd = periodEnd;
+  }
+
+  while (windowEnd <= now && (!isValidDate(periodEnd) || windowEnd < periodEnd)) {
+    const nextWindowEnd = addMonths(windowEnd, 1);
+
+    if (nextWindowEnd <= windowEnd) {
+      break;
+    }
+
+    windowEnd = isValidDate(periodEnd) && nextWindowEnd > periodEnd ? periodEnd : nextWindowEnd;
+  }
+
+  let windowStart = addMonths(windowEnd, -1);
+
+  if (isValidDate(periodStart) && windowStart < periodStart) {
+    windowStart = periodStart;
+  }
+
+  return {
+    startIso: windowStart.toISOString(),
+    endIso: windowEnd.toISOString(),
+  };
+}
+
 /**
  * Lấy thông tin tổng hợp về credits của user trong tháng hiện tại.
  *
- * Thời gian tính toán: dựa theo `current_period_start` của subscription
- * (chính xác hơn đầu tháng dương lịch).
+ * Thời gian tính toán: dựa theo cửa sổ reset credit tháng hiện tại.
+ * Với gói yearly, billing period kéo dài một năm nhưng credit vẫn reset theo tháng.
  *
  * @param userId - UUID của user cần truy vấn
  * @returns CreditSummary hoặc null nếu không tìm thấy subscription/wallet
@@ -294,7 +345,7 @@ export async function getCreditSummary(
   // 1. Lấy subscription + plan
   const { data: subscription, error: subError } = await client
     .from("subscriptions")
-    .select("current_period_start, plan_id")
+    .select("current_period_start, current_period_end, next_credit_reset_at, plan_id")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -317,7 +368,11 @@ export async function getCreditSummary(
   }
 
   const totalCreditsThisMonth = plan?.monthly_credits ?? 0;
-  const periodStart = subscription.current_period_start;
+  const creditWindow = getCreditUsageWindow({
+    currentPeriodStart: subscription.current_period_start,
+    currentPeriodEnd: subscription.current_period_end,
+    nextCreditResetAt: subscription.next_credit_reset_at,
+  });
 
   // 2. Lấy tất cả credit transactions liên quan đến usage trong kỳ
   const indexCategoryTypes = [
@@ -338,7 +393,8 @@ export async function getCreditSummary(
     .select("amount, transaction_type")
     .eq("user_id", userId)
     .in("transaction_type", relevantTypes)
-    .gte("created_at", periodStart);
+    .gte("created_at", creditWindow.startIso)
+    .lt("created_at", creditWindow.endIso);
 
   if (txError) {
     throw new Error(`Failed to fetch credit transactions: ${txError.message}`);

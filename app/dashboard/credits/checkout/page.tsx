@@ -88,18 +88,23 @@ function CreditCheckoutContent() {
         const { data: rawData, error } = await supabase
           .from("credit_packages")
           .select("*")
-          .eq("is_active", true)
-          .order("price", { ascending: true });
-
-        const data = rawData as Tables<"credit_packages">[] | null;
+          .eq("is_active", true);
 
         if (error) throw error;
-        setPackages(data || []);
-        if (data && data.length > 0) {
-          if (initialPackageId && data.some((p) => p.id === initialPackageId)) {
+
+        // Sort by VND price in memory since price is now JSONB
+        const sortedData = ((rawData as Tables<"credit_packages">[]) || []).sort((a, b) => {
+          const priceA = (a.price as { VND?: number })?.VND || 0;
+          const priceB = (b.price as { VND?: number })?.VND || 0;
+          return priceA - priceB;
+        });
+
+        setPackages(sortedData || []);
+        if (sortedData && sortedData.length > 0) {
+          if (initialPackageId && sortedData.some((p) => p.id === initialPackageId)) {
             setSelectedPackageId(initialPackageId);
           } else {
-            setSelectedPackageId(data[0].id);
+            setSelectedPackageId(sortedData[0].id);
           }
         }
       } catch (error) {
@@ -303,7 +308,14 @@ function CreditCheckoutContent() {
                               </p>
                             </div>
                           </div>
-                          <span className="font-semibold">{formatVND(pkg.price)}đ</span>
+                          <div className="text-right">
+                            <span className="block font-semibold">
+                              {formatVND((pkg.price as { VND?: number })?.VND || 0)}đ
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              ~ ${(pkg.price as { USD?: number })?.USD || 0} USD
+                            </span>
+                          </div>
                         </div>
                       );
                     })}
@@ -329,9 +341,20 @@ function CreditCheckoutContent() {
                       <p className="text-sm text-muted-foreground">Đơn giá</p>
                       <p className="text-lg font-semibold">
                         {formatVND(
-                          Math.round(selectedPackage.price / selectedPackage.credits_amount)
+                          Math.round(
+                            ((selectedPackage.price as { VND?: number })?.VND || 0) /
+                              selectedPackage.credits_amount
+                          )
                         )}
                         đ / credit
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        ~ $
+                        {(
+                          ((selectedPackage.price as { USD?: number })?.USD || 0) /
+                          selectedPackage.credits_amount
+                        ).toFixed(4)}{" "}
+                        USD
                       </p>
                     </div>
                   </div>
@@ -362,15 +385,27 @@ function CreditCheckoutContent() {
                     <>
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">{selectedPackage.name}</span>
-                        <span className="font-medium">{formatVND(selectedPackage.price)}đ</span>
+                        <div className="text-right">
+                          <span className="block font-medium">
+                            {formatVND((selectedPackage.price as { VND?: number })?.VND || 0)}đ
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            ~ ${(selectedPackage.price as { USD?: number })?.USD || 0} USD
+                          </span>
+                        </div>
                       </div>
 
                       <div className="border-t border-border/60 pt-4">
                         <div className="flex items-center justify-between">
                           <span className="text-lg font-semibold">Tổng cộng</span>
-                          <span className="text-2xl font-bold text-primary">
-                            {formatVND(selectedPackage.price)}đ
-                          </span>
+                          <div className="text-right">
+                            <span className="block text-2xl font-bold text-primary">
+                              {formatVND((selectedPackage.price as { VND?: number })?.VND || 0)}đ
+                            </span>
+                            <span className="text-xs font-medium text-muted-foreground">
+                              ~ ${(selectedPackage.price as { USD?: number })?.USD || 0} USD
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </>

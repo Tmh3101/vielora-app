@@ -1,3 +1,6 @@
+import { getDiscoverSeedUrl } from "./crawl-website-helpers";
+import type { Tables } from "@/lib/supabase/types";
+
 /**
  * Format URL to ensure it has a protocol
  */
@@ -88,3 +91,41 @@ export const canonicalizeActionKey = (value: string): string => {
     return trimmed.replace(/\s+/g, " ").toLowerCase();
   }
 };
+
+export function normalizeKnowledgeUrl(input: string): string | null {
+  try {
+    const parsed = new URL(input.trim());
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+
+    parsed.hash = "";
+    if (parsed.pathname !== "/") {
+      parsed.pathname = parsed.pathname.replace(/\/+$/g, "") || "/";
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHostname(hostname: string): string {
+  return hostname.toLowerCase().replace(/^www\./, "");
+}
+
+function isRootPath(pathname: string): boolean {
+  return pathname === "" || pathname === "/";
+}
+
+export function isBotRootUrl(url: string, bot: Tables<"bots">): boolean {
+  try {
+    const target = new URL(url);
+    const seed = new URL(getDiscoverSeedUrl(bot));
+
+    return (
+      normalizeHostname(target.hostname) === normalizeHostname(seed.hostname) &&
+      isRootPath(target.pathname)
+    );
+  } catch {
+    return false;
+  }
+}

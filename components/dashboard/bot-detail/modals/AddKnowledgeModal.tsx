@@ -16,7 +16,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CREDIT_PER_PAGE, MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH } from "@/config";
 import { ALLOWED_KNOWLEDGE_FILE_EXTENSIONS, MAX_KNOWLEDGE_FILE_SIZE } from "@/config/knowledge";
-import { FileText, Loader2, Plus, Upload } from "lucide-react";
+import { FileText, Link, Loader2, Plus, Upload } from "lucide-react";
 
 export interface AddKnowledgeModalProps {
   open: boolean;
@@ -25,6 +25,7 @@ export interface AddKnowledgeModalProps {
   totalCredits: number;
   onConfirmManual: (title: string, content: string) => Promise<void>;
   onConfirmFile: (file: File) => Promise<void>;
+  onConfirmUrl: (url: string) => Promise<void>;
 }
 
 export function AddKnowledgeModal({
@@ -34,10 +35,13 @@ export function AddKnowledgeModal({
   totalCredits,
   onConfirmManual,
   onConfirmFile,
+  onConfirmUrl,
 }: AddKnowledgeModalProps) {
-  const [inputMode, setInputMode] = useState<"manual" | "file">("manual");
+  const [inputMode, setInputMode] = useState<"manual" | "file" | "url">("manual");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [url, setUrl] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -50,6 +54,8 @@ export function AddKnowledgeModal({
       setInputMode("manual");
       setTitle("");
       setContent("");
+      setUrl("");
+      setUrlError(null);
       setSelectedFile(null);
       setIsDraggingFile(false);
       setFileError(null);
@@ -83,20 +89,37 @@ export function AddKnowledgeModal({
     setIsDraggingFile(false);
   };
 
+  const validateUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "Vui lòng nhập URL.";
+
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return "URL phải bắt đầu bằng http:// hoặc https://.";
+      }
+      return null;
+    } catch {
+      return "URL không hợp lệ.";
+    }
+  };
+
+  const currentUrlError = inputMode === "url" ? validateUrl(url) : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Thêm dữ liệu</DialogTitle>
-          <DialogDescription>Thêm văn bản thủ công hoặc tải tệp lên cho bot.</DialogDescription>
+          <DialogDescription>Thêm văn bản, tệp hoặc URL cho bot.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <Tabs
             value={inputMode}
-            onValueChange={(value) => setInputMode(value as "manual" | "file")}
+            onValueChange={(value) => setInputMode(value as "manual" | "file" | "url")}
           >
-            <TabsList className="grid w-full grid-cols-2 bg-muted/60">
+            <TabsList className="grid w-full grid-cols-3 bg-muted/60">
               <TabsTrigger
                 value="manual"
                 disabled={isSubmitting}
@@ -108,6 +131,10 @@ export function AddKnowledgeModal({
               <TabsTrigger value="file" disabled={isSubmitting} className="flex items-center gap-2">
                 <Upload className="h-4 w-4" />
                 Tệp
+              </TabsTrigger>
+              <TabsTrigger value="url" disabled={isSubmitting} className="flex items-center gap-2">
+                <Link className="h-4 w-4" />
+                Đường dẫn
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -163,7 +190,7 @@ export function AddKnowledgeModal({
                 </div>
               </div>
             </>
-          ) : (
+          ) : inputMode === "file" ? (
             <div className="space-y-2">
               <Label>Tệp *</Label>
               <input
@@ -223,6 +250,30 @@ export function AddKnowledgeModal({
                 </div>
               ) : null}
             </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="knowledge-url">URL bài viết/tài liệu *</Label>
+              <Input
+                id="knowledge-url"
+                type="url"
+                placeholder="https://example.com/blog/article"
+                value={url}
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  setUrlError(null);
+                }}
+                onBlur={() => setUrlError(validateUrl(url))}
+                disabled={isSubmitting}
+              />
+              {urlError ? (
+                <p className="text-xs font-medium text-destructive">{urlError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Dùng cho một trang cụ thể như bài viết, blog hoặc tài liệu online. Với toàn bộ
+                  website, hãy dùng Reindex.
+                </p>
+              )}
+            </div>
           )}
         </div>
 
@@ -254,30 +305,44 @@ export function AddKnowledgeModal({
               Hủy
             </Button>
             <Button
-              onClick={() =>
-                void (inputMode === "manual"
-                  ? onConfirmManual(title, content)
-                  : selectedFile
-                    ? onConfirmFile(selectedFile)
-                    : Promise.resolve())
-              }
+              onClick={() => {
+                if (inputMode === "manual") {
+                  void onConfirmManual(title, content);
+                  return;
+                }
+                if (inputMode === "file" && selectedFile) {
+                  void onConfirmFile(selectedFile);
+                  return;
+                }
+                if (inputMode === "url") {
+                  const error = validateUrl(url);
+                  setUrlError(error);
+                  if (!error) void onConfirmUrl(url);
+                }
+              }}
               disabled={
                 isSubmitting ||
                 totalCredits < CREDIT_PER_PAGE ||
-                (inputMode === "manual" ? !title.trim() || !content.trim() : !selectedFile)
+                (inputMode === "manual"
+                  ? !title.trim() || !content.trim()
+                  : inputMode === "file"
+                    ? !selectedFile
+                    : !url.trim() || Boolean(currentUrlError))
               }
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang thêm...
+                  {inputMode === "url" ? "Đang gửi..." : "Đang thêm..."}
                 </>
               ) : (
                 <>
                   {inputMode === "manual" ? (
                     <Plus className="mr-2 h-4 w-4" />
-                  ) : (
+                  ) : inputMode === "file" ? (
                     <Upload className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Link className="mr-2 h-4 w-4" />
                   )}
                   Thêm dữ liệu
                 </>

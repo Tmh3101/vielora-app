@@ -8,6 +8,8 @@ import {
 } from "@/lib/constants";
 import type { EPageErrorType } from "./enums";
 
+export type PageCrawlerMode = "discover" | "single_url_knowledge";
+
 export type CrawlScopeType = (typeof CrawlScopeEnum)[keyof typeof CrawlScopeEnum];
 
 /**
@@ -157,6 +159,7 @@ export interface DiscoverJobData {
 }
 
 export interface PageCrawlerJobData {
+  mode?: PageCrawlerMode;
   botId: string;
   currentUrl: string;
   depth: number;
@@ -166,12 +169,25 @@ export interface PageCrawlerJobData {
   maxPages: number;
   maxDepth: number;
   config?: CrawlJobConfig;
+  pageId?: string;
+  creditRefund?: {
+    userId: string;
+    deductedFromSubscription: number;
+    deductedFromPayg: number;
+    creditAmount: number;
+  };
 }
 
 export interface IndexerJobData {
   botId: string;
   pageId: string;
   requestId: string;
+  creditRefund?: {
+    userId: string;
+    deductedFromSubscription: number;
+    deductedFromPayg: number;
+    creditAmount: number;
+  };
 }
 
 /**

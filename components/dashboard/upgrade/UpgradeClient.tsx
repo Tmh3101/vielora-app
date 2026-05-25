@@ -262,8 +262,13 @@ export default function UpgradeClient({
                 >
                   <div className="p-6">
                     <h3 className="text-lg font-semibold text-foreground">{pkg.name}</h3>
-                    <div className="mt-4 flex items-baseline text-3xl font-bold text-primary">
-                      {pkg.price.toLocaleString("vi-VN")}đ
+                    <div className="mt-4 flex flex-col gap-1">
+                      <div className="flex items-baseline text-3xl font-bold text-primary">
+                        {((pkg.price as { VND?: number })?.VND || 0).toLocaleString("vi-VN")}đ
+                      </div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        ~ ${(pkg.price as { USD?: number })?.USD || 0} USD
+                      </div>
                     </div>
                     <div className="mt-4 space-y-3 text-sm text-muted-foreground">
                       <div className="flex items-center gap-2">

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { getRedisPublisher } from "@/lib/config/redis";
 import { extractContent } from "@/lib/scraper/extractors";
 import { processLinks, extractBaseDomain, normalizeUrl } from "./link-processor";
-import { getPageCrawlerQueue } from "./queue";
+import { addIndexerJob, getPageCrawlerQueue } from "./queue";
 import { ensureProtocol } from "@/lib/helpers/url-helpers";
 import { createJobRecord as _createJobRecord } from "@/lib/services/job.service";
 import {
@@ -28,7 +28,7 @@ import type {
   RenderModeType,
   PageContent,
 } from "@/types";
-import { EBotStatus, EPageStatus } from "@/types";
+import { EBotStatus, EPageStatus, ETransactionType } from "@/types";
 import {
   RenderMode as RenderModeEnum,
   DISCOVERED_PAGE_STATUSES,
@@ -38,8 +38,9 @@ import {
 import { createAdminClient } from "@/lib/supabase/server";
 import type { TablesInsert } from "@/lib/supabase/types";
 import { hashContent, fetchSitemapUrls, isSoft404 } from "@/lib/helpers/crawl-website-helpers";
+import { refundCredits } from "@/lib/services/credit.service";
 import { createChunks, embedChunks } from "@/lib/rag-processor";
-import { MAX_PAGES, MAX_DEPTH } from "@/config/scraper";
+import { CREDIT_PER_PAGE, MAX_PAGES, MAX_DEPTH, MIN_CHUNK_SIZE } from "@/config";
 import { getJobProgressStreamId } from "@/lib/helpers/job-tracker-helpers";
 import { sleep } from "@/lib/utils/sleep";
 
@@ -61,6 +62,40 @@ const getDiscoverPendingKey = (discoverJobId: string): string =>
   `${DISCOVER_PENDING_KEY_PREFIX}:${discoverJobId}`;
 const getDiscoverSeenKey = (discoverJobId: string): string =>
   `${DISCOVER_SEEN_KEY_PREFIX}:${discoverJobId}`;
+
+const refundSingleUrlKnowledgeCredits = async (
+  supabase: ReturnType<typeof createAdminClient>,
+  jobData: PageCrawlerJobData
+): Promise<void> => {
+  const refund = jobData.creditRefund;
+  if (!refund) return;
+
+  await refundCredits(supabase, {
+    userId: refund.userId,
+    deductedFromSubscription: refund.deductedFromSubscription,
+    deductedFromPayg: refund.deductedFromPayg,
+    transactionType: ETransactionType.AddKnowledgeRefund,
+    transactionDescription: `Refunded ${refund.creditAmount || CREDIT_PER_PAGE} credits due to an error while adding URL knowledge for bot ${jobData.botId}`,
+  });
+};
+
+const failSingleUrlKnowledgeJob = async (
+  supabase: ReturnType<typeof createAdminClient>,
+  jobData: PageCrawlerJobData,
+  message: string
+): Promise<never> => {
+  if (jobData.pageId) {
+    await updatePageServer(supabase, jobData.pageId, {
+      status: EPageStatus.Failed,
+      error_message: message,
+      crawled_at: new Date().toISOString(),
+    });
+  }
+
+  await refundSingleUrlKnowledgeCredits(supabase, jobData);
+  debouncedFinalizeBotIfDone(jobData.botId);
+  throw new Error(message);
+};
 
 export const processDiscoverJob = async (job: Job<DiscoverJobData>): Promise<void> => {
   const { botId, startUrl, config } = job.data;
@@ -180,9 +215,10 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
     maxDepth,
     config,
   } = job.data;
-  const redis = await getRedisPublisher();
-  const pendingKey = getDiscoverPendingKey(discoverJobId);
-  const seenKey = getDiscoverSeenKey(discoverJobId);
+  const isSingleUrlKnowledge = job.data.mode === "single_url_knowledge";
+  const redis = isSingleUrlKnowledge ? null : await getRedisPublisher();
+  const pendingKey = isSingleUrlKnowledge ? null : getDiscoverPendingKey(discoverJobId);
+  const seenKey = isSingleUrlKnowledge ? null : getDiscoverSeenKey(discoverJobId);
   const renderMode: RenderModeType = config?.renderMode ?? RenderModeEnum.AUTO;
 
   try {
@@ -205,7 +241,9 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
     });
 
     let result: CrawlResult;
-    const pageTimeoutMs = (config?.timeout ?? 30000) * 3;
+    const pageTimeoutMs = isSingleUrlKnowledge
+      ? (config?.timeout ?? 30000)
+      : (config?.timeout ?? 30000) * 3;
 
     console.log(
       `[PageCrawlerJob] Starting content extraction for URL: ${currentUrl} with timeout ${pageTimeoutMs}ms`
@@ -228,7 +266,8 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
         title: "",
         html: "",
         markdown: "",
-        error: error instanceof Error ? error.message : "Unknown discover error",
+        error: error instanceof Error ? error.message : "Unknown crawl error",
+        links: [],
         processingTimeMs: 0,
       };
     }
@@ -238,8 +277,61 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
       currentUrl,
       title: result.title,
       contentLength: result.markdown.length,
-      linksCount: result.links.length,
+      linksCount: result.links?.length ?? 0,
     });
+
+    if (isSingleUrlKnowledge) {
+      const supabase = createAdminClient();
+
+      try {
+        if (!job.data.pageId) {
+          throw new Error("Missing pageId for single URL knowledge crawl");
+        }
+
+        if (!result.success) {
+          throw new Error(result.error || "Unable to crawl this URL.");
+        }
+
+        if (isSoft404(result.title, result.markdown)) {
+          throw new Error("No indexable content was found.");
+        }
+
+        const normalizedContent = result.markdown.trim();
+        if (normalizedContent.length < MIN_CHUNK_SIZE) {
+          throw new Error("No indexable content was found at this URL.");
+        }
+
+        await updatePageServer(supabase, job.data.pageId, {
+          title: result.title?.trim() || currentUrl,
+          content: normalizedContent,
+          raw_content: result.rawHtml || result.html || normalizedContent,
+          content_hash: hashContent(normalizedContent),
+          status: EPageStatus.PendingIndex,
+          error_message: null,
+          crawled_at: new Date().toISOString(),
+        });
+
+        const indexerJobId = await addIndexerJob({
+          botId,
+          pageId: job.data.pageId,
+          creditRefund: job.data.creditRefund,
+        });
+
+        void job.updateProgress({ percent: 100, currentUrl });
+        console.log("[PageCrawlerJob] Queued indexer for single URL knowledge:", {
+          botId,
+          pageId: job.data.pageId,
+          indexerJobId,
+        });
+      } catch (error) {
+        await failSingleUrlKnowledgeJob(
+          supabase,
+          job.data,
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+      return;
+    }
 
     if (!result.success || isSoft404(result.title, result.markdown)) {
       return;
@@ -262,7 +354,7 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
       }
     }
 
-    const seenCount = await redis.scard(seenKey);
+    const seenCount = await redis!.scard(seenKey!);
     const progressPercent = Math.min(
       100,
       Math.round((Math.min(seenCount, maxPages) / maxPages) * 100)
@@ -278,7 +370,7 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
       includeSubdomains: config?.includeSubdomains ?? true,
       includePatterns: config?.includePatterns,
       excludePatterns: config?.excludePatterns,
-      preExtractedLinks: result.links,
+      preExtractedLinks: result.links ?? [],
     });
 
     console.log("[PageCrawlerJob] Processed links for URL:", {
@@ -322,11 +414,13 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
         }))
       );
     } catch (error) {
-      await redis.decrby(pendingKey, childUrls.length);
+      await redis!.decrby(pendingKey!, childUrls.length);
       throw error;
     }
   } finally {
-    await redis.decr(pendingKey);
+    if (pendingKey && redis) {
+      await redis.decr(pendingKey);
+    }
   }
 };
 
@@ -347,6 +441,17 @@ export const processIndexerJob = async (job: Job<IndexerJobData>): Promise<void>
       status: EPageStatus.Failed,
       error_message: "Missing content",
     });
+    if (job.data.creditRefund) {
+      await refundCredits(supabase, {
+        userId: job.data.creditRefund.userId,
+        deductedFromSubscription: job.data.creditRefund.deductedFromSubscription,
+        deductedFromPayg: job.data.creditRefund.deductedFromPayg,
+        transactionType: ETransactionType.AddKnowledgeRefund,
+        transactionDescription: `Refunded ${
+          job.data.creditRefund.creditAmount || CREDIT_PER_PAGE
+        } credits due to missing content while adding URL knowledge for bot ${botId}`,
+      });
+    }
     debouncedFinalizeBotIfDone(botId);
     return;
   }
@@ -385,10 +490,22 @@ export const processIndexerJob = async (job: Job<IndexerJobData>): Promise<void>
 
     void job.updateProgress({ percent: 100, currentUrl: page.url });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to index page";
     await updatePageServer(supabase, pageId, {
       status: EPageStatus.Failed,
-      error_message: error instanceof Error ? error.message : "Failed to index page",
+      error_message: errorMessage,
     });
+    if (job.data.creditRefund) {
+      await refundCredits(supabase, {
+        userId: job.data.creditRefund.userId,
+        deductedFromSubscription: job.data.creditRefund.deductedFromSubscription,
+        deductedFromPayg: job.data.creditRefund.deductedFromPayg,
+        transactionType: ETransactionType.AddKnowledgeRefund,
+        transactionDescription: `Refunded ${
+          job.data.creditRefund.creditAmount || CREDIT_PER_PAGE
+        } credits due to an indexing error while adding URL knowledge for bot ${botId}`,
+      });
+    }
     void job.updateProgress({ percent: 100, currentUrl: page.url });
   }
 

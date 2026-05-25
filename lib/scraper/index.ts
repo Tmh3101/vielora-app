@@ -11,6 +11,7 @@
 
 export {
   addDiscoverJob,
+  addSingleUrlCrawlJob,
   addIndexerJob,
   addIndexerJobs,
   getDiscoverQueue,

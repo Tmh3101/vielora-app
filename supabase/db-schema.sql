@@ -288,7 +288,7 @@ CREATE TABLE public.pages (
 	crawled_at timestamptz DEFAULT now() NOT NULL,
 	CONSTRAINT pages_pkey PRIMARY KEY (id),
 	CONSTRAINT pages_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.bots(id) ON DELETE CASCADE,
-	CONSTRAINT pages_source_type_check CHECK (source_type IN ('website', 'manual_text', 'file'))
+	CONSTRAINT pages_source_type_check CHECK (source_type IN ('website', 'manual_text', 'file', 'single_url'))
 );
 
 CREATE INDEX idx_pages_bot_id_url ON public.pages (bot_id, url);

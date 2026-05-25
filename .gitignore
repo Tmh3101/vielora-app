@@ -73,12 +73,10 @@ AGENTS.md
 CLAUDE.md
 
 .gitnexus
-**/.gemini/
-.vscode
+.gemini
 .kiro
 .agents
 .codex
 .claude
-.antigravitycli
 
 skills-lock.json

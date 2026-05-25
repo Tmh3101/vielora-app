@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Package not found or inactive" }, { status: 404 });
     }
 
-    const amount = creditPackage.price;
+    const priceObj = creditPackage.price as unknown as { USD?: number; VND?: number } | null;
+    const amount = priceObj?.VND;
 
     if (!amount || amount <= 0) {
       return NextResponse.json({ error: "Invalid package price." }, { status: 400 });

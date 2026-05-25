@@ -194,6 +194,7 @@ export default function BotDetailPage() {
     handleOpenAddDataSource,
     handleAddDataSource,
     handleAddFileDataSource,
+    handleAddUrlDataSource,
     handleOpenEditKnowledge,
     handleSaveEditKnowledge,
     handleOpenDeleteKnowledge,
@@ -541,6 +542,7 @@ export default function BotDetailPage() {
         totalCredits={totalCredits}
         onConfirmManual={handleAddDataSource}
         onConfirmFile={handleAddFileDataSource}
+        onConfirmUrl={handleAddUrlDataSource}
       />
 
       <EditKnowledgeModal

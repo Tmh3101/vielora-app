@@ -32,6 +32,7 @@ export const CrawlSessionStatus = {
 
 export const JobName = {
   DISCOVER: "discover",
+  PAGE_CRAWL: "page_crawl",
   INDEX: "index",
 } as const;
 

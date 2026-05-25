@@ -57,7 +57,7 @@ export async function addDiscoverJob(params: {
 }): Promise<string> {
   const requestId = params.requestId ?? randomUUID();
   const queue = getDiscoverQueue();
-  const jobData = {
+  const jobData: DiscoverJobData = {
     botId: params.botId,
     startUrl: params.startUrl,
     requestId,
@@ -65,29 +65,86 @@ export async function addDiscoverJob(params: {
   };
 
   // Dual-insert: DB record first, then BullMQ job
-  await createJobRecord(createAdminClient(), requestId, JobName.DISCOVER, jobData, params.botId);
+  await createJobRecord(
+    createAdminClient(),
+    requestId,
+    JobName.DISCOVER,
+    jobData as unknown as Record<string, unknown>,
+    params.botId
+  );
 
   await queue.add(`discover:${params.botId}:${requestId}`, jobData, { jobId: requestId });
 
   return requestId;
 }
 
+export async function addSingleUrlCrawlJob(params: {
+  botId: string;
+  pageId: string;
+  url: string;
+  requestId?: string;
+  config?: CrawlJobConfig;
+  creditRefund?: PageCrawlerJobData["creditRefund"];
+}): Promise<string> {
+  const requestId = params.requestId ?? randomUUID();
+  const queue = getPageCrawlerQueue();
+  const jobId = randomUUID();
+  const hostname = new URL(params.url).hostname;
+  const jobData: PageCrawlerJobData = {
+    mode: "single_url_knowledge",
+    botId: params.botId,
+    currentUrl: params.url,
+    depth: 0,
+    discoverJobId: requestId,
+    startHostname: hostname,
+    baseDomain: hostname,
+    maxPages: 1,
+    maxDepth: 0,
+    config: params.config,
+    pageId: params.pageId,
+  };
+  if (params.creditRefund) jobData.creditRefund = params.creditRefund;
+
+  await createJobRecord(
+    createAdminClient(),
+    jobId,
+    JobName.PAGE_CRAWL,
+    jobData as unknown as Record<string, unknown>,
+    params.botId
+  );
+
+  await queue.add(`page-crawl:single-url:${params.pageId}:${requestId}`, jobData, {
+    jobId,
+    attempts: 1,
+  });
+
+  return jobId;
+}
+
 export async function addIndexerJob(params: {
   botId: string;
   pageId: string;
   requestId?: string;
+  creditRefund?: IndexerJobData["creditRefund"];
 }): Promise<string> {
   const requestId = params.requestId ?? randomUUID();
   const queue = getIndexerQueue();
   const jobId = randomUUID();
-  const jobData = {
+  const jobData: IndexerJobData = {
     botId: params.botId,
     pageId: params.pageId,
     requestId,
   };
+  if (params.creditRefund) jobData.creditRefund = params.creditRefund;
 
   // Dual-insert: DB record first, then BullMQ job
-  await createJobRecord(createAdminClient(), jobId, JobName.INDEX, jobData, params.botId);
+  await createJobRecord(
+    createAdminClient(),
+    jobId,
+    JobName.INDEX,
+    jobData as unknown as Record<string, unknown>,
+    params.botId
+  );
 
   await queue.add(`index:${params.pageId}:${requestId}`, jobData, { jobId });
 

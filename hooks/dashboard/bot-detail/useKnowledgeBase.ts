@@ -7,6 +7,7 @@ import type { Tables } from "@/lib/supabase/types";
 import {
   addKnowledge,
   addKnowledgeFile,
+  addKnowledgeUrl,
   deleteKnowledge,
   editKnowledge,
   pollPipelineStatus,
@@ -17,6 +18,7 @@ import { useReindexDiscover } from "@/hooks/dashboard/bot-detail/useReindexDisco
 import { getCreditSummary } from "@/lib/services/credit.service";
 import { getPagePreviewByBotId } from "@/lib/services/page.service";
 import { getDiscoverSeedUrl } from "@/lib/helpers/crawl-website-helpers";
+import { normalizeKnowledgeUrl } from "@/lib/helpers/url-helpers";
 import { CREDIT_PER_PAGE } from "@/config";
 import { EPageSourceType, EPageStatus, ESubscriptionPlan } from "@/types";
 import type { CrawlScopeType } from "@/types/scrape";
@@ -93,6 +95,7 @@ export interface UseKnowledgeBaseResult {
   handleOpenAddDataSource: () => void;
   handleAddDataSource: (title: string, content: string) => Promise<void>;
   handleAddFileDataSource: (file: File) => Promise<void>;
+  handleAddUrlDataSource: (url: string) => Promise<void>;
   handleOpenEditKnowledge: (page: PageType) => void;
   handleSaveEditKnowledge: (title: string, content: string) => Promise<void>;
   handleOpenDeleteKnowledge: (page: PageType) => void;
@@ -428,6 +431,68 @@ export function useKnowledgeBase({
     [bot, fetchData, supabase, toast]
   );
 
+  const handleAddUrlDataSource = useCallback(
+    async (url: string) => {
+      if (!bot) return;
+
+      const normalizedUrl = normalizeKnowledgeUrl(url);
+      if (!normalizedUrl) {
+        toast({
+          title: "Lỗi",
+          description: "Vui lòng nhập URL hợp lệ bắt đầu bằng http:// hoặc https://.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (totalCredits < CREDIT_PER_PAGE) {
+        toast({
+          title: "Không đủ credits",
+          description: `Bạn cần ${CREDIT_PER_PAGE} credit để thêm URL này.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setIsSubmittingDataSource(true);
+      try {
+        await addKnowledgeUrl(supabase, {
+          botId: bot.id,
+          url: normalizedUrl,
+        });
+
+        toast({
+          title: "Thành công",
+          description: "Đã đưa URL vào hàng chờ crawl và index.",
+        });
+
+        setAddDataSourceOpen(false);
+
+        setTimeout(() => {
+          void fetchData();
+        }, 2000);
+      } catch (error) {
+        console.error("Add URL data source error:", error);
+        toast({
+          title: "Lỗi",
+          description: error instanceof Error ? error.message : "Không thể thêm URL dữ liệu.",
+          variant: "destructive",
+        });
+      } finally {
+        if (userId) {
+          try {
+            const summary = await getCreditSummary(supabase, userId);
+            setTotalCredits(summary?.totalRemainingCredits ?? 0);
+          } catch (creditError) {
+            console.error("Credit refresh error:", creditError);
+          }
+        }
+        setIsSubmittingDataSource(false);
+      }
+    },
+    [bot, fetchData, setTotalCredits, supabase, toast, totalCredits, userId]
+  );
+
   const handleOpenEditKnowledge = useCallback(
     (page: PageType) => {
       if (planCode === ESubscriptionPlan.Free) {
@@ -579,6 +644,7 @@ export function useKnowledgeBase({
     handleOpenAddDataSource,
     handleAddDataSource,
     handleAddFileDataSource,
+    handleAddUrlDataSource,
     handleOpenEditKnowledge,
     handleSaveEditKnowledge,
     handleOpenDeleteKnowledge,

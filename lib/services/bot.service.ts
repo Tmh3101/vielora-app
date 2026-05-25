@@ -72,7 +72,8 @@ export function validateSuggestedQuestions(questions: unknown): { valid: boolean
 
 export interface AddKnowledgeRequest {
   botId: string;
-  isManual: boolean;
+  isManual?: boolean;
+  mode?: "manual" | "file" | "url";
   title?: string;
   content?: string;
   url?: string;
@@ -406,6 +407,32 @@ export async function addKnowledgeFile(
   const res = (await response.json()) as AddKnowledgeResponse;
   if (!response.ok || !res.success || !res.data) {
     throw new Error(res.message || "Failed to add file knowledge");
+  }
+
+  return res.data;
+}
+
+export async function addKnowledgeUrl(
+  client: ServiceClient,
+  request: { botId: string; url: string }
+): Promise<NonNullable<AddKnowledgeResponse["data"]>> {
+  const headers = {
+    ...(await getAuthHeaders(client)),
+    "Content-Type": "application/json",
+  };
+  const response = await fetch("/api/bots/knowledge", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      botId: request.botId,
+      mode: "url",
+      url: request.url,
+    }),
+  });
+
+  const res = (await response.json()) as AddKnowledgeResponse;
+  if (!response.ok || !res.success || !res.data) {
+    throw new Error(res.message || "Failed to add URL knowledge");
   }
 
   return res.data;

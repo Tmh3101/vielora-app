@@ -112,7 +112,7 @@ export type Database = {
           id: string;
           name: string;
           credits_amount: number;
-          price: number;
+          price: Json;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -121,7 +121,7 @@ export type Database = {
           id?: string;
           name: string;
           credits_amount: number;
-          price: number;
+          price: Json;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -130,7 +130,7 @@ export type Database = {
           id?: string;
           name?: string;
           credits_amount?: number;
-          price?: number;
+          price?: Json;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;

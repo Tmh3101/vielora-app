@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { addIndexerJob } from "@/lib/scraper";
-import { corsHeaders } from "@/lib/constants";
+import { addIndexerJob, addSingleUrlCrawlJob } from "@/lib/scraper";
+import { RenderMode as RenderModeEnum, corsHeaders } from "@/lib/constants";
 import { hashContent } from "@/lib/helpers/crawl-website-helpers";
+import { isBotRootUrl } from "@/lib/helpers/url-helpers";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
+import { normalizeKnowledgeUrl } from "@/lib/helpers/url-helpers";
 import {
   EPageStatus,
   EBotStatus,
@@ -12,11 +14,15 @@ import {
   ESubscriptionPlan,
 } from "@/types";
 import { MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH, CREDIT_PER_PAGE } from "@/config";
-import { MAX_KNOWLEDGE_FILE_SIZE } from "@/config/knowledge";
+import { MAX_KNOWLEDGE_FILE_SIZE, SINGLE_URL_CRAWL_TIMEOUT_MS } from "@/config/knowledge";
 import { deductCredits, refundCredits } from "@/lib/services/credit.service";
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
-import { getBotByIdServer, updateBotStatusServer } from "@/lib/services/bot.service";
-import { insertPageServer } from "@/lib/services/page.service";
+import { getBotByOwner, updateBotStatusServer } from "@/lib/services/bot.service";
+import {
+  deletePageByIdServer,
+  getPageByBotIdAndUrlServer,
+  insertPageServer,
+} from "@/lib/services/page.service";
 import { uploadKnowledgeFile, deleteKnowledgeFile } from "@/lib/supabase/upload";
 import { extractTextFromFile } from "@/lib/scraper/extractors/files";
 
@@ -30,7 +36,7 @@ const ALLOWED_PLANS = [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro];
 interface KnowledgeRequest {
   botId?: string;
   isManual?: boolean;
-  mode?: "manual" | "file";
+  mode?: "manual" | "file" | "url";
   title?: string;
   content?: string;
   url?: string;
@@ -72,6 +78,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
     const mode = body.mode ?? "manual";
     const isManual = mode === "manual";
     const isFileMode = mode === "file";
+    const isUrlMode = mode === "url";
 
     // Validate required fields
     if (!botId) {
@@ -106,9 +113,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
       );
     }
 
-    if (!isManual && !isFileMode) {
+    if (!isManual && !isFileMode && !isUrlMode) {
       return NextResponse.json(
-        { success: false, message: "mode must be either manual or file" },
+        { success: false, message: "mode must be manual, file, or url" },
         { status: 400, headers: corsHeaders }
       );
     }
@@ -158,18 +165,18 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
           { status: 400, headers: corsHeaders }
         );
       }
-    } else {
+    } else if (isUrlMode) {
       // Validate website-specific fields
       if (!url?.trim()) {
         return NextResponse.json(
-          { success: false, message: "url is required for website entries" },
+          { success: false, message: "url is required for URL entries" },
           { status: 400, headers: corsHeaders }
         );
       }
     }
 
-    // Verify bot exists
-    const bot = await getBotByIdServer(supabase, botId);
+    // Verify bot exists and belongs to the authenticated user.
+    const bot = await getBotByOwner(supabase, botId, user.id);
 
     if (!bot) {
       return NextResponse.json(
@@ -178,25 +185,55 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
       );
     }
 
-    if (isManual || isFileMode) {
-      const requiredCredits = CREDIT_PER_PAGE;
-      const deductionResult = await deductCredits(supabase, {
-        userId: bot.user_id,
-        creditAmount: requiredCredits,
-        transactionType: ETransactionType.AddKnowledge,
-        transactionDescription: `Deducted ${requiredCredits} credits to add knowledge for bot ${botId} (${CREDIT_PER_PAGE} credit/page)`,
-      });
+    let normalizedUrl: string | null = null;
+    if (isUrlMode) {
+      normalizedUrl = normalizeKnowledgeUrl(url || "");
+      if (!normalizedUrl) {
+        return NextResponse.json(
+          { success: false, message: "URL must be a valid http or https URL." },
+          { status: 400, headers: corsHeaders }
+        );
+      }
 
-      if (!deductionResult.success) {
+      if (isBotRootUrl(normalizedUrl, bot)) {
         return NextResponse.json(
           {
             success: false,
-            message: deductionResult.message || "Insufficient credits to add knowledge.",
+            message:
+              "Use Reindex to crawl the bot's root website. URL knowledge is for a single article or document page.",
           },
           { status: 400, headers: corsHeaders }
         );
       }
 
+      const existingPage = await getPageByBotIdAndUrlServer(supabase, botId, normalizedUrl);
+      if (existingPage) {
+        return NextResponse.json(
+          { success: false, message: "This URL already exists for this bot." },
+          { status: 409, headers: corsHeaders }
+        );
+      }
+    }
+
+    const requiredCredits = CREDIT_PER_PAGE;
+    const deductionResult = await deductCredits(supabase, {
+      userId: bot.user_id,
+      creditAmount: requiredCredits,
+      transactionType: ETransactionType.AddKnowledge,
+      transactionDescription: `Deducted ${requiredCredits} credits to add knowledge for bot ${botId} (${CREDIT_PER_PAGE} credit/page)`,
+    });
+
+    if (!deductionResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: deductionResult.message || "Insufficient credits to add knowledge.",
+        },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (isManual || isFileMode) {
       const pageId = randomUUID();
       const sourceType = isFileMode ? EPageSourceType.File : EPageSourceType.ManualText;
       let pageUrl = `manual://${pageId}`;
@@ -277,69 +314,73 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
         { headers: corsHeaders }
       );
     } else {
-      // TODO: Handle website URL entry - use existing discover flow
-      return NextResponse.json(
-        { success: false, message: "Website URL entry is not implemented yet" },
-        { status: 501, headers: corsHeaders }
-      );
-      //   // Handle website URL entry - use existing discover flow
-      //   const normalizedUrl = url!.trim();
-      //   // Check if page already exists for this bot
-      //   const { data: existingPage } = await supabase
-      //     .from("pages")
-      //     .select("id")
-      //     .eq("bot_id", botId)
-      //     .eq("url", normalizedUrl)
-      //     .single();
-      //   if (existingPage) {
-      //     return NextResponse.json(
-      //       { success: false, message: "This URL already exists for this bot" },
-      //       { status: 409, headers: corsHeaders }
-      //     );
-      //   }
-      //   // Insert page record with pending status (crawler will fetch content)
-      //   const pageId = randomUUID();
-      //   const { error: insertError } = await supabase.from("pages").insert({
-      //     id: pageId,
-      //     bot_id: botId,
-      //     url: normalizedUrl,
-      //     title: title?.trim() || null,
-      //     source_type: EPageSourceType.Website,
-      //     status: EPageStatus.Pending,
-      //     crawled_at: new Date().toISOString(),
-      //   });
-      //   if (insertError) {
-      //     console.error("[KnowledgeAPI] Insert page error:", insertError);
-      //     return NextResponse.json(
-      //       { success: false, message: `Failed to create page: ${insertError.message}` },
-      //       { status: 500, headers: corsHeaders }
-      //     );
-      //   }
-      //   // Enqueue discover job for website crawling
-      //   const jobId = await addDiscoverJob({
-      //     botId,
-      //     startUrl: normalizedUrl,
-      //     config: {
-      //       maxPages: 1, // Single page for manual URL addition
-      //       maxDepth: 0,
-      //       renderMode: RenderModeEnum.AUTO,
-      //     },
-      //   });
-      //   // Update bot status
-      //   if (bot.status !== EBotStatus.Ready) {
-      //     await supabase.from("bots").update({ status: EBotStatus.Discovering }).eq("id", botId);
-      //   }
-      //   return NextResponse.json(
-      //     {
-      //       success: true,
-      //       data: {
-      //         pageId,
-      //         jobId,
-      //         sourceType: EPageSourceType.Website,
-      //       },
-      //     },
-      //     { headers: corsHeaders }
-      //   );
+      const pageId = randomUUID();
+      try {
+        await insertPageServer(supabase, {
+          id: pageId,
+          bot_id: botId,
+          url: normalizedUrl!,
+          title: normalizedUrl!,
+          content: null,
+          raw_content: null,
+          content_hash: null,
+          source_type: EPageSourceType.SingleUrl,
+          status: EPageStatus.Processing,
+          crawled_at: new Date().toISOString(),
+        });
+
+        const jobId = await addSingleUrlCrawlJob({
+          botId,
+          pageId,
+          url: normalizedUrl!,
+          config: {
+            maxPages: 1,
+            maxDepth: 0,
+            timeout: SINGLE_URL_CRAWL_TIMEOUT_MS,
+            renderMode: RenderModeEnum.AUTO,
+            useStealth: true,
+            transformRelativeUrls: true,
+          },
+          creditRefund: {
+            userId: bot.user_id,
+            deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
+            deductedFromPayg: deductionResult.deductedFromPayg || 0,
+            creditAmount: requiredCredits,
+          },
+        });
+
+        if (bot.status !== EBotStatus.Indexing) {
+          await updateBotStatusServer(supabase, botId, EBotStatus.Indexing);
+        }
+
+        return NextResponse.json(
+          {
+            success: true,
+            data: {
+              pageId,
+              jobId,
+              sourceType: EPageSourceType.SingleUrl,
+            },
+          },
+          { headers: corsHeaders }
+        );
+      } catch (urlErr) {
+        const urlError = urlErr as Error;
+
+        await deletePageByIdServer(supabase, pageId).catch(() => undefined);
+        await refundCredits(supabase, {
+          userId: bot.user_id,
+          deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
+          deductedFromPayg: deductionResult.deductedFromPayg || 0,
+          transactionType: ETransactionType.AddKnowledgeRefund,
+          transactionDescription: `Refunded ${requiredCredits} credits due to an error while adding URL knowledge for bot ${botId}`,
+        });
+
+        return NextResponse.json(
+          { success: false, message: urlError.message },
+          { status: 500, headers: corsHeaders }
+        );
+      }
     }
   } catch (error) {
     console.error("[KnowledgeAPI] Unexpected error:", error);

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EPageSourceType, EPageStatus } from "@/types";
-import { FileText, Globe, Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { FileText, Globe, Link, Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type { Tables } from "@/lib/supabase/types";
 
 type PageType = Tables<"pages">;
@@ -99,11 +99,24 @@ export function KnowledgeBaseTab({
                             (p) =>
                               p.source_type !== EPageSourceType.ManualText &&
                               p.source_type !== EPageSourceType.File &&
+                              p.source_type !== EPageSourceType.SingleUrl &&
                               !p.url.startsWith("file://")
                           ).length
                         }
                       </p>
                       <p className="-mt-1 text-xs text-muted-foreground">Website</p>
+                    </div>
+                  </div>
+                  <div className="h-8 w-px bg-border" />
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                      <Link className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-foreground">
+                        {pages.filter((p) => p.source_type === EPageSourceType.SingleUrl).length}
+                      </p>
+                      <p className="-mt-1 text-xs text-muted-foreground">URL</p>
                     </div>
                   </div>
                 </div>
@@ -118,6 +131,7 @@ export function KnowledgeBaseTab({
                   const isManual = page.source_type === EPageSourceType.ManualText;
                   const isFile =
                     page.source_type === EPageSourceType.File || page.url.startsWith("file://");
+                  const isSingleUrl = page.source_type === EPageSourceType.SingleUrl;
                   const isTextLike = isManual || isFile;
                   const isProcessing =
                     page.status === EPageStatus.PendingIndex ||
@@ -136,13 +150,17 @@ export function KnowledgeBaseTab({
                               ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
                               : isFile
                                 ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400"
-                                : "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                                : isSingleUrl
+                                  ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                  : "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
                           }`}
                         >
                           {isProcessing ? (
                             <Loader2 className="h-5 w-5 animate-spin" />
                           ) : isTextLike ? (
                             <FileText className="h-5 w-5" />
+                          ) : isSingleUrl ? (
+                            <Link className="h-5 w-5" />
                           ) : (
                             <Globe className="h-5 w-5" />
                           )}
@@ -160,10 +178,18 @@ export function KnowledgeBaseTab({
                                   ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
                                   : isFile
                                     ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
-                                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                                    : isSingleUrl
+                                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                               }`}
                             >
-                              {isManual ? "Văn bản" : isFile ? "Tệp" : "Website"}
+                              {isManual
+                                ? "Văn bản"
+                                : isFile
+                                  ? "Tệp"
+                                  : isSingleUrl
+                                    ? "URL"
+                                    : "Website"}
                             </Badge>
                           </div>
                           <p className="mt-0.5 truncate text-xs text-muted-foreground">

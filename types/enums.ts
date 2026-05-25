@@ -90,6 +90,7 @@ export enum EPageSourceType {
   Website = "website",
   ManualText = "manual_text",
   File = "file",
+  SingleUrl = "single_url",
 }
 
 export enum EPageErrorType {
