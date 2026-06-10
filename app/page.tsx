@@ -6,8 +6,10 @@
 
 import Header from "@/components/landing/Header";
 import HeroSection from "@/components/landing/HeroSection";
+import LogoShowcase from "@/components/landing/LogoShowcase";
 import FeaturesSection from "@/components/landing/FeaturesSection";
 import PricingSection from "@/components/landing/PricingSection";
+import TestimonialsSection from "@/components/landing/TestimonialsSection";
 import DemoSection from "@/components/landing/DemoSection";
 import CTASection from "@/components/landing/CTASection";
 import Footer from "@/components/landing/Footer";
@@ -48,9 +50,11 @@ export default function Home() {
       <Header />
       <main>
         <HeroSection />
+        <LogoShowcase />
         <FeaturesSection />
         <DemoSection />
         <PricingSection />
+        <TestimonialsSection />
         <CTASection />
       </main>
       <Footer />

@@ -7,12 +7,26 @@ import { Input } from "@/components/ui/input";
 import { Send, Bot } from "lucide-react";
 import type { PublicBotData } from "@/lib/services/bot.service";
 import type { Json } from "@/lib/supabase/types";
-import { parseMarkdown, getUserMessageTextColor } from "@/lib/helpers/chat-helpers";
+import {
+  parseMarkdown,
+  getUserMessageTextColor,
+  getBackgroundStyle,
+  getRateLimitMessage,
+} from "@/lib/helpers";
 import type { Message as ApiMessage, InitResponse } from "@/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  CHATBOT_UNAVAILABLE_MESSAGE,
+  INSUFFICIENT_CREDITS_ERROR_CODE,
+  INSUFFICIENT_CREDITS_MESSAGE,
+} from "@/lib/constants/chat";
+import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
+import type { BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
+import { EMessageRole, EWidgetBackgroundType } from "@/types/enums";
+import type { ChatResponse } from "@/types/widget-api";
 
 interface ChatMessage {
-  role: "user" | "assistant";
+  role: EMessageRole;
   content: string;
   isHistory?: boolean;
 }
@@ -21,7 +35,7 @@ interface WidgetSettings {
   primaryColor?: string;
   welcomeMessage?: string;
   suggestedQuestions?: string[];
-  chatBackgroundType?: "solid" | "gradient" | "image";
+  chatBackgroundType?: EWidgetBackgroundType;
   chatBackgroundValue?: string;
   chatBackgroundOpacity?: number;
 }
@@ -49,6 +63,9 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [rateLimitExceeded, setRateLimitExceeded] = useState(false);
+  const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
+  const [insufficientCredits, setInsufficientCredits] = useState(false);
+  const [insufficientCreditsMessage, setInsufficientCreditsMessage] = useState<string | null>(null);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [suggestedQuestionsShown, setSuggestedQuestionsShown] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -58,41 +75,15 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
   const widgetSettings = (bot.widget_settings as Json as WidgetSettings | null) || {};
   const primaryColor = widgetSettings?.primaryColor || "#3B82F6";
   const welcomeMessage = widgetSettings?.welcomeMessage || "Hello! How can I help you?";
-
-  const bgType = widgetSettings?.chatBackgroundType || "solid";
+  const bgType = widgetSettings?.chatBackgroundType || EWidgetBackgroundType.Solid;
   const bgValue = widgetSettings?.chatBackgroundValue || "#ffffff";
   const bgOpacity = (widgetSettings?.chatBackgroundOpacity || 100) / 100;
-
-  const getBackgroundStyle = () => {
-    if (bgType === "solid") {
-      try {
-        const hex = bgValue;
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${bgOpacity})` };
-      } catch {
-        return { backgroundColor: `rgba(255, 255, 255, ${bgOpacity})` };
-      }
-    } else if (bgType === "gradient") {
-      return {
-        background: bgValue,
-        backgroundColor: `rgba(255, 255, 255, ${1 - bgOpacity})`,
-        backgroundBlendMode: "lighten" as const,
-        backgroundSize: "cover",
-      };
-    } else if (bgType === "image" && bgValue?.startsWith("http")) {
-      return {
-        backgroundImage: `url("${bgValue}")`,
-        backgroundColor: `rgba(255, 255, 255, ${1 - bgOpacity})`,
-        backgroundBlendMode: "lighten" as const,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-      };
-    }
-    return { backgroundColor: `rgba(255, 255, 255, ${bgOpacity})` };
-  };
+  const blockedChatMessage = insufficientCredits
+    ? insufficientCreditsMessage || INSUFFICIENT_CREDITS_MESSAGE
+    : rateLimitExceeded
+      ? rateLimitMessage || `${bot.name} đã đạt giới hạn tin nhắn trong ngày.`
+      : null;
+  const isChatBlocked = insufficientCredits || rateLimitExceeded || quotaExceeded || !isAvailable;
 
   // Load FingerprintJS
   const loadFingerprintJS = (): Promise<string | null> => {
@@ -162,55 +153,101 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
           body: JSON.stringify({ botId: bot.id, visitorId }),
         });
 
+        const data: InitResponse = await response.json();
+
+        const rateLimitMessCreated = getRateLimitMessage(
+          bot.name || "Bot",
+          data.data?.errorCode as BotRateLimitErrorCode,
+          data.message
+        );
+
         if (response.status === 429) {
           setRateLimitExceeded(true);
-          setMessages([{ role: "assistant", content: "Bạn đã hết lượt chat miễn phí hôm nay." }]);
+          setRateLimitMessage(rateLimitMessCreated);
+          setSuggestedQuestionsShown(true);
+          setSuggestedQuestions([]);
+          setMessages([
+            {
+              role: EMessageRole.Assistant,
+              content: rateLimitMessCreated,
+            },
+          ]);
+          setIsInitialized(true);
           return;
         }
-
-        const data: InitResponse = await response.json();
 
         if (data.success && data.data) {
           const settings = data.data.settings;
           setIsAvailable(data.data.isAvailable);
           setStatusMessage(data.data.statusMessage);
           setQuotaExceeded(data.data.quotaExceeded);
+          setRateLimitExceeded(Boolean(data.data.rateLimitExceeded));
+          setRateLimitMessage(data.data?.errorCode ? rateLimitMessCreated : null);
           setSuggestedQuestions(settings?.suggestedQuestions || []);
+          if (data.data.rateLimitExceeded) {
+            setSuggestedQuestionsShown(true);
+          }
 
           if (data.data.conversationId) {
             setConversationId(data.data.conversationId);
             if (data.data.messages && data.data.messages.length > 0) {
               setMessages(
                 data.data.messages.map((msg: ApiMessage) => ({
-                  role: (msg.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+                  role: (msg.role === EMessageRole.Assistant
+                    ? EMessageRole.Assistant
+                    : EMessageRole.User) as EMessageRole,
                   content: msg.content,
                   isHistory: true,
                 }))
               );
             } else {
               setMessages([
-                { role: "assistant", content: settings?.welcomeMessage || welcomeMessage },
+                {
+                  role: EMessageRole.Assistant,
+                  content: data.data.rateLimitMessage || settings?.welcomeMessage || welcomeMessage,
+                },
               ]);
             }
           } else {
             setMessages([
-              { role: "assistant", content: settings?.welcomeMessage || welcomeMessage },
+              {
+                role: EMessageRole.Assistant,
+                content: data.data.rateLimitMessage || settings?.welcomeMessage || welcomeMessage,
+              },
             ]);
           }
+          setIsInitialized(true);
+        } else {
+          const message =
+            response.status === 404 ? CHATBOT_UNAVAILABLE_MESSAGE : data.message || welcomeMessage;
+          setIsAvailable(false);
+          setStatusMessage(message);
+          setMessages([{ role: EMessageRole.Assistant, content: message }]);
           setIsInitialized(true);
         }
       } catch (error) {
         console.error("Failed to initialize bot:", error);
-        setMessages([{ role: "assistant", content: welcomeMessage }]);
+        setMessages([{ role: EMessageRole.Assistant, content: welcomeMessage }]);
       }
     };
 
     void initBot();
-  }, [visitorId, bot.id, welcomeMessage, isInitialized]);
+  }, [visitorId, bot.id, bot.name, welcomeMessage, isInitialized]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const appendAssistantMessage = (content: string) => {
+    setMessages((prev) => {
+      const lastMessage = prev[prev.length - 1];
+      if (lastMessage?.role === EMessageRole.Assistant && lastMessage.content === content) {
+        return prev;
+      }
+
+      return [...prev, { role: EMessageRole.Assistant, content }];
+    });
+  };
 
   const handleSubmit = async (e?: React.FormEvent, overrideInput?: string) => {
     if (e) e.preventDefault();
@@ -219,46 +256,39 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
     if (!messageToSend || isLoading || !visitorId) return;
 
     if (messageToSend.length > 200) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "Tin nhắn quá dài (tối đa 200 ký tự). Vui lòng rút gọn nội dung.",
-        },
-      ]);
+      appendAssistantMessage("Tin nhắn quá dài (tối đa 200 ký tự). Vui lòng rút gọn nội dung.");
       return;
     }
 
     if (quotaExceeded) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Hệ thống đang bảo trì. Vui lòng quay lại sau." },
-      ]);
+      appendAssistantMessage("Hệ thống đang bảo trì. Vui lòng quay lại sau.");
       return;
     }
 
     if (rateLimitExceeded) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Bạn đã hết lượt chat miễn phí hôm nay." },
-      ]);
+      setInput("");
+      appendAssistantMessage(
+        rateLimitMessage || `${bot.name} đã đạt giới hạn tin nhắn trong ngày.`
+      );
+      return;
+    }
+
+    if (insufficientCredits) {
+      setInput("");
+      appendAssistantMessage(insufficientCreditsMessage || INSUFFICIENT_CREDITS_MESSAGE);
       return;
     }
 
     if (!isAvailable) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: statusMessage || "Bot chưa sẵn sàng. Vui lòng đợi trong giây lát.",
-        },
-      ]);
+      appendAssistantMessage(
+        statusMessage || `${bot.name} chưa sẵn sàng. Vui lòng đợi trong giây lát.`
+      );
       return;
     }
 
     setInput("");
     setSuggestedQuestionsShown(true);
-    setMessages((prev) => [...prev, { role: "user", content: messageToSend }]);
+    setMessages((prev) => [...prev, { role: EMessageRole.User, content: messageToSend }]);
     setIsLoading(true);
 
     try {
@@ -278,34 +308,53 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
         }),
       });
 
+      const data: ChatResponse = await response.json();
+
       if (response.status === 429) {
-        setRateLimitExceeded(true);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "Bạn đã hết lượt chat miễn phí trong ngày." },
-        ]);
+        const rateLimitMessCreated = getRateLimitMessage(
+          bot.name || "Bot",
+          data.code as BotRateLimitErrorCode,
+          data.message
+        );
+        if (data.code !== BOT_RATE_LIMIT_ERROR_CODES.ApiExceeded) {
+          setRateLimitExceeded(true);
+          setRateLimitMessage(rateLimitMessCreated);
+          setSuggestedQuestionsShown(true);
+        }
+        appendAssistantMessage(rateLimitMessCreated);
         return;
       }
 
-      const data = await response.json();
+      if (response.status === 402 && data.code === INSUFFICIENT_CREDITS_ERROR_CODE) {
+        const creditsMessage = data.message || INSUFFICIENT_CREDITS_MESSAGE;
+        setInsufficientCredits(true);
+        setInsufficientCreditsMessage(creditsMessage);
+        setSuggestedQuestionsShown(true);
+        setSuggestedQuestions([]);
+        appendAssistantMessage(creditsMessage);
+        return;
+      }
+
+      if (response.status === 404) {
+        window.location.reload();
+        return;
+      }
 
       if (data.success && data.data) {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.data.message || "Sorry, something went wrong." },
+          {
+            role: EMessageRole.Assistant,
+            content: data.data.message || "Sorry, something went wrong.",
+          },
         ]);
         if (data.data.conversationId) setConversationId(data.data.conversationId);
       } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.message || "Sorry, something went wrong." },
-        ]);
+        const message = data.message || "Sorry, something went wrong.";
+        appendAssistantMessage(message);
       }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Sorry, I'm having trouble connecting right now." },
-      ]);
+      appendAssistantMessage("Sorry, I'm having trouble connecting right now.");
     } finally {
       setIsLoading(false);
     }
@@ -320,6 +369,22 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
           text-decoration: underline;
           text-underline-offset: 2px;
           font-weight: 500;
+        }
+        .chatbot-message-content ul,
+        .chatbot-message-content ol {
+          list-style-position: outside;
+          padding-left: 20px;
+          margin: 6px 0;
+        }
+        .chatbot-message-content ul {
+          list-style-type: disc;
+        }
+        .chatbot-message-content ol {
+          list-style-type: decimal;
+        }
+        .chatbot-message-content li {
+          display: list-item;
+          margin-bottom: 3px;
         }
         .chatbot-message-content code {
           background: #f3f4f6;
@@ -347,13 +412,20 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
         <div>
           <h1 className="text-lg font-semibold leading-tight">{bot.name}</h1>
           <p className="text-sm opacity-90">
-            {isAvailable ? "Luôn sẵn sàng hỗ trợ" : statusMessage || "Chưa sẵn sàng"}
+            {insufficientCredits
+              ? "Tạm dừng do hết credits"
+              : isAvailable
+                ? "Luôn sẵn sàng hỗ trợ"
+                : statusMessage || "Chưa sẵn sàng"}
           </p>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6" style={getBackgroundStyle()}>
+      <div
+        className="flex-1 overflow-y-auto px-4 py-6"
+        style={getBackgroundStyle(bgType, bgValue, bgOpacity)}
+      >
         <div className="mx-auto max-w-3xl space-y-3">
           {messages.map((msg, idx) => (
             <div key={idx} className="space-y-3">
@@ -373,14 +445,14 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
                   duration: 0.3,
                   delay: idx === messages.length - 1 ? 0.1 : 0,
                 }}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex ${msg.role === EMessageRole.User ? "justify-end" : "justify-start"}`}
               >
                 <div
                   className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
-                    msg.role === "user" ? "rounded-br-sm" : "rounded-bl-sm bg-muted"
+                    msg.role === EMessageRole.User ? "rounded-br-sm" : "rounded-bl-sm bg-muted"
                   }`}
                   style={
-                    msg.role === "user"
+                    msg.role === EMessageRole.User
                       ? {
                           backgroundColor: primaryColor,
                           color: getUserMessageTextColor(primaryColor),
@@ -388,10 +460,12 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
                       : {}
                   }
                 >
-                  {msg.role === "assistant" ? (
+                  {msg.role === EMessageRole.Assistant ? (
                     <div
                       className="chatbot-message-content whitespace-pre-line"
-                      dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.content) }}
+                      dangerouslySetInnerHTML={{
+                        __html: parseMarkdown(msg.content, primaryColor),
+                      }}
                     />
                   ) : (
                     <p className="whitespace-pre-line">{msg.content}</p>
@@ -432,36 +506,54 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
       </div>
 
       {/* Suggested Questions */}
-      {!suggestedQuestionsShown && suggestedQuestions.length > 0 && isAvailable && (
-        <div className="bg-background/95 bg-white px-4 py-2">
-          <div className="scrollbar-hide mx-auto flex max-w-3xl gap-2 overflow-x-auto">
-            {suggestedQuestions.map((q, i) => (
-              <button
-                key={i}
-                onClick={() => handleSubmit(undefined, q)}
-                className="whitespace-nowrap rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
-              >
-                {q}
-              </button>
-            ))}
+      {!suggestedQuestionsShown &&
+        suggestedQuestions.length > 0 &&
+        isAvailable &&
+        !isChatBlocked && (
+          <div className="bg-background/95 bg-white px-4 py-2">
+            <div className="scrollbar-hide mx-auto flex max-w-3xl gap-2 overflow-x-auto">
+              {suggestedQuestions.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleSubmit(undefined, q)}
+                  className="whitespace-nowrap rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Input */}
-      <div className="border-t bg-white px-4 py-2">
+      <div className="relative border-t bg-white px-4 py-2">
+        {blockedChatMessage && (rateLimitExceeded || insufficientCredits) && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-full z-10 px-4">
+            <div className="mx-auto max-w-3xl">
+              <div
+                className={`rounded-t-lg px-4 py-2 text-sm font-medium shadow-sm backdrop-blur-sm ${
+                  insufficientCredits
+                    ? "border border-rose-200/70 bg-rose-50 text-rose-900"
+                    : "border border-amber-200/70 bg-amber-50 text-amber-900"
+                }`}
+              >
+                {blockedChatMessage}
+              </div>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="mx-auto flex max-w-3xl gap-2">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isAvailable ? "Type your message..." : "Bot chưa sẵn sàng"}
-            disabled={isLoading || !isAvailable}
+            placeholder={insufficientCredits ? "Bot đã hết credits" : "Nhập tin nhắn..."}
+            disabled={isLoading || isChatBlocked}
             maxLength={200}
             className="flex-1 rounded-2xl"
           />
           <Button
             type="submit"
-            disabled={isLoading || !input.trim() || !isAvailable}
+            disabled={isLoading || !input.trim() || isChatBlocked}
             className="rounded-full shadow-sm transition-shadow hover:shadow-md"
             style={{ backgroundColor: primaryColor }}
           >

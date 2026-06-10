@@ -5,6 +5,8 @@ import type { Dispatch, SetStateAction } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/types";
 import type { WidgetSettings } from "@/types/widget-api";
+import { parseRateLimitInput } from "@/lib/bot-rate-limit";
+import { getEffectiveAllowedDomains, validateAllowedDomains } from "@/lib/security/allowed-domains";
 import { WIDGET_LIMITS, WIDGET_FALLBACK } from "@/config/widget";
 import {
   getActiveBotCount,
@@ -12,6 +14,8 @@ import {
   stopBot,
   updateBotRateLimit,
 } from "@/lib/services/bot.service";
+import { isHexColor } from "@/lib/helpers";
+import { EWidgetBackgroundType, EWidgetIconType } from "@/types";
 
 type SupabaseClient = ReturnType<typeof createBrowserSupabaseClient>;
 type BotType = Tables<"bots">;
@@ -39,10 +43,10 @@ interface AppearanceSettingsOverrides {
   position?: string;
   welcomeMessage?: string;
   suggestedQuestions?: string[];
-  chatBackgroundType?: "solid" | "gradient" | "image";
+  chatBackgroundType?: EWidgetBackgroundType;
   chatBackgroundValue?: string;
   chatBackgroundOpacity?: number;
-  chatIconType?: "preset" | "custom";
+  chatIconType?: EWidgetIconType;
   chatIconPreset?: string;
   chatIconUrl?: string | null;
   chatIconColor?: string;
@@ -64,10 +68,10 @@ export interface UseBotSettingsResult {
   position: string;
   welcomeMessage: string;
   suggestedQuestions: string[];
-  chatBackgroundType: "solid" | "gradient" | "image";
+  chatBackgroundType: EWidgetBackgroundType;
   chatBackgroundValue: string;
   chatBackgroundOpacity: number;
-  chatIconType: "preset" | "custom";
+  chatIconType: EWidgetIconType;
   chatIconPreset: string;
   chatIconUrl: string | null;
   chatIconColor: string;
@@ -79,19 +83,28 @@ export interface UseBotSettingsResult {
   slug: string;
   isPublic: boolean;
   isSaving: boolean;
+  isSavingRateLimit: boolean;
+  isSavingSlugSettings: boolean;
+  isSavingAllowedDomains: boolean;
   stopModalOpen: boolean;
   isStoppingBot: boolean;
   upgradeModalOpen: boolean;
   upgradeModalMessage: UpgradeModalMessage;
+  rateLimitPerDayError: string;
+  rateLimitPerIpError: string;
+  allowedDomains: string[];
+  allowedDomainsError: string;
+  isRateLimitFormValid: boolean;
+  isAllowedDomainsFormValid: boolean;
   setPrimaryColor: (value: string) => void;
   setTextColor: (value: string) => void;
   setPosition: (value: string) => void;
   setWelcomeMessage: (value: string) => void;
   setSuggestedQuestions: (value: string[]) => void;
-  setChatBackgroundType: (value: "solid" | "gradient" | "image") => void;
+  setChatBackgroundType: (value: EWidgetBackgroundType) => void;
   setChatBackgroundValue: (value: string) => void;
   setChatBackgroundOpacity: (value: number) => void;
-  setChatIconType: (value: "preset" | "custom") => void;
+  setChatIconType: (value: EWidgetIconType) => void;
   setChatIconPreset: (value: string) => void;
   setChatIconUrl: (value: string | null) => void;
   setChatIconColor: (value: string) => void;
@@ -100,6 +113,7 @@ export interface UseBotSettingsResult {
   setAvatarUrl: (value: string | null) => void;
   setRateLimitPerDay: (value: string) => void;
   setRateLimitPerIp: (value: string) => void;
+  setAllowedDomains: (value: string[]) => void;
   setSlug: (value: string) => void;
   setIsPublic: (value: boolean) => void;
   setStopModalOpen: (open: boolean) => void;
@@ -108,6 +122,7 @@ export interface UseBotSettingsResult {
   initializeFromBot: (botData: BotType) => void;
   handleSaveAppearance: (overrides?: AppearanceSettingsOverrides) => Promise<void>;
   handleSaveRateLimit: () => Promise<void>;
+  handleSaveAllowedDomains: () => Promise<void>;
   handleSaveSlugSettings: () => Promise<void>;
   handleStopBot: () => Promise<void>;
   handleStartBot: () => Promise<void>;
@@ -126,7 +141,7 @@ export function useBotSettings({
   const [position, setPosition] = useState(WIDGET_FALLBACK.POSITION);
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
-  const [chatBackgroundType, setChatBackgroundType] = useState<"solid" | "gradient" | "image">(
+  const [chatBackgroundType, setChatBackgroundType] = useState<EWidgetBackgroundType>(
     WIDGET_FALLBACK.CHAT_BACKGROUND_TYPE
   );
   const [chatBackgroundValue, setChatBackgroundValue] = useState(
@@ -135,9 +150,7 @@ export function useBotSettings({
   const [chatBackgroundOpacity, setChatBackgroundOpacity] = useState(
     WIDGET_FALLBACK.CHAT_BACKGROUND_OPACITY
   );
-  const [chatIconType, setChatIconType] = useState<"preset" | "custom">(
-    WIDGET_FALLBACK.CHAT_ICON_TYPE
-  );
+  const [chatIconType, setChatIconType] = useState<EWidgetIconType>(WIDGET_FALLBACK.CHAT_ICON_TYPE);
   const [chatIconPreset, setChatIconPreset] = useState(WIDGET_FALLBACK.CHAT_ICON_PRESET);
   const [chatIconUrl, setChatIconUrl] = useState<string | null>(null);
   const [chatIconColor, setChatIconColor] = useState(WIDGET_FALLBACK.CHAT_ICON_COLOR);
@@ -146,13 +159,20 @@ export function useBotSettings({
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [rateLimitPerDay, setRateLimitPerDay] = useState<string>("");
   const [rateLimitPerIp, setRateLimitPerIp] = useState<string>("");
+  const [allowedDomains, setAllowedDomains] = useState<string[]>([]);
   const [slug, setSlug] = useState<string>("");
   const [isPublic, setIsPublic] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingRateLimit, setIsSavingRateLimit] = useState(false);
+  const [isSavingSlugSettings, setIsSavingSlugSettings] = useState(false);
+  const [isSavingAllowedDomains, setIsSavingAllowedDomains] = useState(false);
   const [stopModalOpen, setStopModalOpen] = useState(false);
   const [isStoppingBot, setIsStoppingBot] = useState(false);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [upgradeModalMessage, setUpgradeModalMessage] = useState<UpgradeModalMessage>({});
+  const [rateLimitPerDayError, setRateLimitPerDayError] = useState("");
+  const [rateLimitPerIpError, setRateLimitPerIpError] = useState("");
+  const [allowedDomainsError, setAllowedDomainsError] = useState("");
 
   // Ref to store latest widget settings values to avoid closure issues
   const settingsRef = useRef({
@@ -161,10 +181,10 @@ export function useBotSettings({
     position: WIDGET_FALLBACK.POSITION,
     welcomeMessage: "",
     suggestedQuestions: [] as string[],
-    chatBackgroundType: WIDGET_FALLBACK.CHAT_BACKGROUND_TYPE as "solid" | "gradient" | "image",
+    chatBackgroundType: WIDGET_FALLBACK.CHAT_BACKGROUND_TYPE,
     chatBackgroundValue: WIDGET_FALLBACK.CHAT_BACKGROUND_VALUE,
     chatBackgroundOpacity: WIDGET_FALLBACK.CHAT_BACKGROUND_OPACITY,
-    chatIconType: WIDGET_FALLBACK.CHAT_ICON_TYPE as "preset" | "custom",
+    chatIconType: WIDGET_FALLBACK.CHAT_ICON_TYPE,
     chatIconPreset: WIDGET_FALLBACK.CHAT_ICON_PRESET,
     chatIconUrl: null as string | null,
     chatIconColor: WIDGET_FALLBACK.CHAT_ICON_COLOR,
@@ -204,6 +224,21 @@ export function useBotSettings({
     chatIconBgColor,
   ]);
 
+  useEffect(() => {
+    setRateLimitPerDayError(
+      parseRateLimitInput(rateLimitPerDay, "Giới hạn tin nhắn / ngày").error || ""
+    );
+    setRateLimitPerIpError(
+      parseRateLimitInput(rateLimitPerIp, "Giới hạn tin nhắn / IP / ngày").error || ""
+    );
+  }, [rateLimitPerDay, rateLimitPerIp]);
+
+  useEffect(() => {
+    const nonEmptyDomains = allowedDomains.map((domain) => domain.trim()).filter(Boolean);
+    const validation = validateAllowedDomains(nonEmptyDomains);
+    setAllowedDomainsError(validation.error || "");
+  }, [allowedDomains]);
+
   const openUpgradeModal = useCallback((message?: UpgradeModalMessage) => {
     setUpgradeModalMessage(message ?? {});
     setUpgradeModalOpen(true);
@@ -214,6 +249,7 @@ export function useBotSettings({
     setAvatarUrl(botData.avatar_url);
     setRateLimitPerDay(botData.rate_limit_per_day?.toString() || "");
     setRateLimitPerIp(botData.rate_limit_per_ip?.toString() || "");
+    setAllowedDomains(getEffectiveAllowedDomains(botData.allowed_domains, botData.domain));
     setSlug(botData.slug || "");
     setIsPublic(botData.is_public || false);
 
@@ -231,8 +267,12 @@ export function useBotSettings({
         Array.isArray(widgetSettings.suggestedQuestions) ? widgetSettings.suggestedQuestions : []
       );
       setChatBackgroundType(
-        ["solid", "gradient", "image"].includes(widgetSettings.chatBackgroundType)
-          ? (widgetSettings.chatBackgroundType as "solid" | "gradient" | "image")
+        [
+          EWidgetBackgroundType.Solid,
+          EWidgetBackgroundType.Gradient,
+          EWidgetBackgroundType.Image,
+        ].includes(widgetSettings.chatBackgroundType)
+          ? (widgetSettings.chatBackgroundType as EWidgetBackgroundType)
           : WIDGET_FALLBACK.CHAT_BACKGROUND_TYPE
       );
       setChatBackgroundValue(
@@ -245,7 +285,9 @@ export function useBotSettings({
       );
 
       setChatIconType(
-        widgetSettings.chatIconType === "custom" ? "custom" : WIDGET_FALLBACK.CHAT_ICON_TYPE
+        widgetSettings.chatIconType === EWidgetIconType.Custom
+          ? EWidgetIconType.Custom
+          : WIDGET_FALLBACK.CHAT_ICON_TYPE
       );
       setChatIconPreset(widgetSettings.chatIconPreset || WIDGET_FALLBACK.CHAT_ICON_PRESET);
       setChatIconUrl(widgetSettings.chatIconUrl || null);
@@ -257,7 +299,7 @@ export function useBotSettings({
       setPosition(WIDGET_FALLBACK.POSITION);
       setWelcomeMessage("");
       setSuggestedQuestions([]);
-      setChatBackgroundType(WIDGET_FALLBACK.CHAT_BACKGROUND_TYPE);
+      setChatBackgroundType(WIDGET_FALLBACK.CHAT_BACKGROUND_TYPE as EWidgetBackgroundType);
       setChatBackgroundValue(WIDGET_FALLBACK.CHAT_BACKGROUND_VALUE);
       setChatBackgroundOpacity(WIDGET_FALLBACK.CHAT_BACKGROUND_OPACITY);
       setChatIconType(WIDGET_FALLBACK.CHAT_ICON_TYPE);
@@ -271,6 +313,36 @@ export function useBotSettings({
   const handleSaveAppearance = useCallback(
     async (overrides?: AppearanceSettingsOverrides) => {
       if (!bot) return;
+
+      const trimmedBotName = editBotName.trim();
+      if (!trimmedBotName) {
+        toast({
+          title: "Lỗi",
+          description: "Tên Bot không được để trống.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const trimmedWelcomeMessage = welcomeMessage.trim();
+      if (!trimmedWelcomeMessage) {
+        toast({
+          title: "Lỗi",
+          description: "Tin nhắn chào mừng không được để trống.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const normalizedPrimaryColor = primaryColor.trim();
+      if (!isHexColor(normalizedPrimaryColor)) {
+        toast({
+          title: "Lỗi",
+          description: "Màu thương hiệu phải là mã Hex hợp lệ dạng #RRGGBB.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       setIsSaving(true);
       try {
@@ -289,10 +361,10 @@ export function useBotSettings({
           .filter((q) => q.length > 0);
 
         const updatedSettings = {
-          primaryColor: current.primaryColor,
+          primaryColor: normalizedPrimaryColor,
           textColor: current.textColor,
           position: current.position,
-          welcomeMessage: current.welcomeMessage,
+          welcomeMessage: trimmedWelcomeMessage,
           suggestedQuestions: filteredQuestions,
           chatBackgroundType: current.chatBackgroundType,
           chatBackgroundValue: current.chatBackgroundValue,
@@ -305,7 +377,7 @@ export function useBotSettings({
         };
 
         if (
-          updatedSettings.chatBackgroundType === "image" &&
+          updatedSettings.chatBackgroundType === EWidgetBackgroundType.Image &&
           (!updatedSettings.chatBackgroundValue ||
             !updatedSettings.chatBackgroundValue.startsWith("http"))
         ) {
@@ -322,7 +394,7 @@ export function useBotSettings({
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            name: editBotName,
+            name: trimmedBotName,
             avatarUrl,
             widgetSettings: updatedSettings,
           }),
@@ -338,7 +410,7 @@ export function useBotSettings({
           prev
             ? {
                 ...prev,
-                name: editBotName,
+                name: trimmedBotName,
                 avatar_url: avatarUrl,
                 widget_settings: data.data?.widget_settings || updatedSettings,
               }
@@ -360,16 +432,32 @@ export function useBotSettings({
         setIsSaving(false);
       }
     },
-    [editBotName, avatarUrl, bot, setBot, supabase, toast]
+    [editBotName, avatarUrl, bot, primaryColor, setBot, supabase, toast, welcomeMessage]
   );
 
   const handleSaveRateLimit = useCallback(async () => {
     if (!bot) return;
 
-    setIsSaving(true);
+    const parsedRateLimitPerDay = parseRateLimitInput(rateLimitPerDay, "Giới hạn tin nhắn / ngày");
+    const parsedRateLimitPerIp = parseRateLimitInput(
+      rateLimitPerIp,
+      "Giới hạn tin nhắn / IP / ngày"
+    );
+
+    if (parsedRateLimitPerDay.error || parsedRateLimitPerIp.error) {
+      toast({
+        title: "Lỗi",
+        description:
+          parsedRateLimitPerDay.error || parsedRateLimitPerIp.error || "Dữ liệu không hợp lệ.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSavingRateLimit(true);
     try {
-      const rateLimitDay = rateLimitPerDay ? parseInt(rateLimitPerDay, 10) : null;
-      const rateLimitIp = rateLimitPerIp ? parseInt(rateLimitPerIp, 10) : null;
+      const rateLimitDay = parsedRateLimitPerDay.value;
+      const rateLimitIp = parsedRateLimitPerIp.value;
 
       await updateBotRateLimit(supabase, bot.id, {
         rateLimitPerDay: rateLimitDay,
@@ -394,18 +482,77 @@ export function useBotSettings({
       console.error("Save error:", error);
       toast({
         title: "Lỗi",
-        description: "Không thể lưu cài đặt.",
+        description: error instanceof Error ? error.message : "Không thể lưu cài đặt.",
         variant: "destructive",
       });
     } finally {
-      setIsSaving(false);
+      setIsSavingRateLimit(false);
     }
   }, [bot, rateLimitPerDay, rateLimitPerIp, setBot, supabase, toast]);
+
+  const handleSaveAllowedDomains = useCallback(async () => {
+    if (!bot) return;
+
+    const nonEmptyDomains = allowedDomains.map((domain) => domain.trim()).filter(Boolean);
+    const validation = validateAllowedDomains(nonEmptyDomains);
+
+    if (!validation.valid) {
+      toast({
+        title: "Lỗi",
+        description: validation.error || "Danh sách domain không hợp lệ.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSavingAllowedDomains(true);
+    try {
+      const response = await fetch(`/api/bots/${bot.id}/allowed-domains`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allowedDomains: validation.domains }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || "Không thể lưu allowed domains.");
+      }
+
+      const nextAllowedDomains = Array.isArray(data.data?.allowed_domains)
+        ? data.data.allowed_domains
+        : validation.domains;
+
+      setAllowedDomains(nextAllowedDomains);
+      setBot((prev) =>
+        prev
+          ? {
+              ...prev,
+              allowed_domains: nextAllowedDomains,
+            }
+          : prev
+      );
+
+      toast({
+        title: "Thành công",
+        description: "Đã lưu danh sách domain được phép.",
+      });
+    } catch (error) {
+      console.error("Save allowed domains error:", error);
+      toast({
+        title: "Lỗi",
+        description: error instanceof Error ? error.message : "Không thể lưu allowed domains.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingAllowedDomains(false);
+    }
+  }, [allowedDomains, bot, setBot, toast]);
 
   const handleSaveSlugSettings = useCallback(async () => {
     if (!bot) return;
 
-    setIsSaving(true);
+    setIsSavingSlugSettings(true);
     try {
       const response = await fetch(`/api/bots/${bot.id}/slug-settings`, {
         method: "PATCH",
@@ -442,7 +589,7 @@ export function useBotSettings({
         variant: "destructive",
       });
     } finally {
-      setIsSaving(false);
+      setIsSavingSlugSettings(false);
     }
   }, [bot, slug, isPublic, setBot, toast]);
 
@@ -527,10 +674,19 @@ export function useBotSettings({
     slug,
     isPublic,
     isSaving,
+    isSavingRateLimit,
+    isSavingSlugSettings,
+    isSavingAllowedDomains,
     stopModalOpen,
     isStoppingBot,
     upgradeModalOpen,
     upgradeModalMessage,
+    rateLimitPerDayError,
+    rateLimitPerIpError,
+    allowedDomains,
+    allowedDomainsError,
+    isRateLimitFormValid: !rateLimitPerDayError && !rateLimitPerIpError,
+    isAllowedDomainsFormValid: !allowedDomainsError,
     setPrimaryColor,
     setTextColor,
     setPosition,
@@ -548,6 +704,7 @@ export function useBotSettings({
     setAvatarUrl,
     setRateLimitPerDay,
     setRateLimitPerIp,
+    setAllowedDomains,
     setSlug,
     setIsPublic,
     setStopModalOpen,
@@ -556,6 +713,7 @@ export function useBotSettings({
     initializeFromBot,
     handleSaveAppearance,
     handleSaveRateLimit,
+    handleSaveAllowedDomains,
     handleSaveSlugSettings,
     handleStopBot,
     handleStartBot,

@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, LogOut, Zap } from "lucide-react";
+import { ChevronDown, CreditCard, LogOut } from "lucide-react";
 // import { Settings } from "lucide-react";
 
 export interface DashboardMobileHeaderProps {
@@ -63,14 +63,10 @@ export function DashboardMobileHeader({
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/dashboard/upgrade" className="flex cursor-pointer items-center">
-                  <Zap className="mr-2 h-4 w-4" />
-                  Nạp thêm Credit
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Quản lý thanh toán
                 </Link>
               </DropdownMenuItem>
-              {/* <DropdownMenuItem onClick={onNavigateSettings}>
-                <Settings className="mr-2 h-4 w-4" />
-                Cài đặt
-              </DropdownMenuItem> */}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void onSignOut()} className="text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />

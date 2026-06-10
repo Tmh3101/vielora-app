@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsHeaders } from "@/lib/constants";
-import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import { getBotAnalytics } from "@/lib/services/analytics.service";
 import { getBotByIdServer } from "@/lib/services/bot.service";
 

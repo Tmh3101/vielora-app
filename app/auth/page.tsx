@@ -11,7 +11,7 @@
  * - Glassmorphism + animated background
  */
 
-import { useState, useEffect, Suspense, useCallback, useMemo } from "react";
+import { useState, useEffect, Suspense, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -34,7 +34,17 @@ import {
 } from "lucide-react";
 import { z } from "zod";
 import { LogoLoader } from "@/components/ui/logo-loader";
-import { checkEmailExists } from "@/lib/services/auth.service";
+import {
+  checkEmailExists,
+  loginWithPassword,
+  LoginWithPasswordError,
+} from "@/lib/services/auth.service";
+import {
+  LoginWithPasswordError as LoginWithPasswordErrorCode,
+  OauthProvider,
+  AuthView,
+} from "@/lib/constants/auth";
+import type { OauthProviderType, AuthViewType } from "@/lib/constants/auth";
 
 /* ------------------------------------------------------------------ */
 /*  Zod schemas                                                        */
@@ -188,15 +198,20 @@ function GitHubIcon({ className }: { className?: string }) {
 /*  Auth views: "login" | "signup" | "forgot" | "signup-success"       */
 /* ------------------------------------------------------------------ */
 
-type AuthView = "login" | "signup" | "forgot" | "signup-success";
+function formatCooldown(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+}
 
 function AuthPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
 
-  const initialView: AuthView = searchParams.get("mode") === "signup" ? "signup" : "login";
-  const [view, setView] = useState<AuthView>(initialView);
+  const initialView: AuthViewType =
+    searchParams.get("mode") === "signup" ? AuthView.SIGNUP : AuthView.LOGIN;
+  const [view, setView] = useState<AuthViewType>(initialView);
 
   // Form fields
   const [email, setEmail] = useState("");
@@ -206,10 +221,17 @@ function AuthPageContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isOAuthLoading, setIsOAuthLoading] = useState<"google" | "github" | null>(null);
+  const [isOAuthLoading, setIsOAuthLoading] = useState<OauthProviderType | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [forgotSent, setForgotSent] = useState(false);
+  const [cooldownEmail, setCooldownEmail] = useState<string | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const handledOAuthErrorRef = useRef(false);
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const normalizedEmail = email.trim().toLowerCase();
+  const isLoginCooldownActive =
+    view === AuthView.LOGIN && cooldownRemaining > 0 && normalizedEmail === cooldownEmail;
 
   /* ---- redirect after auth ---- */
   useEffect(() => {
@@ -230,6 +252,40 @@ function AuthPageContent() {
     return () => subscription.unsubscribe();
   }, [supabase, router]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const authError = searchParams.get("error");
+    const hashParams = new URLSearchParams(
+      window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash
+    );
+
+    const oauthFailed = authError === "oauth_failed" || hashParams.get("error") === "access_denied";
+    if (!oauthFailed) {
+      handledOAuthErrorRef.current = false;
+      return;
+    }
+
+    if (handledOAuthErrorRef.current) return;
+    handledOAuthErrorRef.current = true;
+
+    const oauthErrorMessage =
+      hashParams.get("error") === "access_denied"
+        ? "Bạn đã hủy đăng nhập OAuth hoặc quyền truy cập bị từ chối."
+        : "Không thể đăng nhập bằng OAuth. Vui lòng thử lại.";
+
+    toast({
+      title: "Lỗi",
+      description: oauthErrorMessage,
+      variant: "destructive",
+    });
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("error");
+    url.hash = "";
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [searchParams, toast]);
+
   /* ---- helpers ---- */
   const resetForm = useCallback(() => {
     setEmail("");
@@ -241,19 +297,42 @@ function AuthPageContent() {
   }, []);
 
   const switchView = useCallback(
-    (v: AuthView) => {
+    (v: AuthViewType) => {
       resetForm();
+      setCooldownEmail(null);
+      setCooldownUntil(null);
+      setCooldownRemaining(0);
       setView(v);
     },
     [resetForm]
   );
 
+  useEffect(() => {
+    if (!cooldownUntil) {
+      setCooldownRemaining(0);
+      return;
+    }
+
+    const updateCooldown = () => {
+      const remaining = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+      setCooldownRemaining(remaining);
+      if (remaining === 0) {
+        setCooldownEmail(null);
+        setCooldownUntil(null);
+      }
+    };
+
+    updateCooldown();
+    const timer = window.setInterval(updateCooldown, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownUntil]);
+
   /* ---- validate ---- */
   const validate = useCallback(() => {
     try {
-      if (view === "signup") {
+      if (view === AuthView.SIGNUP) {
         signUpSchema.parse({ email, password, confirmPassword, fullName });
-      } else if (view === "login") {
+      } else if (view === AuthView.LOGIN) {
         signInSchema.parse({ email, password });
       } else {
         forgotSchema.parse({ email });
@@ -278,9 +357,18 @@ function AuthPageContent() {
     e.preventDefault();
     if (!validate()) return;
 
+    if (isLoginCooldownActive) {
+      toast({
+        title: "Tạm khóa đăng nhập",
+        description: `Bạn đã nhập sai mật khẩu quá nhiều lần.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
-      if (view === "signup") {
+      if (view === AuthView.SIGNUP) {
         try {
           const { exists } = await checkEmailExists(email);
           if (exists) throw new Error("User already registered");
@@ -306,16 +394,24 @@ function AuthPageContent() {
         if (error) throw error;
 
         if (data.user && !data.session) {
-          setView("signup-success");
+          setView(AuthView.SIGNUP_SUCCESS);
         }
-      } else if (view === "login") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+      } else if (view === AuthView.LOGIN) {
+        const { session } = await loginWithPassword(email, password);
+        const { error } = await supabase.auth.setSession({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+        });
         if (error) throw error;
+
+        setCooldownUntil(null);
+        setCooldownRemaining(0);
+        setCooldownEmail(null);
         toast({
           title: "Đăng nhập thành công",
           description: "Chào mừng bạn quay trở lại!",
         });
-      } else if (view === "forgot") {
+      } else if (view === AuthView.FORGOT) {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/auth/reset-password`,
         });
@@ -327,7 +423,31 @@ function AuthPageContent() {
       const raw = error instanceof Error ? error.message : "";
 
       let msg = "Có lỗi xảy ra. Vui lòng thử lại.";
-      if (raw === "Invalid login credentials") {
+      if (
+        error instanceof LoginWithPasswordError &&
+        error.code === LoginWithPasswordErrorCode.LOGIN_COOLDOWN
+      ) {
+        const nextCooldownUntil = error.lockedUntil
+          ? new Date(error.lockedUntil).getTime()
+          : Date.now() + Math.max(error.retryAfter || 0, 1) * 1000;
+        const retryAfter = Math.max(
+          error.retryAfter || 0,
+          Math.ceil((nextCooldownUntil - Date.now()) / 1000)
+        );
+
+        setCooldownEmail(email.trim().toLowerCase());
+        setCooldownUntil(nextCooldownUntil);
+        setCooldownRemaining(retryAfter);
+        msg = `Bạn đã nhập sai mật khẩu quá nhiều lần.`;
+      } else if (
+        error instanceof LoginWithPasswordError &&
+        error.code === LoginWithPasswordErrorCode.INVALID_CREDENTIALS
+      ) {
+        msg =
+          typeof error.attemptsRemaining === "number"
+            ? `Mật khẩu không chính xác. Còn ${error.attemptsRemaining} lần thử.`
+            : "Email hoặc mật khẩu không đúng.";
+      } else if (raw === "Invalid login credentials") {
         msg = "Email hoặc mật khẩu không đúng.";
       } else if (raw === "User already registered") {
         msg = "Email này đã được đăng ký. Vui lòng đăng nhập.";
@@ -342,7 +462,7 @@ function AuthPageContent() {
   };
 
   /* ---- OAuth ---- */
-  const handleOAuth = async (provider: "google" | "github") => {
+  const handleOAuth = async (provider: OauthProviderType) => {
     setIsOAuthLoading(provider);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -354,7 +474,7 @@ function AuthPageContent() {
       console.error("OAuth error:", error);
       toast({
         title: "Lỗi",
-        description: `Không thể đăng nhập với ${provider === "google" ? "Google" : "GitHub"}. Vui lòng thử lại.`,
+        description: `Không thể đăng nhập với ${provider === OauthProvider.GOOGLE ? "Google" : "GitHub"}. Vui lòng thử lại.`,
         variant: "destructive",
       });
       setIsOAuthLoading(null);
@@ -364,11 +484,11 @@ function AuthPageContent() {
   /* ---- derived ---- */
   const heading = useMemo(() => {
     switch (view) {
-      case "signup":
+      case AuthView.SIGNUP:
         return { title: "Tạo tài khoản", desc: "Bắt đầu tạo chatbot AI cho website của bạn" };
-      case "forgot":
+      case AuthView.FORGOT:
         return { title: "Quên mật khẩu", desc: "Nhập email để nhận link đặt lại mật khẩu" };
-      case "signup-success":
+      case AuthView.SIGNUP_SUCCESS:
         return { title: "Đăng ký thành công!", desc: "Kiểm tra email để xác nhận tài khoản" };
       default:
         return { title: "Đăng nhập", desc: "Đăng nhập để quản lý chatbot của bạn" };
@@ -404,7 +524,7 @@ function AuthPageContent() {
           <div className="bg-gradient-primary absolute left-0 right-0 top-0 h-1 rounded-t-lg" />
 
           {/* Header - ẩn khi forgot password sent */}
-          {!(view === "forgot" && forgotSent) && (
+          {!(view === AuthView.FORGOT && forgotSent) && (
             <CardHeader className="pt-8 text-center">
               <Link href="/" className="group mb-2 flex items-center justify-center">
                 <Image
@@ -416,7 +536,7 @@ function AuthPageContent() {
                   priority
                 />
               </Link>
-              {view !== "signup-success" && (
+              {view !== AuthView.SIGNUP_SUCCESS && (
                 <>
                   <CardTitle className="heading-premium text-2xl">{heading.title}</CardTitle>
                   <CardDescription>{heading.desc}</CardDescription>
@@ -425,9 +545,9 @@ function AuthPageContent() {
             </CardHeader>
           )}
 
-          <CardContent className={view === "forgot" && forgotSent ? "pt-8" : ""}>
+          <CardContent className={view === AuthView.FORGOT && forgotSent ? "pt-8" : ""}>
             {/* ===== SIGN-UP SUCCESS SCREEN ===== */}
-            {view === "signup-success" && (
+            {view === AuthView.SIGNUP_SUCCESS && (
               <div className="-mt-4 flex flex-col items-center space-y-6 pb-4">
                 <div className="flex w-auto items-center justify-center space-x-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
@@ -446,7 +566,7 @@ function AuthPageContent() {
                 <Button
                   variant="outline"
                   className="hover:border-primary/50 hover:bg-white hover:text-foreground hover:text-primary hover:shadow-sm hover:shadow-primary/20"
-                  onClick={() => switchView("login")}
+                  onClick={() => switchView(AuthView.LOGIN)}
                 >
                   Quay lại đăng nhập
                 </Button>
@@ -454,7 +574,7 @@ function AuthPageContent() {
             )}
 
             {/* ===== FORGOT PASSWORD — sent state ===== */}
-            {view === "forgot" && forgotSent && (
+            {view === AuthView.FORGOT && forgotSent && (
               <div className="flex flex-col items-center space-y-4 py-2">
                 {/* Logo */}
                 <Link href="/" className="group flex items-center justify-center">
@@ -491,7 +611,7 @@ function AuthPageContent() {
                 <Button
                   variant="outline"
                   className="hover:border-primary/50 hover:bg-white hover:text-foreground hover:text-primary hover:shadow-sm hover:shadow-primary/20"
-                  onClick={() => switchView("login")}
+                  onClick={() => switchView(AuthView.LOGIN)}
                 >
                   Quay lại đăng nhập
                 </Button>
@@ -499,11 +619,11 @@ function AuthPageContent() {
             )}
 
             {/* ===== FORMS (login / signup / forgot) ===== */}
-            {view !== "signup-success" && !(view === "forgot" && forgotSent) && (
+            {view !== AuthView.SIGNUP_SUCCESS && !(view === AuthView.FORGOT && forgotSent) && (
               <>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {/* Full name — sign-up only */}
-                  {view === "signup" && (
+                  {view === AuthView.SIGNUP && (
                     <div className="space-y-2">
                       <Label htmlFor="fullName">Họ và tên</Label>
                       <div>
@@ -543,15 +663,15 @@ function AuthPageContent() {
                   </div>
 
                   {/* Password — login & sign-up */}
-                  {view !== "forgot" && (
+                  {view !== AuthView.FORGOT && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="password">Mật khẩu</Label>
-                        {view === "login" && (
+                        {view === AuthView.LOGIN && (
                           <button
                             type="button"
                             tabIndex={-1}
-                            onClick={() => switchView("forgot")}
+                            onClick={() => switchView(AuthView.FORGOT)}
                             className="text-xs font-medium text-primary hover:underline"
                           >
                             Quên mật khẩu?
@@ -566,7 +686,7 @@ function AuthPageContent() {
                             placeholder="••••••••"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            disabled={isLoading}
+                            disabled={isLoading || isLoginCooldownActive}
                             className="focus-glow border-border/60 bg-background/50 pr-10 focus:border-primary/50 focus:ring-primary/20"
                           />
                           <button
@@ -584,6 +704,11 @@ function AuthPageContent() {
                         </div>
                         {errors.password && (
                           <p className="pt-1 text-xs text-destructive">{errors.password}</p>
+                        )}
+                        {isLoginCooldownActive && (
+                          <p className="pt-1 text-xs text-destructive">
+                            Vui lòng thử lại sau {formatCooldown(cooldownRemaining)}
+                          </p>
                         )}
                       </div>
 
@@ -633,13 +758,15 @@ function AuthPageContent() {
                   <Button
                     type="submit"
                     className="bg-gradient-primary btn-glow h-11 w-full"
-                    disabled={isLoading}
+                    disabled={isLoading || isLoginCooldownActive}
                   >
                     {isLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Đang xử lý...
                       </>
+                    ) : isLoginCooldownActive ? (
+                      "Tạm khóa đăng nhập"
                     ) : view === "signup" ? (
                       <>
                         <Sparkles className="mr-2 h-4 w-4" />

@@ -12,16 +12,17 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { MapPin } from "lucide-react";
-import { parsePosition, type DragPosition } from "@/lib/helpers/position-helpers";
+import { parsePosition, type DragPosition } from "@/lib/helpers";
 import { WIDGET_POSITION } from "@/config/widget";
 import { getIconSVG } from "@/lib/icons";
+import { EWidgetIconType } from "@/types";
 
 interface PositionModalProps {
   open: boolean;
   botName: string;
   avatarUrl: string | null;
   primaryColor: string;
-  chatIconType: "preset" | "custom";
+  chatIconType: EWidgetIconType;
   chatIconUrl: string | null;
   chatIconBgColor: string;
   chatIconPreset: string;
@@ -228,7 +229,8 @@ export function PositionModal({
                   ref={iconRef}
                   className={`absolute z-20 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-shadow ${isDragging ? "cursor-grabbing active:shadow-xl" : "cursor-grab"}`}
                   style={{
-                    backgroundColor: chatIconType === "preset" ? primaryColor : chatIconBgColor,
+                    backgroundColor:
+                      chatIconType === EWidgetIconType.Preset ? primaryColor : chatIconBgColor,
                     left: `${dragPosition.x}px`,
                     top: `${dragPosition.y}px`,
                     transition: isDragging ? "none" : "all 0.15s ease-out",
@@ -237,7 +239,7 @@ export function PositionModal({
                   onMouseDown={handleMouseDown}
                   title="Kéo để di chuyển"
                 >
-                  {chatIconType === "custom" && chatIconUrl ? (
+                  {chatIconType === EWidgetIconType.Custom && chatIconUrl ? (
                     <Image
                       src={chatIconUrl}
                       alt="Custom icon"

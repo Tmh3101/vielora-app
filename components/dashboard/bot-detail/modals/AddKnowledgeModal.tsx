@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { KnowledgeFileDropzone } from "@/components/shared/KnowledgeFileDropzone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CREDIT_PER_PAGE, MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH } from "@/config";
-import { ALLOWED_KNOWLEDGE_FILE_EXTENSIONS, MAX_KNOWLEDGE_FILE_SIZE } from "@/config/knowledge";
 import { FileText, Link, Loader2, Plus, Upload } from "lucide-react";
 
 export interface AddKnowledgeModalProps {
@@ -42,11 +42,8 @@ export function AddKnowledgeModal({
   const [content, setContent] = useState("");
   const [url, setUrl] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [prevOpen, setPrevOpen] = useState(open);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   if (prevOpen !== open) {
     setPrevOpen(open);
@@ -56,38 +53,9 @@ export function AddKnowledgeModal({
       setContent("");
       setUrl("");
       setUrlError(null);
-      setSelectedFile(null);
-      setIsDraggingFile(false);
-      setFileError(null);
+      setSelectedFiles([]);
     }
   }
-
-  const handleSelectFile = (file: File | null) => {
-    if (file) {
-      const allowedExtensions = ALLOWED_KNOWLEDGE_FILE_EXTENSIONS.map((ext) => ext.toLowerCase());
-      const fileName = file.name.toLowerCase();
-      const isAllowedExtension = allowedExtensions.some((ext) => fileName.endsWith(ext));
-
-      if (!isAllowedExtension) {
-        setSelectedFile(null);
-        setFileError(
-          `Định dạng tệp không được hỗ trợ. Chỉ chấp nhận: ${ALLOWED_KNOWLEDGE_FILE_EXTENSIONS.join(", ")}.`
-        );
-        setIsDraggingFile(false);
-        return;
-      }
-    }
-
-    if (file && file.size > MAX_KNOWLEDGE_FILE_SIZE) {
-      setSelectedFile(null);
-      setFileError("Tệp vượt quá 10MB. Vui lòng chọn tệp nhỏ hơn.");
-      setIsDraggingFile(false);
-      return;
-    }
-    setSelectedFile(file);
-    setFileError(null);
-    setIsDraggingFile(false);
-  };
 
   const validateUrl = (value: string) => {
     const trimmed = value.trim();
@@ -193,62 +161,11 @@ export function AddKnowledgeModal({
           ) : inputMode === "file" ? (
             <div className="space-y-2">
               <Label>Tệp *</Label>
-              <input
-                ref={fileInputRef}
-                id="knowledge-file"
-                type="file"
-                accept={ALLOWED_KNOWLEDGE_FILE_EXTENSIONS.join(",")}
+              <KnowledgeFileDropzone
+                files={selectedFiles}
+                onFilesChange={setSelectedFiles}
                 disabled={isSubmitting}
-                className="hidden"
-                onChange={(e) => handleSelectFile(e.target.files?.[0] || null)}
               />
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => fileInputRef.current?.click()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    fileInputRef.current?.click();
-                  }
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (!isSubmitting) setIsDraggingFile(true);
-                }}
-                onDragLeave={() => setIsDraggingFile(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (isSubmitting) return;
-                  const file = e.dataTransfer.files?.[0] || null;
-                  handleSelectFile(file);
-                }}
-                className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
-                  isDraggingFile
-                    ? "border-primary bg-primary/5"
-                    : "border-border bg-muted/20 hover:border-primary/60 hover:bg-muted/40"
-                } ${isSubmitting ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
-              >
-                <Upload className="mx-auto mb-3 h-8 w-8 text-primary" />
-                <p className="text-sm font-medium text-foreground">Thả tệp vào đây</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  hoặc bấm để chọn tệp từ máy tính
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Định dạng hỗ trợ: {ALLOWED_KNOWLEDGE_FILE_EXTENSIONS.join(", ")}. Tối đa 10MB.
-                </p>
-              </div>
-              {fileError ? (
-                <p className="text-xs font-medium text-destructive">{fileError}</p>
-              ) : null}
-              {selectedFile ? (
-                <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
-                  <p className="font-medium text-foreground">Đã chọn tệp: {selectedFile.name}</p>
-                  <p className="text-muted-foreground">
-                    Kích thước: {(selectedFile.size / 1024).toFixed(1)} KB
-                  </p>
-                </div>
-              ) : null}
             </div>
           ) : (
             <div className="space-y-2">
@@ -310,8 +227,8 @@ export function AddKnowledgeModal({
                   void onConfirmManual(title, content);
                   return;
                 }
-                if (inputMode === "file" && selectedFile) {
-                  void onConfirmFile(selectedFile);
+                if (inputMode === "file" && selectedFiles[0]) {
+                  void onConfirmFile(selectedFiles[0]);
                   return;
                 }
                 if (inputMode === "url") {
@@ -326,7 +243,7 @@ export function AddKnowledgeModal({
                 (inputMode === "manual"
                   ? !title.trim() || !content.trim()
                   : inputMode === "file"
-                    ? !selectedFile
+                    ? selectedFiles.length === 0
                     : !url.trim() || Boolean(currentUrlError))
               }
             >

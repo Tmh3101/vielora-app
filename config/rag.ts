@@ -18,10 +18,10 @@ export const ERROR_RESPONSE =
 export const NO_ANSWER_PHRASES = ["không có đủ thông tin", "không tìm thấy"];
 
 export const GENERATION_CONFIG = {
-  temperature: 0.3, // Keep RAG temperature low (0.1 - 0.3) to reduce hallucinations
-  topP: 0.95, // Higher topP allows more diverse responses while maintaining quality
-  topK: 40, // Higher topK gives the model more candidate tokens for more flexible generation
-  maxOutputTokens: 512, // Higher maxOutputTokens allows longer answers, especially when many references are used
+  temperature: 0.15,
+  topP: 0.8,
+  topK: 40,
+  maxOutputTokens: 768,
 };
 
 // Limit the maximum length of user chat input

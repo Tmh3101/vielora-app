@@ -99,10 +99,27 @@ export async function getIndexedPageCountsByBotIds(
   botIds: string[]
 ): Promise<Record<string, number>> {
   if (botIds.length === 0) return {};
-  const counts = await Promise.all(
-    botIds.map((id) => getIndexedPageCount(client, id).then((c) => [id, c] as const))
-  );
-  return Object.fromEntries(counts);
+
+  const uniqueBotIds = Array.from(new Set(botIds));
+  const countsByBotId = Object.fromEntries(uniqueBotIds.map((id) => [id, 0])) as Record<
+    string,
+    number
+  >;
+
+  const { data, error } = await client
+    .from("pages")
+    .select("bot_id")
+    .in("bot_id", uniqueBotIds)
+    .eq("status", EPageStatus.Completed);
+
+  if (error) throw new Error(error.message);
+
+  type IndexedPageCountRow = { bot_id: string };
+  (data as IndexedPageCountRow[] | null)?.forEach((row) => {
+    countsByBotId[row.bot_id] = (countsByBotId[row.bot_id] ?? 0) + 1;
+  });
+
+  return countsByBotId;
 }
 
 /**

@@ -8,16 +8,17 @@ import {
   deleteWidgetBackground,
   deleteWidgetIcon,
 } from "@/lib/supabase/upload";
-import { getUserMessageTextColor as getTextColor } from "@/lib/helpers/chat-helpers";
+import { getUserMessageTextColor as getTextColor } from "@/lib/helpers";
 import { AppearanceSettingsCard } from "./appearance/AppearanceSettingsCard";
 import { WidgetPreviewCard } from "./appearance/WidgetPreviewCard";
 import { BackgroundType, type ChatBackgroundType } from "@/lib/constants/widget-appearance";
-import { ESubscriptionPlan } from "@/types";
+import { ESubscriptionPlan, EWidgetIconType } from "@/types";
 
 interface AppearanceSaveOverrides {
+  primaryColor?: string;
   chatBackgroundType?: ChatBackgroundType;
   chatBackgroundValue?: string;
-  chatIconType?: "preset" | "custom";
+  chatIconType?: EWidgetIconType;
   chatIconPreset?: string;
   chatIconUrl?: string | null;
   chatIconColor?: string;
@@ -36,7 +37,7 @@ export interface AppearanceTabProps {
   chatBackgroundType: ChatBackgroundType;
   chatBackgroundValue: string;
   chatBackgroundOpacity: number;
-  chatIconType: "preset" | "custom";
+  chatIconType: EWidgetIconType;
   chatIconPreset: string;
   chatIconUrl: string | null;
   chatIconColor: string;
@@ -52,7 +53,7 @@ export interface AppearanceTabProps {
   setChatBackgroundType: (value: ChatBackgroundType) => void;
   setChatBackgroundValue: (value: string) => void;
   setChatBackgroundOpacity: (value: number) => void;
-  setChatIconType: (value: "preset" | "custom") => void;
+  setChatIconType: (value: EWidgetIconType) => void;
   setChatIconPreset: (value: string) => void;
   setChatIconUrl: (value: string | null) => void;
   setChatIconColor: (value: string) => void;
@@ -93,7 +94,6 @@ export function AppearanceTab({
   chatIconType,
   chatIconPreset,
   chatIconUrl,
-  chatIconColor,
   chatIconBgColor,
   setChatIconType,
   setChatIconPreset,
@@ -114,10 +114,46 @@ export function AppearanceTab({
   const [gradientColor2, setGradientColor2] = useState("#764ba2");
   const [gradientAngle, setGradientAngle] = useState(135);
   const [positionModalOpen, setPositionModalOpen] = useState(false);
+  const [previewPrimaryColor, setPreviewPrimaryColor] = useState(primaryColor);
+  const [previewChatIconBgColor, setPreviewChatIconBgColor] = useState(chatIconBgColor);
 
-  const getUserMessageTextColor = () => getTextColor(primaryColor);
+  const previewPrimaryTextColor = getTextColor(previewPrimaryColor);
+  const previewChatIconTextColor = getTextColor(previewChatIconBgColor);
+  const getUserMessageTextColor = () => previewPrimaryTextColor;
   const generateGradientCSS = (color1: string, color2: string, angle: number) =>
     `linear-gradient(${angle}deg, ${color1} 0%, ${color2} 100%)`;
+
+  const handlePrimaryColorChange = (color: string) => {
+    const textColorForNewColor = getTextColor(color);
+    setPreviewPrimaryColor(color);
+    setPreviewChatIconBgColor(color);
+    setPrimaryColor(color);
+    setChatIconBgColor(color);
+    setChatIconColor(textColorForNewColor);
+  };
+
+  const saveAppearanceWithPreviewColors = (overrides?: AppearanceSaveOverrides) => {
+    const nextChatIconBgColor = overrides?.chatIconBgColor ?? previewChatIconBgColor;
+
+    return onSaveAppearance({
+      ...overrides,
+      primaryColor: overrides?.primaryColor ?? previewPrimaryColor,
+      chatIconBgColor: nextChatIconBgColor,
+      chatIconColor: getTextColor(nextChatIconBgColor),
+    });
+  };
+
+  useEffect(() => {
+    setChatIconColor(previewChatIconTextColor);
+  }, [previewChatIconTextColor, setChatIconColor]);
+
+  useEffect(() => {
+    setPreviewPrimaryColor(primaryColor);
+  }, [primaryColor]);
+
+  useEffect(() => {
+    setPreviewChatIconBgColor(chatIconBgColor);
+  }, [chatIconBgColor]);
 
   const handleSolidColorChange = (color: string) => {
     setSolidColor(color);
@@ -143,7 +179,7 @@ export function AppearanceTab({
   }, [
     welcomeMessage,
     suggestedQuestions,
-    primaryColor,
+    previewPrimaryColor,
     textColor,
     chatBackgroundType,
     chatBackgroundValue,
@@ -151,7 +187,7 @@ export function AppearanceTab({
     chatIconType,
     chatIconPreset,
     chatIconUrl,
-    chatIconBgColor,
+    previewChatIconBgColor,
   ]);
 
   useEffect(() => {
@@ -203,7 +239,7 @@ export function AppearanceTab({
         }
         setChatBackgroundValue(result.url);
         setBgPreviewFile(null);
-        await onSaveAppearance({
+        await saveAppearanceWithPreviewColors({
           chatBackgroundType: BackgroundType.IMAGE,
           chatBackgroundValue: result.url,
         });
@@ -242,11 +278,11 @@ export function AppearanceTab({
       const result = await uploadWidgetIcon(file, botId);
       if (result.success && result.url) {
         // Ensure uploaded icon is immediately active in preview and persisted as custom mode.
-        setChatIconType("custom");
+        setChatIconType(EWidgetIconType.Custom);
         setChatIconUrl(result.url);
         setIconUploadError(null);
         await onSaveAppearance({
-          chatIconType: "custom",
+          chatIconType: EWidgetIconType.Custom,
           chatIconUrl: result.url,
         });
       } else {
@@ -268,7 +304,7 @@ export function AppearanceTab({
       setChatBackgroundType(BackgroundType.SOLID);
       setChatBackgroundValue(solidColor);
       setBgPreviewFile(null);
-      await onSaveAppearance({
+      await saveAppearanceWithPreviewColors({
         chatBackgroundType: BackgroundType.SOLID,
         chatBackgroundValue: solidColor,
       });
@@ -284,11 +320,11 @@ export function AppearanceTab({
     try {
       await deleteWidgetIcon(botId);
       // Fallback to preset mode when custom icon is removed.
-      setChatIconType("preset");
+      setChatIconType(EWidgetIconType.Preset);
       setChatIconUrl(null);
       setIconUploadError(null);
       await onSaveAppearance({
-        chatIconType: "preset",
+        chatIconType: EWidgetIconType.Preset,
         chatIconUrl: null,
       });
     } catch (error) {
@@ -304,8 +340,14 @@ export function AppearanceTab({
   };
 
   const handlePositionChange = (newPos: { x: number; y: number }) => {
-    setPosition(JSON.stringify({ x: newPos.x, y: newPos.y }));
-    void onSaveAppearance();
+    const positionJson = JSON.stringify({ x: newPos.x, y: newPos.y });
+    console.log("[AppearanceTab] Position saved", {
+      x: newPos.x,
+      y: newPos.y,
+      position: positionJson,
+    });
+    setPosition(positionJson);
+    void saveAppearanceWithPreviewColors();
   };
 
   return (
@@ -315,7 +357,7 @@ export function AppearanceTab({
           botId={botId}
           editBotName={editBotName}
           avatarUrl={avatarUrl}
-          primaryColor={primaryColor}
+          primaryColor={previewPrimaryColor}
           position={position}
           welcomeMessage={welcomeMessage}
           suggestedQuestions={suggestedQuestions}
@@ -339,7 +381,7 @@ export function AppearanceTab({
           bgFileInputRef={bgFileInputRef}
           setEditBotName={setEditBotName}
           setAvatarUrl={setAvatarUrl}
-          setPrimaryColor={setPrimaryColor}
+          setPrimaryColor={handlePrimaryColorChange}
           setWelcomeMessage={setWelcomeMessage}
           setSuggestedQuestions={setSuggestedQuestions}
           setChatBackgroundType={setChatBackgroundType}
@@ -352,12 +394,17 @@ export function AppearanceTab({
           handleBgFileSelect={handleBgFileSelect}
           handleDeleteBackground={handleDeleteBackground}
           setChatIconPreset={setChatIconPreset}
-          setChatIconBgColor={setChatIconBgColor}
+          setChatIconBgColor={(color) => {
+            const iconColorForNewBg = getTextColor(color);
+            setPreviewChatIconBgColor(color);
+            setChatIconBgColor(color);
+            setChatIconColor(iconColorForNewBg);
+          }}
           setChatIconColor={setChatIconColor}
           handleIconInputChange={handleIconInputChange}
           handleIconFileSelect={handleIconFileSelect}
           handleDeleteIcon={handleDeleteIcon}
-          onSaveAppearance={onSaveAppearance}
+          onSaveAppearance={saveAppearanceWithPreviewColors}
         />
       </div>
 
@@ -365,7 +412,7 @@ export function AppearanceTab({
         <WidgetPreviewCard
           editBotName={editBotName}
           avatarUrl={avatarUrl}
-          primaryColor={primaryColor}
+          primaryColor={previewPrimaryColor}
           textColor={textColor}
           welcomeMessage={welcomeMessage}
           suggestedQuestions={suggestedQuestions}
@@ -375,8 +422,8 @@ export function AppearanceTab({
           chatIconType={chatIconType}
           chatIconPreset={chatIconPreset}
           chatIconUrl={chatIconUrl}
-          chatIconColor={chatIconColor}
-          chatIconBgColor={chatIconBgColor}
+          chatIconColor={previewChatIconTextColor}
+          chatIconBgColor={previewChatIconBgColor}
           solidColor={solidColor}
           getUserMessageTextColor={getUserMessageTextColor}
           previewMessagesRef={previewMessagesRef}
@@ -388,12 +435,12 @@ export function AppearanceTab({
         open={positionModalOpen}
         botName={editBotName}
         avatarUrl={avatarUrl}
-        primaryColor={primaryColor}
+        primaryColor={previewPrimaryColor}
         chatIconType={chatIconType}
         chatIconUrl={chatIconUrl}
-        chatIconBgColor={chatIconBgColor}
+        chatIconBgColor={previewChatIconBgColor}
         chatIconPreset={chatIconPreset}
-        chatIconColor={chatIconColor}
+        chatIconColor={previewChatIconTextColor}
         currentPosition={position}
         onPositionChange={handlePositionChange}
         onClose={() => setPositionModalOpen(false)}

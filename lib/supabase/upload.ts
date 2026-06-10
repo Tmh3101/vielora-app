@@ -1,18 +1,22 @@
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
+  DEFAULT_CACHE_CONTROL,
   BOT_AVATAR_BUCKET_NAME,
   WIDGET_BACKGROUND_BUCKET_NAME,
   WIDGET_ICON_BUCKET_NAME,
   MAX_FILE_SIZE,
   ALLOWED_TYPES,
-} from "@/config";
-import { WIDGET_LIMITS } from "@/config/widget";
-import type { ServiceClient } from "@/lib/services/types";
-import {
+  KNOWLEDGE_FILES_BUCKET_NAME,
   ALLOWED_KNOWLEDGE_FILE_EXTENSIONS,
   ALLOWED_KNOWLEDGE_FILE_TYPES,
   MAX_KNOWLEDGE_FILE_SIZE,
-} from "@/config/knowledge";
+  KNOWLEDGE_FILES_PAGE_SIZE,
+  BOT_AVATAR_FILE_PREFIX,
+  WIDGET_BACKGROUND_FILE_PREFIX,
+  WIDGET_ICON_FILE_PREFIX,
+} from "@/config";
+import { WIDGET_LIMITS } from "@/config/widget";
+import type { ServiceClient } from "@/lib/services/types";
 
 export interface UploadResult {
   success: boolean;
@@ -20,16 +24,6 @@ export interface UploadResult {
   error?: string;
 }
 
-/**
- * Generic file upload function to Supabase Storage
- * Handles validation, old file cleanup, bucket creation, and URL retrieval
- * @param file - The file to upload
- * @param botId - The bot ID (used for file naming)
- * @param bucket - The bucket name
- * @param filePrefix - Prefix for the file name (e.g., 'avatar', 'background')
- * @param maxSize - Maximum file size in bytes
- * @returns Upload result with URL or error
- */
 async function uploadFile(
   file: File,
   botId: string,
@@ -58,9 +52,7 @@ async function uploadFile(
     const fileExt = file.name.split(".").pop()?.toLowerCase() || "png";
     const fileName = `${botId}/${filePrefix}-${Date.now()}.${fileExt}`;
 
-    // Helper function to perform the actual upload
     const performUpload = async () => {
-      // Delete old files first
       const { data: existingFiles } = await supabase.storage.from(bucket).list(botId);
 
       if (existingFiles && existingFiles.length > 0) {
@@ -69,7 +61,7 @@ async function uploadFile(
       }
 
       return await supabase.storage.from(bucket).upload(fileName, file, {
-        cacheControl: "3600",
+        cacheControl: DEFAULT_CACHE_CONTROL,
         upsert: true,
       });
     };
@@ -157,7 +149,13 @@ export async function uploadBotAvatar(file: File, botId: string): Promise<Upload
   const supabase = createBrowserSupabaseClient();
   const dbClient: ServiceClient = supabase;
 
-  const result = await uploadFile(file, botId, BOT_AVATAR_BUCKET_NAME, "avatar", MAX_FILE_SIZE);
+  const result = await uploadFile(
+    file,
+    botId,
+    BOT_AVATAR_BUCKET_NAME,
+    BOT_AVATAR_FILE_PREFIX,
+    MAX_FILE_SIZE
+  );
 
   if (result.success && result.url) {
     await dbClient.from("bots").update({ avatar_url: result.url }).eq("id", botId);
@@ -190,7 +188,13 @@ export function revokeFilePreviewUrl(url: string): void {
 }
 
 export async function uploadWidgetBackground(file: File, botId: string): Promise<UploadResult> {
-  return uploadFile(file, botId, WIDGET_BACKGROUND_BUCKET_NAME, "background", MAX_FILE_SIZE);
+  return uploadFile(
+    file,
+    botId,
+    WIDGET_BACKGROUND_BUCKET_NAME,
+    WIDGET_BACKGROUND_FILE_PREFIX,
+    MAX_FILE_SIZE
+  );
 }
 
 export async function uploadWidgetIcon(file: File, botId: string): Promise<UploadResult> {
@@ -198,7 +202,7 @@ export async function uploadWidgetIcon(file: File, botId: string): Promise<Uploa
     file,
     botId,
     WIDGET_ICON_BUCKET_NAME,
-    "icon",
+    WIDGET_ICON_FILE_PREFIX,
     WIDGET_LIMITS.CHAT_ICON_MAX_FILE_SIZE
   );
 }
@@ -239,11 +243,13 @@ export async function uploadKnowledgeFile(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const filePath = `${botId}/${crypto.randomUUID()}-${safeName}`;
 
-  const { data, error } = await client.storage.from("knowledge_files").upload(filePath, file, {
-    upsert: false,
-    cacheControl: "3600",
-    contentType: file.type || undefined,
-  });
+  const { data, error } = await client.storage
+    .from(KNOWLEDGE_FILES_BUCKET_NAME)
+    .upload(filePath, file, {
+      upsert: false,
+      cacheControl: DEFAULT_CACHE_CONTROL,
+      contentType: file.type || undefined,
+    });
 
   if (error || !data) {
     return {
@@ -267,12 +273,67 @@ export async function deleteKnowledgeFile(
     };
   }
 
-  const { error } = await client.storage.from("knowledge_files").remove([normalizedPath]);
+  const { error } = await client.storage.from(KNOWLEDGE_FILES_BUCKET_NAME).remove([normalizedPath]);
   if (error) {
     return {
       success: false,
       error: error.message || "Failed to delete knowledge file.",
     };
+  }
+
+  return { success: true };
+}
+
+export async function deleteKnowledgeFilesByBotId(
+  client: ServiceClient,
+  botId: string
+): Promise<UploadResult> {
+  const normalizedBotId = botId.trim();
+  if (!normalizedBotId) {
+    return {
+      success: false,
+      error: "Bot ID is required.",
+    };
+  }
+
+  const bucket = client.storage.from(KNOWLEDGE_FILES_BUCKET_NAME);
+  const filesToDelete: string[] = [];
+  let offset = 0;
+  let hasMoreFiles = true;
+
+  while (hasMoreFiles) {
+    const { data, error } = await bucket.list(normalizedBotId, {
+      limit: KNOWLEDGE_FILES_PAGE_SIZE,
+      offset,
+    });
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message || "Failed to list knowledge files.",
+      };
+    }
+
+    if (!data || data.length === 0) {
+      hasMoreFiles = false;
+      continue;
+    }
+
+    filesToDelete.push(...data.map((file) => `${normalizedBotId}/${file.name}`));
+    hasMoreFiles = data.length === KNOWLEDGE_FILES_PAGE_SIZE;
+    offset += KNOWLEDGE_FILES_PAGE_SIZE;
+  }
+
+  for (let index = 0; index < filesToDelete.length; index += KNOWLEDGE_FILES_PAGE_SIZE) {
+    const batch = filesToDelete.slice(index, index + KNOWLEDGE_FILES_PAGE_SIZE);
+    const { error } = await bucket.remove(batch);
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message || "Failed to delete knowledge files.",
+      };
+    }
   }
 
   return { success: true };

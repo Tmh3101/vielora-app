@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addIndexerJobs } from "@/lib/scraper";
 import { corsHeaders } from "@/lib/constants";
-import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import { EBotStatus, EPageStatus, ETransactionType } from "@/types";
 import { CREDIT_PER_PAGE } from "@/config";
 import { deductCredits, refundCredits, CreditDeductionResult } from "@/lib/services/credit.service";

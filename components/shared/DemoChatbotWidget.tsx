@@ -7,47 +7,44 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MAX_CHAT_INPUT } from "@/config/rag";
-import { parseMarkdown, getUserMessageTextColor } from "@/lib/helpers/chat-helpers";
-import { parsePosition } from "@/lib/helpers/position-helpers";
-import { getIconColorBasedOnBg } from "@/lib/helpers/icon-helpers";
+import type { InitResponse, WidgetSettings } from "@/types";
+import {
+  getIconColorBasedOnBg,
+  parsePosition,
+  parseMarkdown,
+  getUserMessageTextColor,
+} from "@/lib/helpers";
 import { getIconSVGWithSize } from "@/lib/icons";
 import { WIDGET_CONFIG, WIDGET_FALLBACK, WIDGET_MESSAGES, WIDGET_POSITION } from "@/config/widget";
+import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
+import {
+  INSUFFICIENT_CREDITS_ERROR_CODE,
+  INSUFFICIENT_CREDITS_MESSAGE,
+} from "@/lib/constants/chat";
+import { EMessageRole, EWidgetBackgroundType, EWidgetIconType } from "@/types/enums";
 
 // API message format (matching widget.js)
 interface APIMessage {
-  role: "user" | "assistant" | "bot";
+  role: EMessageRole;
   content: string;
-}
-
-// Bot settings interface
-interface BotSettings {
-  primaryColor: string;
-  textColor: string;
-  position: string;
-  welcomeMessage: string;
-  suggestedQuestions?: string[];
-  chatBackgroundType?: "solid" | "gradient" | "image";
-  chatBackgroundValue?: string;
-  chatBackgroundOpacity?: number;
-  chatIconType?: "preset" | "custom";
-  chatIconPreset?: string;
-  chatIconUrl?: string | null;
-  chatIconColor?: string;
-  chatIconBgColor?: string;
 }
 
 interface BotInfo {
   botName: string;
   avatarUrl: string | null;
-  settings: BotSettings;
+  settings: WidgetSettings;
   isReady: boolean;
   previousMessages?: APIMessage[];
   conversationId?: string;
+  rateLimitExceeded?: boolean;
+  rateLimitMessage?: string | null;
+  insufficientCredits?: boolean;
+  insufficientCreditsMessage?: string | null;
 }
 
 interface Message {
   id: number;
-  role: "user" | "bot";
+  role: EMessageRole;
   content: string;
 }
 
@@ -61,7 +58,7 @@ const generateVisitorId = (): string => {
   return id;
 };
 
-const getFallbackSetting = (): BotSettings => ({
+const getFallbackSetting = (): WidgetSettings => ({
   primaryColor: WIDGET_FALLBACK.PRIMARY_COLOR,
   textColor: WIDGET_FALLBACK.TEXT_COLOR,
   position: WIDGET_FALLBACK.POSITION,
@@ -75,6 +72,10 @@ const getFallbackBotInfo = (): BotInfo => ({
   isReady: true,
   previousMessages: [],
   conversationId: undefined,
+  rateLimitExceeded: false,
+  rateLimitMessage: null,
+  insufficientCredits: false,
+  insufficientCreditsMessage: null,
 });
 
 // Function to initialize demo bot (matching widget.js init)
@@ -99,7 +100,7 @@ const initDemoBot = async (botId: string): Promise<BotInfo> => {
       throw new Error("Init API call failed");
     }
 
-    const data = await response.json();
+    const data: InitResponse = await response.json();
 
     if (data.success && data.data) {
       return {
@@ -109,6 +110,10 @@ const initDemoBot = async (botId: string): Promise<BotInfo> => {
         isReady: data.data.status === "ready",
         previousMessages: data.data.messages || [],
         conversationId: data.data.conversationId || undefined,
+        rateLimitExceeded: Boolean(data.data.rateLimitExceeded),
+        rateLimitMessage: data.data.rateLimitMessage || null,
+        insufficientCredits: false,
+        insufficientCreditsMessage: null,
       };
     }
 
@@ -119,11 +124,18 @@ const initDemoBot = async (botId: string): Promise<BotInfo> => {
   }
 };
 
-const callVieloraAPI = async (
+const callChatAPI = async (
   botId: string,
   message: string,
   conversationId?: string
-): Promise<{ message: string; conversationId: string }> => {
+): Promise<{
+  message: string;
+  conversationId: string;
+  rateLimitExceeded?: boolean;
+  rateLimitMessage?: string | null;
+  insufficientCredits?: boolean;
+  insufficientCreditsMessage?: string | null;
+}> => {
   const visitorId = generateVisitorId();
 
   try {
@@ -143,11 +155,27 @@ const callVieloraAPI = async (
     });
 
     if (response.status === 429) {
-      throw new Error("Rate limit exceeded");
+      const data: InitResponse = await response.json();
+      return {
+        message: data.message || WIDGET_MESSAGES.API_ERROR,
+        conversationId: conversationId || "",
+        rateLimitExceeded: data.code !== BOT_RATE_LIMIT_ERROR_CODES.ApiExceeded,
+        rateLimitMessage: data.message || null,
+      };
     }
 
     if (response.status === 403) {
       throw new Error("Domain not allowed");
+    }
+
+    if (response.status === 402) {
+      const data = await response.json();
+      return {
+        message: data.message || INSUFFICIENT_CREDITS_MESSAGE,
+        conversationId: conversationId || "",
+        insufficientCredits: data.code === INSUFFICIENT_CREDITS_ERROR_CODE,
+        insufficientCreditsMessage: data.message || INSUFFICIENT_CREDITS_MESSAGE,
+      };
     }
 
     if (!response.ok) {
@@ -190,9 +218,19 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const websiteRef = useRef<HTMLDivElement>(null);
   const [botInfo, setBotInfo] = useState<BotInfo>(getFallbackBotInfo());
+  const [rateLimitExceeded, setRateLimitExceeded] = useState(false);
+  const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
+  const [insufficientCredits, setInsufficientCredits] = useState(false);
+  const [insufficientCreditsMessage, setInsufficientCreditsMessage] = useState<string | null>(null);
   const [containerDimensions, setContainerDimensions] = useState({ width: 340, height: 400 });
 
   const finalPosition = position || botInfo.settings.position;
+  const blockedChatMessage = insufficientCredits
+    ? insufficientCreditsMessage || INSUFFICIENT_CREDITS_MESSAGE
+    : rateLimitExceeded
+      ? rateLimitMessage || `${botInfo.botName} đã đạt giới hạn tin nhắn trong ngày.`
+      : null;
+  const isChatBlocked = insufficientCredits || rateLimitExceeded;
   const parsedPosition = parsePosition(finalPosition);
 
   const BASE_MIN_X = WIDGET_POSITION.PADDING;
@@ -243,6 +281,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
   };
 
   const handleSuggestedQuestionClick = (question: string) => {
+    if (isChatBlocked || isTyping) return;
     setSuggestedQuestionsShown(true);
     sendMessageContent(question);
   };
@@ -261,24 +300,24 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
 
   // Memoized styles
   const chatBackgroundStyle = useMemo(() => {
-    const bgType = botInfo.settings.chatBackgroundType || "solid";
+    const bgType = botInfo.settings.chatBackgroundType || EWidgetBackgroundType.Solid;
     const bgValue = botInfo.settings.chatBackgroundValue || "#ffffff";
     const bgOpacity = (botInfo.settings.chatBackgroundOpacity || 100) / 100;
 
-    if (bgType === "solid") {
+    if (bgType === EWidgetBackgroundType.Solid) {
       const rgb = parseInt(bgValue.slice(1), 16);
       const r = (rgb >> 16) & 255;
       const g = (rgb >> 8) & 255;
       const b = rgb & 255;
       return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${bgOpacity})` };
-    } else if (bgType === "gradient") {
+    } else if (bgType === EWidgetBackgroundType.Gradient) {
       const overlayOpacity = 1 - bgOpacity;
       return {
         background: bgValue,
         backgroundColor: `rgba(255, 255, 255, ${overlayOpacity})`,
         backgroundBlendMode: "lighten" as const,
       };
-    } else if (bgType === "image") {
+    } else if (bgType === EWidgetBackgroundType.Image) {
       const overlayOpacity = 1 - bgOpacity;
       return {
         backgroundImage: `url("${bgValue}")`,
@@ -327,13 +366,13 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     if (previousMessages && previousMessages.length > 0) {
       loadedMessages.push({
         id: 0,
-        role: "bot",
+        role: EMessageRole.Bot,
         content: WIDGET_MESSAGES.HISTORY_SEPARATOR,
       });
 
       // Add previous messages with proper role conversion
       previousMessages.forEach((msg, index) => {
-        const role = msg.role === "assistant" ? "bot" : (msg.role as "user" | "bot");
+        const role = msg.role === EMessageRole.Assistant ? EMessageRole.Bot : msg.role;
         loadedMessages.push({
           id: index + 1,
           role: role,
@@ -344,7 +383,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
       // Add welcome message if no previous messages
       loadedMessages.push({
         id: 1,
-        role: "bot",
+        role: EMessageRole.Bot,
         content: welcomeMessage,
       });
     }
@@ -390,6 +429,13 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
       }
 
       setBotInfo(info);
+      setRateLimitExceeded(Boolean(info.rateLimitExceeded));
+      setRateLimitMessage(info.rateLimitMessage || null);
+      setInsufficientCredits(Boolean(info.insufficientCredits));
+      setInsufficientCreditsMessage(info.insufficientCreditsMessage || null);
+      if (info.rateLimitExceeded) {
+        setSuggestedQuestionsShown(true);
+      }
 
       // Set conversation ID if available
       if (info.conversationId) {
@@ -399,24 +445,45 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
       // Load previous messages or welcome message
       const initialMessages = loadPreviousMessages(
         info.previousMessages || [],
-        info.settings.welcomeMessage
+        info.rateLimitExceeded && info.rateLimitMessage
+          ? info.rateLimitMessage
+          : info.settings.welcomeMessage
       );
       setMessages(initialMessages);
     };
     initBot();
   }, [activeBotId, position]);
 
+  const appendBotMessage = (content: string) => {
+    setMessages((prev) => {
+      const lastMessage = prev[prev.length - 1];
+      if (lastMessage?.role === EMessageRole.Bot && lastMessage.content === content) {
+        return prev;
+      }
+
+      return [
+        ...prev,
+        {
+          id: prev.length + 1,
+          role: EMessageRole.Bot,
+          content,
+        },
+      ];
+    });
+  };
+
   const handleSend = async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
 
+    if (isChatBlocked) {
+      setInput("");
+      appendBotMessage(blockedChatMessage || INSUFFICIENT_CREDITS_MESSAGE);
+      return;
+    }
+
     if (trimmed.length > MAX_CHAT_INPUT) {
-      const warning: Message = {
-        id: messages.length + 1,
-        role: "bot",
-        content: WIDGET_MESSAGES.MAX_LENGTH_WARNING(MAX_CHAT_INPUT),
-      };
-      setMessages((prev) => [...prev, warning]);
+      appendBotMessage(WIDGET_MESSAGES.MAX_LENGTH_WARNING(MAX_CHAT_INPUT));
       return;
     }
 
@@ -428,7 +495,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
   const sendMessageContent = async (messageText: string) => {
     const userMessage: Message = {
       id: messages.length + 1,
-      role: "user",
+      role: EMessageRole.User,
       content: messageText,
     };
 
@@ -436,15 +503,29 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     setIsTyping(true);
 
     try {
-      const response = await callVieloraAPI(activeBotId, messageText, conversationId);
+      const response = await callChatAPI(activeBotId, messageText, conversationId);
 
       if (response.conversationId) {
         setConversationId(response.conversationId);
       }
 
+      if (response.rateLimitExceeded) {
+        setRateLimitExceeded(true);
+        setRateLimitMessage(response.rateLimitMessage || response.message);
+        setSuggestedQuestionsShown(true);
+      }
+
+      if (response.insufficientCredits) {
+        setInsufficientCredits(true);
+        setInsufficientCreditsMessage(
+          response.insufficientCreditsMessage || response.message || INSUFFICIENT_CREDITS_MESSAGE
+        );
+        setSuggestedQuestionsShown(true);
+      }
+
       const botMessage: Message = {
         id: messages.length + 2,
-        role: "bot",
+        role: EMessageRole.Bot,
         content: response.message,
       };
 
@@ -453,7 +534,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
       console.error("Error during message handling:", error);
       const errorMessage: Message = {
         id: messages.length + 2,
-        role: "bot",
+        role: EMessageRole.Bot,
         content: WIDGET_MESSAGES.TECHNICAL_ERROR,
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -474,7 +555,10 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     q.trim()
   );
   const showSuggestedOverlay =
-    !suggestedQuestionsShown && messages.length > 0 && visibleSuggestedQuestions.length > 0;
+    !suggestedQuestionsShown &&
+    messages.length > 0 &&
+    visibleSuggestedQuestions.length > 0 &&
+    !isChatBlocked;
 
   return (
     <motion.div
@@ -564,7 +648,8 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                   )
                 }
               />
-            ) : botInfo.settings.chatIconType === "custom" && botInfo.settings.chatIconUrl ? (
+            ) : botInfo.settings.chatIconType === EWidgetIconType.Custom &&
+              botInfo.settings.chatIconUrl ? (
               <Avatar className="h-14 w-14 border-none">
                 <AvatarImage
                   src={botInfo.settings.chatIconUrl}
@@ -575,7 +660,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                   <Bot className="h-6 w-6" />
                 </AvatarFallback>
               </Avatar>
-            ) : botInfo.settings.chatIconType === "preset" ? (
+            ) : botInfo.settings.chatIconType === EWidgetIconType.Preset ? (
               <div
                 dangerouslySetInnerHTML={{
                   __html: getIconSVGWithSize(
@@ -666,7 +751,9 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                     </Avatar>
                     <div>
                       <h4 className="text-sm font-semibold text-white">{botInfo.botName}</h4>
-                      <p className="text-xs text-white/80">Trực tuyến</p>
+                      <p className="text-xs text-white/80">
+                        {insufficientCredits ? "Tạm dừng do hết credits" : "Trực tuyến"}
+                      </p>
                     </div>
                   </div>
                   <Button
@@ -694,6 +781,22 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                     .chatbot-message-content a {
                       color: ${botInfo.settings.primaryColor};
                       text-decoration: underline;
+                    }
+                    .chatbot-message-content ul,
+                    .chatbot-message-content ol {
+                      list-style-position: outside;
+                      padding-left: 20px;
+                      margin: 6px 0;
+                    }
+                    .chatbot-message-content ul {
+                      list-style-type: disc;
+                    }
+                    .chatbot-message-content ol {
+                      list-style-type: decimal;
+                    }
+                    .chatbot-message-content li {
+                      display: list-item;
+                      margin-bottom: 3px;
                     }
                     .chatbot-message-content code {
                       background: #f3f4f6;
@@ -743,7 +846,10 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                               <div
                                 className="chatbot-message-content whitespace-pre-line"
                                 dangerouslySetInnerHTML={{
-                                  __html: parseMarkdown(message.content),
+                                  __html: parseMarkdown(
+                                    message.content,
+                                    botInfo.settings.primaryColor
+                                  ),
                                 }}
                               />
                             ) : (
@@ -828,18 +934,35 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                   )}
 
                   {/* Input */}
-                  <div className="rounded-b-2xl bg-background/95 p-3 shadow-lg">
+                  <div className="rounded-b-2xl p-3 shadow-lg">
+                    {blockedChatMessage && (rateLimitExceeded || insufficientCredits) && (
+                      <div className="pointer-events-none absolute inset-x-0 bottom-14 z-10 px-3">
+                        <div
+                          className={`rounded-t-lg px-3 py-2 text-xs font-medium shadow-sm backdrop-blur-sm ${
+                            insufficientCredits
+                              ? "border border-rose-200/70 bg-rose-50 text-rose-900"
+                              : "border border-amber-200/70 bg-amber-50 text-amber-900"
+                          }`}
+                        >
+                          {blockedChatMessage}
+                        </div>
+                      </div>
+                    )}
                     <form onSubmit={handleSubmit} className="flex gap-2">
                       <Input
                         value={input}
                         onChange={handleInputChange}
-                        placeholder={WIDGET_MESSAGES.INPUT_PLACEHOLDER}
+                        placeholder={
+                          insufficientCredits ? "Bot đã hết credits" : "Nhập tin nhắn..."
+                        }
+                        disabled={isTyping || isChatBlocked}
                         maxLength={MAX_CHAT_INPUT}
                         className="h-8 flex-1 text-xs"
                       />
                       <Button
                         type="submit"
                         size="sm"
+                        disabled={isTyping || !input.trim() || isChatBlocked}
                         className="h-8 w-8 rounded-full p-0 shadow-sm transition-shadow hover:shadow-md"
                         style={{ backgroundColor: botInfo.settings.primaryColor }}
                       >

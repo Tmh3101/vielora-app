@@ -1,0 +1,1 @@
+export const UPGRADE_HISTORY_PAGE_SIZE = 10;

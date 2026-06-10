@@ -11,7 +11,8 @@ import { WIDGET_LIMITS } from "@/config";
 import { getIconSVG } from "@/lib/icons";
 import { Crown, Image as ImageIcon, Loader2, MapPin, Plus, Upload, X } from "lucide-react";
 import { BackgroundType, type ChatBackgroundType } from "@/lib/constants/widget-appearance";
-import { ESubscriptionPlan } from "@/types";
+import { ESubscriptionPlan, EWidgetIconType } from "@/types";
+import { isHexColor } from "@/lib/helpers";
 
 interface AppearanceSettingsCardProps {
   botId: string;
@@ -24,7 +25,7 @@ interface AppearanceSettingsCardProps {
   chatBackgroundType: ChatBackgroundType;
   chatBackgroundValue: string;
   chatBackgroundOpacity: number;
-  chatIconType: "preset" | "custom";
+  chatIconType: EWidgetIconType;
   chatIconPreset: string;
   chatIconUrl: string | null;
   isSaving: boolean;
@@ -46,7 +47,7 @@ interface AppearanceSettingsCardProps {
   setSuggestedQuestions: (value: string[]) => void;
   setChatBackgroundType: (value: ChatBackgroundType) => void;
   setChatBackgroundOpacity: (value: number) => void;
-  setChatIconType: (value: "preset" | "custom") => void;
+  setChatIconType: (value: EWidgetIconType) => void;
   openPositionModal: () => void;
   handleSolidColorChange: (color: string) => void;
   handleGradientChange: (c1?: string, c2?: string, angle?: number) => void;
@@ -60,7 +61,7 @@ interface AppearanceSettingsCardProps {
   handleIconFileSelect: (file: File) => Promise<void>;
   handleDeleteIcon: () => Promise<void>;
   onSaveAppearance: (overrides?: {
-    chatIconType?: "preset" | "custom";
+    chatIconType?: EWidgetIconType;
     chatIconPreset?: string;
     chatIconUrl?: string | null;
     chatIconColor?: string;
@@ -117,6 +118,16 @@ export function AppearanceSettingsCard({
 }: AppearanceSettingsCardProps) {
   const canUseSuggestedQuestions =
     !!currentPlan && [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro].includes(currentPlan);
+  const botNameError = editBotName.trim().length === 0 ? "Tên Bot không được để trống." : null;
+  const primaryColorError = isHexColor(primaryColor.trim())
+    ? null
+    : "Màu thương hiệu phải là mã Hex hợp lệ dạng #RRGGBB.";
+  const solidColorError =
+    chatBackgroundType === BackgroundType.SOLID && !isHexColor(solidColor.trim())
+      ? "Nền hội thoại phải là mã Hex hợp lệ dạng #RRGGBB."
+      : null;
+  const welcomeMessageError =
+    welcomeMessage.trim().length === 0 ? "Tin nhắn chào mừng không được để trống." : null;
 
   return (
     <Card className="glass">
@@ -140,14 +151,18 @@ export function AppearanceSettingsCard({
             />
 
             <div className="w-full flex-1 space-y-2">
-              <Label htmlFor="editBotName">Tên Bot</Label>
+              <Label htmlFor="editBotName">
+                Tên Bot <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="editBotName"
                 type="text"
                 value={editBotName}
                 onChange={(e) => setEditBotName(e.target.value)}
                 placeholder="Tên chatbot"
+                aria-invalid={!!botNameError}
               />
+              {botNameError && <p className="text-xs text-destructive">{botNameError}</p>}
             </div>
           </div>
         </div>
@@ -158,39 +173,49 @@ export function AppearanceSettingsCard({
           </div>
 
           <div className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="primaryColor">Màu thương hiệu</Label>
-              <div className="flex gap-2">
-                <div className="relative h-10 w-12 overflow-hidden rounded-md border border-input">
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="primaryColor">Màu thương hiệu</Label>
+                <div className="flex gap-2">
+                  <div className="relative h-10 w-12 overflow-hidden rounded-md border border-input">
+                    <Input
+                      id="primaryColor"
+                      type="color"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      className="absolute inset-0 -left-[25%] -top-[25%] h-[150%] w-[150%] cursor-pointer border-0 p-0"
+                    />
+                  </div>
                   <Input
-                    id="primaryColor"
-                    type="color"
+                    type="text"
                     value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    className="absolute inset-0 -left-[25%] -top-[25%] h-[150%] w-[150%] cursor-pointer border-0 p-0"
+                    onChange={(e) => setPrimaryColor(e.target.value.slice(0, 7))}
+                    className="flex-1 font-mono"
+                    maxLength={7}
+                    inputMode="text"
+                    spellCheck={false}
+                    autoCapitalize="none"
+                    aria-invalid={!!primaryColorError}
                   />
                 </div>
-                <Input
-                  type="text"
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="flex-1 font-mono"
-                />
+                {primaryColorError && (
+                  <p className="text-xs text-destructive">{primaryColorError}</p>
+                )}
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label>Vị trí hiển thị trên website</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={openPositionModal}
-                className="w-full justify-center gap-2 border hover:border-primary hover:bg-white hover:text-primary"
-              >
-                <MapPin className="h-4 w-4" />
-                Chỉnh sửa vị trí
-              </Button>
+              <div className="space-y-2">
+                <Label>Vị trí hiển thị trên website</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={openPositionModal}
+                  className="h-10 w-full justify-center gap-2 border hover:border-primary hover:bg-white hover:text-primary"
+                >
+                  <MapPin className="h-4 w-4" />
+                  Chỉnh sửa vị trí
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -222,8 +247,9 @@ export function AppearanceSettingsCard({
                     <div className="flex gap-2">
                       <div className="relative h-10 w-12 overflow-hidden rounded-md border border-input">
                         <Input
+                          id="solidColor"
                           type="color"
-                          value={solidColor}
+                          value={isHexColor(solidColor.trim()) ? solidColor.trim() : "#ffffff"}
                           onChange={(e) => handleSolidColorChange(e.target.value)}
                           className="absolute inset-0 -left-[25%] -top-[25%] h-[150%] w-[150%] cursor-pointer border-0 p-0"
                         />
@@ -231,10 +257,18 @@ export function AppearanceSettingsCard({
                       <Input
                         type="text"
                         value={solidColor}
-                        onChange={(e) => handleSolidColorChange(e.target.value)}
+                        onChange={(e) => handleSolidColorChange(e.target.value.slice(0, 7))}
                         className="flex-1 font-mono"
+                        maxLength={7}
+                        inputMode="text"
+                        spellCheck={false}
+                        autoCapitalize="none"
+                        aria-invalid={!!solidColorError}
                       />
                     </div>
+                    {solidColorError && (
+                      <p className="text-xs text-destructive">{solidColorError}</p>
+                    )}
                   </div>
                 )}
 
@@ -449,20 +483,20 @@ export function AppearanceSettingsCard({
               <div className="space-y-3">
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setChatIconType("preset")}
-                    className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${chatIconType === "preset" ? "border-primary bg-primary/10 text-primary" : "border-input text-muted-foreground hover:border-primary hover:text-primary"}`}
+                    onClick={() => setChatIconType(EWidgetIconType.Preset)}
+                    className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${chatIconType === EWidgetIconType.Preset ? "border-primary bg-primary/10 text-primary" : "border-input text-muted-foreground hover:border-primary hover:text-primary"}`}
                   >
                     Có sẵn
                   </button>
                   <button
-                    onClick={() => setChatIconType("custom")}
-                    className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${chatIconType === "custom" ? "border-primary bg-primary/10 text-primary" : "border-input text-muted-foreground hover:border-primary hover:text-primary"}`}
+                    onClick={() => setChatIconType(EWidgetIconType.Custom)}
+                    className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${chatIconType === EWidgetIconType.Custom ? "border-primary bg-primary/10 text-primary" : "border-input text-muted-foreground hover:border-primary hover:text-primary"}`}
                   >
                     Tải lên
                   </button>
                 </div>
 
-                {chatIconType === "preset" && (
+                {chatIconType === EWidgetIconType.Preset && (
                   <div className="space-y-3">
                     <div className="max-h-56 overflow-y-auto rounded-lg border border-border/50 bg-gradient-to-br from-background/50 to-muted/20 p-3 shadow-sm">
                       <div className="grid grid-cols-4 gap-2">
@@ -470,12 +504,12 @@ export function AppearanceSettingsCard({
                           <button
                             key={icon.id}
                             onClick={async () => {
-                              setChatIconType("preset");
+                              setChatIconType(EWidgetIconType.Preset);
                               setChatIconPreset(icon.id);
                               setChatIconBgColor(primaryColor);
                               setChatIconColor("#ffffff");
                               await onSaveAppearance({
-                                chatIconType: "preset",
+                                chatIconType: EWidgetIconType.Preset,
                                 chatIconPreset: icon.id,
                                 chatIconBgColor: primaryColor,
                                 chatIconColor: "#ffffff",
@@ -504,7 +538,7 @@ export function AppearanceSettingsCard({
                   </div>
                 )}
 
-                {chatIconType === "custom" && (
+                {chatIconType === EWidgetIconType.Custom && (
                   <div className="space-y-3">
                     <div className="group relative mx-auto h-48 w-48">
                       <div
@@ -598,7 +632,9 @@ export function AppearanceSettingsCard({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="welcomeMessage">Tin nhắn chào mừng</Label>
+              <Label htmlFor="welcomeMessage">
+                Tin nhắn chào mừng <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="welcomeMessage"
                 value={welcomeMessage}
@@ -606,7 +642,11 @@ export function AppearanceSettingsCard({
                 placeholder="Xin chào! Tôi có thể giúp gì cho bạn?"
                 rows={3}
                 className="resize-none"
+                aria-invalid={!!welcomeMessageError}
               />
+              {welcomeMessageError && (
+                <p className="text-xs text-destructive">{welcomeMessageError}</p>
+              )}
             </div>
 
             {canUseSuggestedQuestions ? (
@@ -714,13 +754,19 @@ export function AppearanceSettingsCard({
         <div className="border-t border-border/50 pt-4">
           <Button
             onClick={() => void onSaveAppearance()}
-            disabled={isSaving}
+            disabled={
+              isSaving ||
+              !!botNameError ||
+              !!primaryColorError ||
+              !!solidColorError ||
+              !!welcomeMessageError
+            }
             className="w-full sm:w-auto"
           >
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang lưu thay đổi...
+                Đang lưu...
               </>
             ) : (
               "Lưu cấu hình"

@@ -35,6 +35,23 @@ function getPhpEmbedScript(botId: string, appUrl: string): string {
 ></script>`;
 }
 
+function getGtmEmbedScript(botId: string, appUrl: string): string {
+  return `<script>
+  (function() {
+    if (document.getElementById("vielora-script")) return;
+
+    var script = document.createElement("script");
+    script.src = "${appUrl}/widget.js";
+    script.id = "vielora-script";
+    script.setAttribute("data-bot-id", "${botId}");
+    script.setAttribute("data-base-url", "${appUrl}");
+    script.defer = true;
+    
+    document.body.appendChild(script);
+  })();
+</script>`;
+}
+
 export function getEmbededScript(botId: string, appUrl: string, framework: FrameworkType): string {
   if (framework === Framework.REACT) {
     return getReactEmbedScript(botId, appUrl);
@@ -42,6 +59,8 @@ export function getEmbededScript(botId: string, appUrl: string, framework: Frame
     return getVueEmbedScript(botId, appUrl);
   } else if (framework === Framework.PHP) {
     return getPhpEmbedScript(botId, appUrl);
+  } else if (framework === Framework.GTM) {
+    return getGtmEmbedScript(botId, appUrl);
   } else {
     throw new Error("Unsupported framework");
   }

@@ -357,17 +357,6 @@ export async function getCreditSummary(
     return null;
   }
 
-  const { data: plan, error: planError } = await client
-    .from("plans")
-    .select("monthly_credits")
-    .eq("id", subscription.plan_id)
-    .maybeSingle();
-
-  if (planError) {
-    throw new Error(`Failed to fetch plan: ${planError.message}`);
-  }
-
-  const totalCreditsThisMonth = plan?.monthly_credits ?? 0;
   const creditWindow = getCreditUsageWindow({
     currentPeriodStart: subscription.current_period_start,
     currentPeriodEnd: subscription.current_period_end,
@@ -388,17 +377,39 @@ export async function getCreditSummary(
 
   const relevantTypes = [...indexCategoryTypes, ...chatCategoryTypes];
 
-  const { data: transactions, error: txError } = await client
-    .from("credit_transactions")
-    .select("amount, transaction_type")
-    .eq("user_id", userId)
-    .in("transaction_type", relevantTypes)
-    .gte("created_at", creditWindow.startIso)
-    .lt("created_at", creditWindow.endIso);
+  const [
+    { data: plan, error: planError },
+    { data: transactions, error: txError },
+    { data: wallet, error: walletError },
+  ] = await Promise.all([
+    client.from("plans").select("monthly_credits").eq("id", subscription.plan_id).maybeSingle(),
+    client
+      .from("credit_transactions")
+      .select("amount, transaction_type")
+      .eq("user_id", userId)
+      .in("transaction_type", relevantTypes)
+      .gte("created_at", creditWindow.startIso)
+      .lt("created_at", creditWindow.endIso),
+    client
+      .from("wallets")
+      .select("subscription_credits, payg_credits, total_credits")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+
+  if (planError) {
+    throw new Error(`Failed to fetch plan: ${planError.message}`);
+  }
 
   if (txError) {
     throw new Error(`Failed to fetch credit transactions: ${txError.message}`);
   }
+
+  if (walletError) {
+    throw new Error(`Failed to fetch wallet: ${walletError.message}`);
+  }
+
+  const totalCreditsThisMonth = plan?.monthly_credits ?? 0;
 
   // 3. Phân loại và tính toán credits đã dùng
   let indexCreditsNet = 0;
@@ -416,17 +427,6 @@ export async function getCreditSummary(
   const indexCreditsUsedThisMonth = Math.max(0, -indexCreditsNet);
   const messageCreditsUsedThisMonth = Math.max(0, -chatCreditsNet);
   const creditsUsedThisMonth = indexCreditsUsedThisMonth + messageCreditsUsedThisMonth;
-
-  // 4. Lấy thông tin wallet (credits còn lại)
-  const { data: wallet, error: walletError } = await client
-    .from("wallets")
-    .select("subscription_credits, payg_credits, total_credits")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (walletError) {
-    throw new Error(`Failed to fetch wallet: ${walletError.message}`);
-  }
 
   const subscriptionCredits = wallet?.subscription_credits ?? 0;
   const paygCredits = wallet?.payg_credits ?? 0;

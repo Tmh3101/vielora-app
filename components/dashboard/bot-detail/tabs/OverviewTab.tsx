@@ -14,7 +14,7 @@ import { HeatmapChart } from "@/components/dashboard/bot-detail/analytics/Heatma
 import { RecentQuestionsCard } from "@/components/dashboard/bot-detail/analytics/RecentQuestionsCard";
 import { OverviewLoadingState } from "@/components/dashboard/bot-detail/tabs/OverviewLoadingState";
 import { OverviewErrorState } from "@/components/dashboard/bot-detail/tabs/OverviewErrorState";
-import { getBotStatusLabel } from "@/lib/helpers/bot-helpers";
+import { getBotStatusLabel } from "@/lib/helpers";
 
 export interface OverviewTabProps {
   bot: Tables<"bots">;

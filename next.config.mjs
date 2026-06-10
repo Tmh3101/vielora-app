@@ -53,6 +53,20 @@ const nextConfig = {
   async redirects() {
     return [];
   },
+
+  async headers() {
+    return [
+      {
+        source: "/(:path*)", // Áp dụng cho toàn bộ các route giao diện
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors https://admin.shopify.com https://*.myshopify.com;",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

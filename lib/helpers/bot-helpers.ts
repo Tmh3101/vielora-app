@@ -100,3 +100,12 @@ export const getBotStatusInfo = (status: string, isStopped: boolean) => {
       return { isAvailable: false, message: "Bot is not ready yet. Please wait a moment." };
   }
 };
+
+export const getStepForBotStatus = (status: EBotStatus, currentStep: number): number => {
+  if (status === EBotStatus.Pending || status === EBotStatus.Discovering) return 2;
+  if (status === EBotStatus.Discovered) return 2;
+  if (status === EBotStatus.Indexing) return 3;
+  if (status === EBotStatus.Ready) return 4;
+  if (status === EBotStatus.Failed) return currentStep >= 3 ? 3 : 2;
+  return 1;
+};

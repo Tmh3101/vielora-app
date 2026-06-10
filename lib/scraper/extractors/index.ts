@@ -1,5 +1,5 @@
 import { extractStatic } from "./static";
-import { isCSRPage } from "@/lib/helpers/crawl-website-helpers";
+import { isCSRPage } from "@/lib/helpers";
 import { extractDynamic } from "./dynamic";
 import type { CrawlResult, CrawlJob, RenderModeType } from "@/types";
 import { RenderMode as RenderModeEnum } from "@/lib/constants";

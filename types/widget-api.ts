@@ -1,4 +1,5 @@
 import { ApiResponse } from "./utils";
+import { EWidgetBackgroundType, EMessageRole, EWidgetIconType } from "./enums";
 
 export type WidgetSettings = {
   primaryColor: string;
@@ -6,10 +7,10 @@ export type WidgetSettings = {
   position: string;
   welcomeMessage: string;
   suggestedQuestions?: string[]; // Array of suggested questions (max 3, max 200 chars each)
-  chatBackgroundType?: "solid" | "gradient" | "image";
+  chatBackgroundType?: EWidgetBackgroundType;
   chatBackgroundValue?: string;
   chatBackgroundOpacity?: number;
-  chatIconType?: "preset" | "custom";
+  chatIconType?: EWidgetIconType;
   chatIconPreset?: string;
   chatIconUrl?: string | null;
   chatIconColor?: string;
@@ -22,7 +23,7 @@ export type InitRequest = {
 };
 
 export type Message = {
-  role: "user" | "assistant" | "system";
+  role: EMessageRole;
   content: string;
   created_at: string;
 };
@@ -39,9 +40,16 @@ export type InitData = {
   isAvailable: boolean;
   statusMessage: string | null;
   settings: WidgetSettings;
+  rateLimitExceeded?: boolean;
+  rateLimitMessage?: string | null;
+  rateLimitInfo?: {
+    remaining: number | null;
+    resetAt: string;
+  };
   // Include existing conversation if found
   conversationId: string | null;
   messages: Message[];
+  errorCode?: string;
 };
 
 export type InitResponse = ApiResponse<InitData>;

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getIconSVG } from "@/lib/icons";
 import { Bot, MinusCircle } from "lucide-react";
 import { BackgroundType, type ChatBackgroundType } from "@/lib/constants/widget-appearance";
+import { EWidgetIconType } from "@/types";
 
 interface WidgetPreviewCardProps {
   editBotName: string;
@@ -16,7 +17,7 @@ interface WidgetPreviewCardProps {
   chatBackgroundType: ChatBackgroundType;
   chatBackgroundValue: string;
   chatBackgroundOpacity: number;
-  chatIconType: "preset" | "custom";
+  chatIconType: EWidgetIconType;
   chatIconPreset: string;
   chatIconUrl: string | null;
   chatIconColor: string;
@@ -75,12 +76,12 @@ export function WidgetPreviewCard({
               style={{ transformOrigin: "bottom right" }}
             >
               <div
-                className="flex items-center gap-3 p-4 transition-colors duration-300"
-                style={{ backgroundColor: primaryColor, color: "white" }}
+                className="flex items-center gap-3 p-4"
+                style={{ backgroundColor: primaryColor, color: getUserMessageTextColor() }}
               >
                 <Avatar className="h-9 w-9 border border-white/20">
                   <AvatarImage src={avatarUrl || undefined} alt={editBotName} />
-                  <AvatarFallback className="bg-white/20 text-white">
+                  <AvatarFallback className="bg-white/20 text-current">
                     <Bot className="h-5 w-5" />
                   </AvatarFallback>
                 </Avatar>
@@ -133,7 +134,7 @@ export function WidgetPreviewCard({
                   {welcomeMessage || "Xin chào! Tôi có thể giúp gì cho bạn?"}
                 </div>
                 <div
-                  className="ml-auto max-w-[85%] rounded-2xl rounded-tr-none p-3 text-sm delay-150 duration-500 animate-in fade-in slide-in-from-bottom-2"
+                  className="ml-auto max-w-[85%] rounded-2xl rounded-tr-none p-3 text-sm"
                   style={{ backgroundColor: primaryColor, color: getUserMessageTextColor() }}
                 >
                   Xin chào! Tôi muốn tìm hiểu về sản phẩm.
@@ -192,8 +193,8 @@ export function WidgetPreviewCard({
                       Nhập câu hỏi...
                     </div>
                     <button
-                      className="flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-300"
-                      style={{ backgroundColor: primaryColor, color: "white" }}
+                      className="flex h-10 w-10 items-center justify-center rounded-full"
+                      style={{ backgroundColor: primaryColor, color: getUserMessageTextColor() }}
                     >
                       <svg
                         width="18"
@@ -219,7 +220,7 @@ export function WidgetPreviewCard({
               style={{ backgroundColor: chatIconBgColor, cursor: "pointer" }}
               title="Click để mở chat"
             >
-              {chatIconType === "preset" ? (
+              {chatIconType === EWidgetIconType.Preset ? (
                 <div
                   dangerouslySetInnerHTML={{ __html: getIconSVG(chatIconPreset) }}
                   style={{

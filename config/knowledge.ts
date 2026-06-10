@@ -1,3 +1,5 @@
+import { ESubscriptionPlan } from "@/types";
+
 export const MAX_MANUAL_CONTENT_LENGTH = 10000;
 export const MAX_MANUAL_TITLE_LENGTH = 100;
 export const MAX_KNOWLEDGE_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -16,3 +18,14 @@ export const PDF_FALLBACK_TIMEOUT_MS = 60000;
 export const PDF_FALLBACK_MIN_TEXT_LENGTH = 50;
 
 export const SINGLE_URL_CRAWL_TIMEOUT_MS = 30_000;
+
+// Plans that are allowed to add/edit knowledge
+export const EDIT_KNOWLEDGE_ALLOWED_PLANS: ESubscriptionPlan[] = [
+  ESubscriptionPlan.Standard,
+  ESubscriptionPlan.Pro,
+];
+
+export const SUGGESTED_QUESTIONS_ALLOWED_PLANS: ESubscriptionPlan[] = [
+  ESubscriptionPlan.Standard,
+  ESubscriptionPlan.Pro,
+];

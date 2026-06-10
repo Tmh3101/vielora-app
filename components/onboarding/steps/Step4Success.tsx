@@ -1,15 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Bot, CheckCircle } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, Bot, CheckCircle, ChevronDown, Link2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { StandaloneChatSharePanel } from "@/components/dashboard/StandaloneChatSharePanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 import { EPageStatus } from "@/types";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
 import {
   ONBOARDING_SUCCESS_BOT_KEY,
   ONBOARDING_SUCCESS_INDEXED_COUNT_KEY,
@@ -22,18 +25,27 @@ export interface Step4SuccessProps {
 interface BotInfo {
   name: string;
   avatar_url: string | null;
+  slug: string | null;
+  is_public: boolean;
 }
 
 export function Step4Success({ botId }: Step4SuccessProps) {
   const router = useRouter();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const reset = useOnboardingStore((state) => state.reset);
+  const [isStandalonePanelOpen, setIsStandalonePanelOpen] = useState(false);
+  const [standaloneSlug, setStandaloneSlug] = useState("");
+  const [standaloneIsPublic, setStandaloneIsPublic] = useState(false);
+  const [isSavingStandalone, setIsSavingStandalone] = useState(false);
 
   const botQuery = useQuery({
     queryKey: [ONBOARDING_SUCCESS_BOT_KEY, botId],
     queryFn: async (): Promise<BotInfo | null> => {
       const { data, error } = await supabase
         .from("bots")
-        .select("name, avatar_url")
+        .select("name, avatar_url, slug, is_public")
         .eq("id", botId)
         .maybeSingle();
 
@@ -62,7 +74,56 @@ export function Step4Success({ botId }: Step4SuccessProps) {
 
   const botName = botQuery.data?.name ?? "Chatbot";
   const botAvatarUrl = botQuery.data?.avatar_url ?? null;
+  const savedStandaloneSlug = botQuery.data?.slug ?? null;
   const pagesIndexed = indexedCountQuery.data ?? 0;
+
+  useEffect(() => {
+    if (!botQuery.data) return;
+
+    setStandaloneSlug(botQuery.data.slug ?? "");
+    setStandaloneIsPublic(botQuery.data.is_public ?? false);
+  }, [botQuery.data]);
+
+  const handleSaveStandaloneSettings = async () => {
+    setIsSavingStandalone(true);
+    try {
+      const response = await fetch(`/api/bots/${botId}/slug-settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: standaloneSlug || null, isPublic: standaloneIsPublic }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || "Failed to save slug settings");
+      }
+
+      queryClient.setQueryData<BotInfo | null>([ONBOARDING_SUCCESS_BOT_KEY, botId], (current) =>
+        current
+          ? {
+              ...current,
+              slug: standaloneSlug || null,
+              is_public: standaloneIsPublic,
+            }
+          : current
+      );
+
+      toast({
+        title: "Thành công",
+        description: "Đã lưu cài đặt trang chat độc lập.",
+      });
+    } catch (error) {
+      console.error("Save standalone chat settings error:", error);
+      toast({
+        title: "Lỗi",
+        description: error instanceof Error ? error.message : "Không thể lưu cài đặt.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingStandalone(false);
+    }
+  };
 
   return (
     <Card className="mx-auto max-w-3xl">
@@ -71,9 +132,7 @@ export function Step4Success({ botId }: Step4SuccessProps) {
           <CheckCircle className="h-8 w-8 text-green-600" />
         </div>
         <CardTitle>Chatbot đã sẵn sàng!</CardTitle>
-        <CardDescription>
-          Bot đã học xong {pagesIndexed} {pagesIndexed === 1 ? "trang" : "trang"} từ website của bạn
-        </CardDescription>
+        <CardDescription>Bot đã học xong {pagesIndexed} nguồn dữ liệu của bạn</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-xl border bg-card p-4 shadow-sm">
@@ -101,7 +160,7 @@ export function Step4Success({ botId }: Step4SuccessProps) {
               </div>
             </div>
             <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-              {pagesIndexed} trang
+              {pagesIndexed} nguồn
             </Badge>
           </div>
         </div>
@@ -109,15 +168,66 @@ export function Step4Success({ botId }: Step4SuccessProps) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Button
             variant="outline"
-            onClick={() => router.push("/dashboard")}
+            onClick={() => {
+              reset();
+              router.push("/dashboard");
+            }}
             className="hover:border-primary hover:bg-white hover:text-primary"
           >
             Trở về Dashboard
           </Button>
-          <Button onClick={() => router.push(`/dashboard/bots/${botId}`)}>
+          <Button
+            onClick={() => {
+              reset();
+              router.push(`/dashboard/bots/${botId}`);
+            }}
+          >
             Cài đặt Widget
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
+        </div>
+
+        <div className="space-y-3">
+          <Button
+            type="button"
+            variant="outline"
+            aria-expanded={isStandalonePanelOpen}
+            className="w-full justify-between hover:border-primary hover:bg-white hover:text-primary"
+            onClick={() => setIsStandalonePanelOpen((current) => !current)}
+          >
+            <span className="flex items-center">
+              <Link2 className="mr-2 h-4 w-4" />
+              Tạo trang chat độc lập
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${
+                isStandalonePanelOpen ? "rotate-180" : ""
+              }`}
+            />
+          </Button>
+
+          {isStandalonePanelOpen && (
+            <div className="rounded-xl border bg-muted/20 p-4 shadow-sm">
+              <div className="mb-4">
+                <p className="font-semibold text-foreground">Trang Chat Độc Lập</p>
+                <p className="text-sm text-muted-foreground">
+                  Chia sẻ chatbot qua đường link công khai và mã QR.
+                </p>
+              </div>
+              <StandaloneChatSharePanel
+                botName={botName}
+                avatarUrl={botAvatarUrl}
+                slug={standaloneSlug}
+                savedSlug={savedStandaloneSlug}
+                isPublic={standaloneIsPublic}
+                isSaving={isSavingStandalone}
+                onSlugChange={setStandaloneSlug}
+                onPublicChange={setStandaloneIsPublic}
+                onSave={handleSaveStandaloneSettings}
+                variant="dropdown"
+              />
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

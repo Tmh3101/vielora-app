@@ -54,6 +54,7 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
     retryDiscover,
     currentAction,
     crawledCount,
+    progress,
   } = useDiscoverPipeline(botId);
 
   const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
@@ -134,6 +135,7 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
         pagesFailed={pagesFailed}
         currentAction={currentAction}
         crawledCount={crawledCount}
+        progress={progress}
         scopeLabel={
           crawlScope === CrawlScope.FULL_WEBSITE ? "Toàn bộ website" : "Chỉ hostname hiện tại"
         }

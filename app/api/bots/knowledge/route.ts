@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { addIndexerJob, addSingleUrlCrawlJob } from "@/lib/scraper";
 import { RenderMode as RenderModeEnum, corsHeaders } from "@/lib/constants";
-import { hashContent } from "@/lib/helpers/crawl-website-helpers";
-import { isBotRootUrl } from "@/lib/helpers/url-helpers";
-import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
-import { normalizeKnowledgeUrl } from "@/lib/helpers/url-helpers";
+import { hashContent, isBotRootUrl, normalizeKnowledgeUrl } from "@/lib/helpers";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import {
   EPageStatus,
   EBotStatus,
@@ -13,8 +11,14 @@ import {
   ETransactionType,
   ESubscriptionPlan,
 } from "@/types";
-import { MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH, CREDIT_PER_PAGE } from "@/config";
-import { MAX_KNOWLEDGE_FILE_SIZE, SINGLE_URL_CRAWL_TIMEOUT_MS } from "@/config/knowledge";
+import {
+  MAX_MANUAL_CONTENT_LENGTH,
+  MAX_MANUAL_TITLE_LENGTH,
+  CREDIT_PER_PAGE,
+  MAX_KNOWLEDGE_FILE_SIZE,
+  SINGLE_URL_CRAWL_TIMEOUT_MS,
+  EDIT_KNOWLEDGE_ALLOWED_PLANS,
+} from "@/config";
 import { deductCredits, refundCredits } from "@/lib/services/credit.service";
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
 import { getBotByOwner, updateBotStatusServer } from "@/lib/services/bot.service";
@@ -23,23 +27,23 @@ import {
   getPageByBotIdAndUrlServer,
   insertPageServer,
 } from "@/lib/services/page.service";
-import { uploadKnowledgeFile, deleteKnowledgeFile } from "@/lib/supabase/upload";
+import { deleteKnowledgeFile } from "@/lib/supabase/upload";
 import { extractTextFromFile } from "@/lib/scraper/extractors/files";
+import { type KnowledgeRequestMode, KNOWLEDGE_REQUEST_MODE } from "@/lib/constants/knowledge";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
 }
 
-// Plans that are allowed to add/edit knowledge
-const ALLOWED_PLANS = [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro];
-
 interface KnowledgeRequest {
   botId?: string;
   isManual?: boolean;
-  mode?: "manual" | "file" | "url";
+  mode?: KnowledgeRequestMode;
+  context?: "onboarding";
   title?: string;
   content?: string;
   url?: string;
+  filePath?: string;
 }
 
 interface KnowledgeResponse {
@@ -54,31 +58,13 @@ interface KnowledgeResponse {
 
 export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResponse>> {
   try {
-    const contentType = req.headers.get("content-type") || "";
-    const isMultipart = contentType.includes("multipart/form-data");
-
-    let body: KnowledgeRequest = {};
-    let uploadedFile: File | null = null;
-
-    if (isMultipart) {
-      const formData = await req.formData();
-      body = {
-        botId: String(formData.get("botId") || ""),
-        mode: "file",
-      };
-      const fileField = formData.get("file");
-      if (fileField instanceof File) {
-        uploadedFile = fileField;
-      }
-    } else {
-      body = (await req.json()) as KnowledgeRequest;
-    }
-
-    const { botId, title, content, url } = body;
-    const mode = body.mode ?? "manual";
-    const isManual = mode === "manual";
-    const isFileMode = mode === "file";
-    const isUrlMode = mode === "url";
+    const body = (await req.json()) as KnowledgeRequest;
+    const { botId, title, content, url, filePath } = body;
+    const mode = body.mode ?? KNOWLEDGE_REQUEST_MODE.MANUAL;
+    const isOnboardingContext = body.context === "onboarding";
+    const isManual = mode === KNOWLEDGE_REQUEST_MODE.MANUAL;
+    const isFileMode = mode === KNOWLEDGE_REQUEST_MODE.FILE;
+    const isUrlMode = mode === KNOWLEDGE_REQUEST_MODE.URL;
 
     // Validate required fields
     if (!botId) {
@@ -92,27 +78,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
     if (isAuthError(authResult)) return authResult;
     const { user, supabase } = authResult;
 
-    // Check user's subscription plan
-    const planCode = await getUserActivePlanCodeServer(supabase, user.id);
-
-    if (!planCode) {
-      return NextResponse.json(
-        { success: false, message: "Unable to verify subscription status" },
-        { status: 403, headers: corsHeaders }
-      );
-    }
-
-    // Check if the user's plan allows adding knowledge
-    if (!ALLOWED_PLANS.includes(planCode as ESubscriptionPlan)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Upgrade to Standard or Pro plan to unlock this feature.",
-        },
-        { status: 403, headers: corsHeaders }
-      );
-    }
-
     if (!isManual && !isFileMode && !isUrlMode) {
       return NextResponse.json(
         { success: false, message: "mode must be manual, file, or url" },
@@ -120,17 +85,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
       );
     }
 
-    // Validate manual-specific fields
+    // Validate source-specific fields
     if (isFileMode) {
-      if (!uploadedFile) {
+      if (!filePath?.trim()) {
         return NextResponse.json(
-          { success: false, message: "file is required for file mode" },
-          { status: 400, headers: corsHeaders }
-        );
-      }
-      if (uploadedFile.size > MAX_KNOWLEDGE_FILE_SIZE) {
-        return NextResponse.json(
-          { success: false, message: "File is too large. Maximum file size is 10MB." },
+          { success: false, message: "filePath is required for file mode" },
           { status: 400, headers: corsHeaders }
         );
       }
@@ -185,6 +144,61 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
       );
     }
 
+    const crawlSettings =
+      bot.crawl_settings &&
+      typeof bot.crawl_settings === "object" &&
+      !Array.isArray(bot.crawl_settings)
+        ? (bot.crawl_settings as Record<string, unknown>)
+        : {};
+    const isFileOnboardingBot = crawlSettings.onboardingSourceMode === "files";
+    const isBotInOnboarding =
+      bot.status === EBotStatus.Pending || bot.status === EBotStatus.Indexing;
+
+    if (isOnboardingContext && (!isFileMode || !isFileOnboardingBot || !isBotInOnboarding)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid onboarding knowledge request." },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (!isOnboardingContext) {
+      // Check user's subscription plan
+      const planCode = await getUserActivePlanCodeServer(supabase, user.id);
+
+      if (!planCode) {
+        return NextResponse.json(
+          { success: false, message: "Unable to verify subscription status" },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+
+      // Check if the user's plan allows adding knowledge
+      if (!EDIT_KNOWLEDGE_ALLOWED_PLANS.includes(planCode as ESubscriptionPlan)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Upgrade to Standard or Pro plan to unlock this feature.",
+          },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+    }
+
+    const normalizedPath = filePath?.trim() || "";
+    const pathParts = normalizedPath.split("/");
+    if (
+      isFileMode &&
+      (pathParts.length !== 2 ||
+        pathParts[0] !== botId ||
+        pathParts.includes("..") ||
+        pathParts.includes("."))
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid file path for this bot" },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
     let normalizedUrl: string | null = null;
     if (isUrlMode) {
       normalizedUrl = normalizeKnowledgeUrl(url || "");
@@ -215,12 +229,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
       }
     }
 
-    const requiredCredits = CREDIT_PER_PAGE;
     const deductionResult = await deductCredits(supabase, {
       userId: bot.user_id,
-      creditAmount: requiredCredits,
+      creditAmount: CREDIT_PER_PAGE,
       transactionType: ETransactionType.AddKnowledge,
-      transactionDescription: `Deducted ${requiredCredits} credits to add knowledge for bot ${botId} (${CREDIT_PER_PAGE} credit/page)`,
+      transactionDescription: `Deducted ${CREDIT_PER_PAGE} credits to add knowledge for bot ${botId} (${CREDIT_PER_PAGE} credit/page)`,
     });
 
     if (!deductionResult.success) {
@@ -240,23 +253,34 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
       let pageTitle = title?.trim() || "";
       let normalizedContent = content?.trim() || "";
       let rawContent: string | null = null;
+      let jobId: string;
 
       try {
-        if (isFileMode && uploadedFile) {
-          const uploadResult = await uploadKnowledgeFile(supabase, uploadedFile, botId);
-          if (!uploadResult.success || !uploadResult.url) {
-            throw new Error(uploadResult.error || "Failed to upload file");
+        if (isFileMode && filePath) {
+          const normalizedFilePath = filePath.trim();
+          rawContent = normalizedFilePath;
+
+          const { data: fileBlob, error: downloadError } = await supabase.storage
+            .from("knowledge_files")
+            .download(normalizedFilePath);
+
+          if (downloadError || !fileBlob) {
+            throw new Error(downloadError?.message || "Failed to download uploaded file");
           }
 
-          const fileBuffer = Buffer.from(await uploadedFile.arrayBuffer());
+          if (fileBlob.size > MAX_KNOWLEDGE_FILE_SIZE) {
+            throw new Error("File is too large. Maximum file size is 10MB.");
+          }
+
+          const fileBuffer = Buffer.from(await fileBlob.arrayBuffer());
+          const storedFileName = normalizedFilePath.split("/").pop() || "knowledge-file";
           normalizedContent = await extractTextFromFile(
             fileBuffer,
-            uploadedFile.name,
-            uploadedFile.type
+            storedFileName,
+            fileBlob.type || undefined
           );
-          pageTitle = uploadedFile.name;
+          pageTitle = storedFileName.replace(/^[0-9a-fA-F-]{36}-/, "");
           pageUrl = `file://${pageId}`;
-          rawContent = uploadResult.url;
         }
 
         await insertPageServer(supabase, {
@@ -271,8 +295,17 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
           status: EPageStatus.PendingIndex,
           crawled_at: new Date().toISOString(),
         });
-      } catch (insertErr) {
-        const insertError = insertErr as Error;
+
+        jobId = await addIndexerJob({
+          botId,
+          pageId,
+        });
+
+        if (bot.status !== EBotStatus.Ready) {
+          await updateBotStatusServer(supabase, botId, EBotStatus.Indexing);
+        }
+      } catch (manualOrFileErr) {
+        const manualOrFileError = manualOrFileErr as Error;
 
         if (isFileMode && rawContent) {
           await deleteKnowledgeFile(supabase, rawContent).catch((err) =>
@@ -280,26 +313,21 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
           );
         }
 
+        await deletePageByIdServer(supabase, pageId).catch((err) =>
+          console.error("[KnowledgeAPI] Failed to cleanup orphaned page", err)
+        );
+
         await refundCredits(supabase, {
           userId: bot.user_id,
           deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
           deductedFromPayg: deductionResult.deductedFromPayg || 0,
           transactionType: ETransactionType.AddKnowledgeRefund,
-          transactionDescription: `Refunded ${requiredCredits} credits due to an error while adding knowledge for bot ${botId}`,
+          transactionDescription: `Refunded ${CREDIT_PER_PAGE} credits due to an error while adding knowledge for bot ${botId}`,
         });
         return NextResponse.json(
-          { success: false, message: `Failed to create page: ${insertError.message}` },
+          { success: false, message: `Failed to add knowledge: ${manualOrFileError.message}` },
           { status: 500, headers: corsHeaders }
         );
-      }
-
-      const jobId = await addIndexerJob({
-        botId,
-        pageId,
-      });
-
-      if (bot.status !== EBotStatus.Ready) {
-        await updateBotStatusServer(supabase, botId, EBotStatus.Indexing);
       }
 
       return NextResponse.json(
@@ -345,7 +373,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
             userId: bot.user_id,
             deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
             deductedFromPayg: deductionResult.deductedFromPayg || 0,
-            creditAmount: requiredCredits,
+            creditAmount: CREDIT_PER_PAGE,
           },
         });
 
@@ -373,7 +401,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
           deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
           deductedFromPayg: deductionResult.deductedFromPayg || 0,
           transactionType: ETransactionType.AddKnowledgeRefund,
-          transactionDescription: `Refunded ${requiredCredits} credits due to an error while adding URL knowledge for bot ${botId}`,
+          transactionDescription: `Refunded ${CREDIT_PER_PAGE} credits due to an error while adding URL knowledge for bot ${botId}`,
         });
 
         return NextResponse.json(

@@ -151,7 +151,7 @@ export async function handlePaymentSuccess(
 
   const { data: plan, error: planError } = await client
     .from("plans")
-    .select("id, name, monthly_credits")
+    .select("id, name, monthly_credits, bots_limit")
     .eq("id", payment.plan_id)
     .maybeSingle();
 
@@ -300,7 +300,7 @@ export async function handlePaymentSuccess(
       currency:
         ((payment.metadata as Record<string, unknown>)?.currency as string) ?? EPaymentCurrency.VND,
       txnId: payment.id.slice(0, 8).toUpperCase(),
-      botsLimit: 0, // Will be resolved from plan
+      botsLimit: plan.bots_limit || 0,
       monthlyCredits: plan.monthly_credits,
       periodStart: formatDate(periodStartIso),
       periodEnd: formatDate(periodEndIso),

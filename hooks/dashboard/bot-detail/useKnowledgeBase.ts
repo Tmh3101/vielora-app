@@ -17,8 +17,7 @@ import {
 import { useReindexDiscover } from "@/hooks/dashboard/bot-detail/useReindexDiscover";
 import { getCreditSummary } from "@/lib/services/credit.service";
 import { getPagePreviewByBotId } from "@/lib/services/page.service";
-import { getDiscoverSeedUrl } from "@/lib/helpers/crawl-website-helpers";
-import { normalizeKnowledgeUrl } from "@/lib/helpers/url-helpers";
+import { getDiscoverSeedUrl, normalizeKnowledgeUrl } from "@/lib/helpers";
 import { CREDIT_PER_PAGE } from "@/config";
 import { EPageSourceType, EPageStatus, ESubscriptionPlan } from "@/types";
 import type { CrawlScopeType } from "@/types/scrape";

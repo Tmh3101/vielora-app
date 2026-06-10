@@ -188,7 +188,6 @@ export async function generateChatResponse(
 
     return text;
   } catch (error) {
-    console.error("Error generating chat response:", error);
     if (error instanceof Error) {
       if (error.message.includes("429") || error.message.includes("quota")) {
         throw new Error("Hệ thống đang quá tải, vui lòng thử lại sau giây lát.");
@@ -197,6 +196,8 @@ export async function generateChatResponse(
         throw new Error("Tin nhắn của bạn vi phạm tiêu chuẩn an toàn cộng đồng.");
       }
     }
+
+    console.error("Error generating chat response:", error);
 
     throw new Error("Đã có lỗi xảy ra khi kết nối với AI. Vui lòng thử lại.");
   }

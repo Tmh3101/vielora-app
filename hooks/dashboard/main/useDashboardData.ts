@@ -84,9 +84,10 @@ export function useDashboardData({
     if (!user) return;
 
     try {
-      const [botsData, subData] = await Promise.all([
+      const [botsData, subData, creditData] = await Promise.all([
         getBotsByUserId(supabase, user.id),
         getSubscriptionByUserId(supabase, user.id),
+        getCreditSummary(supabase, user.id),
       ]);
 
       setBots(botsData);
@@ -95,11 +96,10 @@ export function useDashboardData({
       const botIds = botsData.map((b) => b.id);
       const planId = subData?.plan_id;
 
-      const [indexedCounts, convCount, planData, creditData] = await Promise.all([
+      const [indexedCounts, convCount, planData] = await Promise.all([
         botIds.length > 0 ? getIndexedPageCountsByBotIds(supabase, botIds) : Promise.resolve({}),
         botIds.length > 0 ? getTotalConversationCount(supabase, botIds) : Promise.resolve(0),
         planId ? getPlanById(supabase, planId) : Promise.resolve(null),
-        planId ? getCreditSummary(supabase, user.id) : Promise.resolve(null),
       ]);
 
       setIndexedPagesByBot(indexedCounts);

@@ -7,22 +7,23 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { BOT_RATE_LIMIT_ERROR_CODES, type BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
 import { EUsageAction } from "@/types";
 
 export interface RateLimitParams {
   botId: string;
-  visitorId: string;
   clientIp: string;
-  limitPerVisitor: number;
-  limitPerIp: number;
+  limitPerDay?: number | null;
+  limitPerIp?: number | null;
 }
 
 export interface RateLimitResult {
   allowed: boolean;
   reason?: string;
-  remaining: number;
+  code?: BotRateLimitErrorCode;
+  remaining: number | null;
   resetAt: string;
-  visitorCount: number;
+  dailyCount: number;
   ipCount: number;
 }
 
@@ -45,80 +46,99 @@ function getTodayEnd(): string {
 }
 
 /**
- * Check rate limits for a visitor/IP combination.
- * Queries usage_logs directly using visitor_id and client_ip columns —
- * no joins through conversations/messages needed.
+ * Check bot-wide daily and per-IP daily rate limits.
  */
 export async function checkRateLimit(params: RateLimitParams): Promise<RateLimitResult> {
-  const { botId, visitorId, clientIp, limitPerVisitor, limitPerIp } = params;
+  const { botId, clientIp, limitPerDay = null, limitPerIp = null } = params;
 
   const todayStart = getTodayStart().toISOString();
   const resetAt = getTodayEnd();
+  const hasDailyLimit = limitPerDay != null;
+  const hasIpLimit = limitPerIp != null;
 
   try {
+    if (!hasDailyLimit && !hasIpLimit) {
+      return {
+        allowed: true,
+        remaining: null,
+        resetAt,
+        dailyCount: 0,
+        ipCount: 0,
+      };
+    }
+
     const supabase = createAdminClient();
 
-    // Count messages from this visitor today (via usage_logs.visitor_id)
-    const { count: visitorCountResult } = await supabase
-      .from("usage_logs")
-      .select("*", { count: "exact", head: true })
-      .eq("bot_id", botId)
-      .eq("visitor_id", visitorId)
-      .eq("action", EUsageAction.ChatMessage)
-      .gte("created_at", todayStart);
+    const dailyCountPromise = hasDailyLimit
+      ? supabase
+          .from("usage_logs")
+          .select("*", { count: "exact", head: true })
+          .eq("bot_id", botId)
+          .eq("action", EUsageAction.ChatMessage)
+          .gte("created_at", todayStart)
+      : Promise.resolve({ count: 0 });
 
-    const visitorCount = visitorCountResult || 0;
+    const ipCountPromise = hasIpLimit
+      ? supabase
+          .from("usage_logs")
+          .select("*", { count: "exact", head: true })
+          .eq("bot_id", botId)
+          .eq("client_ip", clientIp)
+          .eq("action", EUsageAction.ChatMessage)
+          .gte("created_at", todayStart)
+      : Promise.resolve({ count: 0 });
 
-    // Count messages from this IP today (DDoS protection via usage_logs.client_ip)
-    const { count: ipCountResult } = await supabase
-      .from("usage_logs")
-      .select("*", { count: "exact", head: true })
-      .eq("bot_id", botId)
-      .eq("client_ip", clientIp)
-      .eq("action", EUsageAction.ChatMessage)
-      .gte("created_at", todayStart);
+    const [{ count: dailyCountResult }, { count: ipCountResult }] = await Promise.all([
+      dailyCountPromise,
+      ipCountPromise,
+    ]);
 
+    const dailyCount = dailyCountResult || 0;
     const ipCount = ipCountResult || 0;
 
-    // Check visitor limit
-    if (visitorCount >= limitPerVisitor) {
+    if (hasDailyLimit && dailyCount >= limitPerDay) {
       return {
         allowed: false,
-        reason: "Bạn đã hết lượt chat miễn phí trong ngày. Vui lòng quay lại vào ngày mai.",
+        reason: "Chatbot đã đạt giới hạn tin nhắn trong ngày.",
+        code: BOT_RATE_LIMIT_ERROR_CODES.DailyExceeded,
         remaining: 0,
         resetAt,
-        visitorCount,
+        dailyCount,
         ipCount,
       };
     }
 
-    // Check IP limit (DDoS protection)
-    if (ipCount >= limitPerIp) {
+    if (hasIpLimit && ipCount >= limitPerIp) {
       return {
         allowed: false,
-        reason: "Quá nhiều yêu cầu từ địa chỉ IP này. Vui lòng thử lại sau.",
+        reason: "Bạn đã đạt giới hạn tin nhắn trong ngày.",
+        code: BOT_RATE_LIMIT_ERROR_CODES.IpExceeded,
         remaining: 0,
         resetAt,
-        visitorCount,
+        dailyCount,
         ipCount,
       };
     }
+
+    const remainingCandidates = [
+      hasDailyLimit ? limitPerDay - dailyCount : null,
+      hasIpLimit ? limitPerIp - ipCount : null,
+    ].filter((value): value is number => value != null);
 
     return {
       allowed: true,
-      remaining: Math.min(limitPerVisitor - visitorCount, limitPerIp - ipCount),
+      remaining: remainingCandidates.length > 0 ? Math.min(...remainingCandidates) : null,
       resetAt,
-      visitorCount,
+      dailyCount,
       ipCount,
     };
   } catch (error) {
     console.error("[RateLimiter] Error checking rate limit:", error);
-    // On error, allow the request but log the issue
     return {
       allowed: true,
-      remaining: limitPerVisitor,
+      remaining: hasDailyLimit ? limitPerDay : hasIpLimit ? limitPerIp : null,
       resetAt,
-      visitorCount: 0,
+      dailyCount: 0,
       ipCount: 0,
     };
   }

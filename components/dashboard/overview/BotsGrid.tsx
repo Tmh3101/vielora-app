@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,7 +15,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { BarChart3, Bot, Globe, Plus, Trash2 } from "lucide-react";
+import { BarChart3, Bot, Check, Copy, Globe, Plus, Trash2, ShieldAlert } from "lucide-react";
+import { toast } from "sonner";
 import type { Tables } from "@/lib/supabase/types";
 import { EBotStatus } from "@/types";
 
@@ -39,12 +41,28 @@ export function BotsGrid({
   onOpenBot,
   onDeleteBot,
 }: BotsGridProps) {
+  const [copiedBotId, setCopiedBotId] = useState<string | null>(null);
+
+  const handleCopyBotId = async (botId: string) => {
+    try {
+      await navigator.clipboard.writeText(botId);
+      setCopiedBotId(botId);
+      toast.success("Đã copy Bot ID");
+      window.setTimeout(() => {
+        setCopiedBotId((current) => (current === botId ? null : current));
+      }, 1600);
+    } catch (error) {
+      console.error("Copy bot id failed:", error);
+      toast.error("Không thể copy Bot ID. Vui lòng thử lại.");
+    }
+  };
+
   return (
     <section>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="heading-premium text-xl font-bold">Chatbots của bạn</h2>
-          <p className="text-sm text-muted-foreground">Quản lý và theo dõi các chatbot</p>
+          <p className="text-sm text-muted-foreground">Quản lý và theo dõi chatbot</p>
         </div>
         <Button onClick={onCreateNew} className="bg-gradient-primary btn-glow shadow-glow-sm">
           <Plus className="mr-2 h-4 w-4" />
@@ -86,20 +104,28 @@ export function BotsGrid({
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <CardTitle className="text-lg">{bot.name}</CardTitle>
+                      <CardTitle className="text-lg leading-tight">{bot.name}</CardTitle>
                       <CardDescription className="flex items-center gap-1">
                         <Globe className="h-3 w-3" />
                         {bot.domain}
                       </CardDescription>
                     </div>
                   </div>
-                  <div className="glass flex items-center gap-2 rounded-full px-2.5 py-1">
-                    <span
-                      className={`h-2 w-2 rounded-full ${getStatusColor(bot.status, bot.is_stopped)} ${bot.status === EBotStatus.Ready && !bot.is_stopped ? "animate-pulse" : ""}`}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {getStatusText(bot.status, bot.is_stopped)}
-                    </span>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div className="glass flex items-center gap-2 rounded-full px-2.5 py-1">
+                      <span
+                        className={`h-2 w-2 rounded-full ${getStatusColor(bot.status, bot.is_stopped)} ${bot.status === EBotStatus.Ready && !bot.is_stopped ? "animate-pulse" : ""}`}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {getStatusText(bot.status, bot.is_stopped)}
+                      </span>
+                    </div>
+                    {bot.is_banned && (
+                      <div className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive ring-1 ring-inset ring-destructive/20">
+                        <ShieldAlert className="h-3 w-3" />
+                        Bị chặn bởi Admin
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -129,6 +155,19 @@ export function BotsGrid({
                   >
                     <BarChart3 className="mr-1 h-4 w-4" />
                     Chi tiết
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                    onClick={() => void handleCopyBotId(bot.id)}
+                    aria-label={`Copy bot ID ${bot.name}`}
+                  >
+                    {copiedBotId === bot.id ? (
+                      <Check className="h-4 w-4 text-primary" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>

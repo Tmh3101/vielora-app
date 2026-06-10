@@ -12,6 +12,54 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.rls_auto_enable()
+ RETURNS event_trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE
+  cmd record;
+BEGIN
+  FOR cmd IN
+    SELECT *
+    FROM pg_event_trigger_ddl_commands()
+    WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+      AND object_type IN ('table','partitioned table')
+  LOOP
+     IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') AND cmd.schema_name NOT IN ('pg_catalog','information_schema') AND cmd.schema_name NOT LIKE 'pg_toast%' AND cmd.schema_name NOT LIKE 'pg_temp%' THEN
+      BEGIN
+        EXECUTE format('alter table if exists %s enable row level security', cmd.object_identity);
+        RAISE LOG 'rls_auto_enable: enabled RLS on %', cmd.object_identity;
+      EXCEPTION
+        WHEN OTHERS THEN
+          RAISE LOG 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;
+      END;
+     ELSE
+        RAISE LOG 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;
+     END IF;
+  END LOOP;
+END;
+$function$
+;
+
+DROP EVENT TRIGGER IF EXISTS ensure_rls;
+CREATE EVENT TRIGGER ensure_rls
+  ON ddl_command_end
+  WHEN TAG IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+  EXECUTE FUNCTION public.rls_auto_enable();
+
 CREATE OR REPLACE FUNCTION public.handle_new_user_billing()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -112,7 +160,7 @@ CREATE TABLE public.plans (
 	code public.pricing_plan NOT NULL,
 	name text NOT NULL,
 	bots_limit int4 DEFAULT 1 NOT NULL,
-	monthly_credits int4 DEFAULT 100 NOT NULL,
+	monthly_credits int4 DEFAULT 1000 NOT NULL,
 	description text NULL,
 	pricing jsonb DEFAULT '{}'::jsonb NOT NULL,
 	is_active bool DEFAULT true NOT NULL,
@@ -138,11 +186,11 @@ VALUES
   ),
   (
     'standard', 'Standard', 2, 1000, 'Balanced plan for growing teams',
-    '{"VND": {"monthly": 149000, "yearly": 1490000}, "USD": {"monthly": 9, "yearly": 90}}'::jsonb,
+    '{"VND": {"monthly": 249000, "yearly": 2490000}, "USD": {"monthly": 9, "yearly": 90}}'::jsonb,
     true
   ),
   (
-    'pro', 'Pro', 5, 10000, 'Advanced plan for high-usage teams',
+    'pro', 'Pro', 5, 5000, 'Advanced plan for high-usage teams',
     '{"VND": {"monthly": 499000, "yearly": 4990000}, "USD": {"monthly": 29, "yearly": 290}}'::jsonb,
     true
   )
@@ -180,8 +228,11 @@ CREATE TABLE public.bots (
 	is_stopped boolean NOT NULL DEFAULT false, -- Whether the bot is manually stopped by the owner
 	slug text NULL, -- URL-friendly unique identifier for standalone chat page
 	is_public boolean NOT NULL DEFAULT false, -- Whether the bot is accessible via public standalone link
+	is_banned boolean NOT NULL DEFAULT false,
+	allowed_domains text[] NOT NULL DEFAULT '{}'::text[], -- Domains allowed to embed this bot widget. Maximum 5 normalized hostnames.
 	CONSTRAINT bots_pkey PRIMARY KEY (id),
-	CONSTRAINT bots_slug_key UNIQUE (slug)
+	CONSTRAINT bots_slug_key UNIQUE (slug),
+	CONSTRAINT bots_allowed_domains_max_5 CHECK (cardinality(allowed_domains) <= 5)
 );
 CREATE INDEX idx_bots_rate_limits ON public.bots USING btree (id, rate_limit_per_day, rate_limit_per_ip);
 CREATE INDEX idx_bots_slug ON public.bots USING btree (slug) WHERE slug IS NOT NULL;
@@ -233,10 +284,8 @@ CREATE TABLE public.documents (
 	CONSTRAINT documents_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.bots(id) ON DELETE CASCADE
 );
 
--- Chỉ giữ lại 3 Index tối ưu nhất (dọn dẹp các index cũ bị lặp)
 CREATE INDEX documents_bot_id_idx ON public.documents USING btree (bot_id);
-CREATE INDEX documents_fts_idx ON public.documents USING gin (fts);
-CREATE INDEX documents_embedding_idx ON public.documents USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX documents_embedding_idx ON public.documents USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
 -- Table Triggers
 create trigger on_documents_updated before
@@ -258,6 +307,8 @@ CREATE TABLE public.messages (
 	content text NOT NULL,
 	no_answer bool DEFAULT false NULL,
 	created_at timestamptz DEFAULT now() NOT NULL,
+	prompt_tokens int4 DEFAULT 0 NOT NULL,
+	completion_tokens int4 DEFAULT 0 NOT NULL,
 	CONSTRAINT messages_pkey PRIMARY KEY (id),
 	CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE
 );
@@ -292,7 +343,7 @@ CREATE TABLE public.pages (
 );
 
 CREATE INDEX idx_pages_bot_id_url ON public.pages (bot_id, url);
-CREATE INDEX IF NOT EXISTS idx_pages_bot_id_url_unique ON public.pages (bot_id, url);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pages_bot_id_url_unique ON public.pages (bot_id, url);
 CREATE INDEX IF NOT EXISTS idx_pages_bot_status ON public.pages (bot_id, status);
 CREATE INDEX IF NOT EXISTS idx_pages_bot_error_type ON public.pages (bot_id, error_type);
 CREATE INDEX IF NOT EXISTS idx_pages_bot_crawled_at_desc ON public.pages (bot_id, crawled_at DESC);
@@ -450,7 +501,7 @@ CREATE TABLE public.credit_packages (
 	id uuid DEFAULT gen_random_uuid() NOT NULL,
 	name text NOT NULL,
 	credits_amount int4 NOT NULL,
-	price int4 NOT NULL,
+	price jsonb DEFAULT '{"USD": 0, "VND": 0}'::jsonb NULL,
 	is_active bool DEFAULT true NOT NULL,
 	created_at timestamptz DEFAULT now() NOT NULL,
 	updated_at timestamptz DEFAULT now() NOT NULL,
@@ -461,6 +512,133 @@ create trigger update_credit_packages_updated_at before
 update
     on
     public.credit_packages for each row execute function update_updated_at_column();
+
+-- public.admin_users definition
+
+CREATE TABLE public.admin_users (
+	id uuid NOT NULL,
+	email text NOT NULL,
+	otp_code text NULL,
+	otp_expires_at timestamptz NULL,
+	role text DEFAULT 'admin'::text NOT NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT admin_users_pkey PRIMARY KEY (id),
+	CONSTRAINT admin_users_email_key UNIQUE (email),
+	CONSTRAINT admin_users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
+);
+
+-- public.support_tickets definition
+
+CREATE TABLE public.support_tickets (
+	id uuid DEFAULT gen_random_uuid() NOT NULL,
+	user_id uuid NULL,
+	subject text NOT NULL,
+	message text NOT NULL,
+	status text DEFAULT 'open'::text NOT NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	admin_response text NULL,
+	resolved_at timestamptz NULL,
+	CONSTRAINT support_tickets_pkey PRIMARY KEY (id),
+	CONSTRAINT support_tickets_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL
+);
+
+-- public.discounts definition
+
+CREATE TABLE public.discounts (
+	code text NOT NULL,
+	discount_value numeric NOT NULL,
+	type text NOT NULL,
+	is_active boolean DEFAULT true NOT NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT discounts_pkey PRIMARY KEY (code),
+	CONSTRAINT discounts_type_check CHECK (type = ANY (ARRAY['percent'::text, 'fixed'::text]))
+);
+
+-- public.banned_users definition
+
+CREATE TABLE public.banned_users (
+	user_id uuid NOT NULL,
+	reason text NULL,
+	banned_at timestamptz DEFAULT now() NOT NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT banned_users_pkey PRIMARY KEY (user_id),
+	CONSTRAINT banned_users_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+);
+
+-- public.categories definition
+
+CREATE TABLE public.categories (
+	id uuid DEFAULT gen_random_uuid() NOT NULL,
+	name text NOT NULL,
+	slug text NOT NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT categories_pkey PRIMARY KEY (id),
+	CONSTRAINT categories_name_key UNIQUE (name),
+	CONSTRAINT categories_slug_key UNIQUE (slug)
+);
+
+-- public.posts definition
+
+CREATE TABLE public.posts (
+	id uuid DEFAULT gen_random_uuid() NOT NULL,
+	title text NOT NULL,
+	slug text NOT NULL,
+	summary text NOT NULL,
+	thumbnail_url text NULL,
+	content text NOT NULL,
+	status text DEFAULT 'draft'::text NOT NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	updated_at timestamptz DEFAULT now() NOT NULL,
+	published_at timestamptz NULL,
+	CONSTRAINT posts_pkey PRIMARY KEY (id),
+	CONSTRAINT posts_slug_key UNIQUE (slug),
+	CONSTRAINT posts_status_check CHECK (status = ANY (ARRAY['draft'::text, 'published'::text]))
+);
+
+create trigger update_posts_updated_at before
+update
+    on
+    public.posts for each row execute function update_updated_at_column();
+
+-- public.post_categories definition
+
+CREATE TABLE public.post_categories (
+	post_id uuid NOT NULL,
+	category_id uuid NOT NULL,
+	CONSTRAINT post_categories_pkey PRIMARY KEY (post_id, category_id),
+	CONSTRAINT post_categories_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.posts(id) ON DELETE CASCADE,
+	CONSTRAINT post_categories_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id) ON DELETE CASCADE
+);
+
+-- public.shopify_sessions_migrations definition
+
+CREATE TABLE public.shopify_sessions_migrations (
+	migration_name varchar NOT NULL,
+	CONSTRAINT shopify_sessions_migrations_pkey PRIMARY KEY (migration_name)
+);
+
+-- public.shopify_sessions definition
+
+CREATE TABLE public.shopify_sessions (
+	id varchar NOT NULL,
+	shop varchar NOT NULL,
+	state varchar NOT NULL,
+	"isOnline" bool NOT NULL,
+	scope varchar NULL,
+	expires int4 NULL,
+	"accessToken" varchar NULL,
+	"refreshToken" varchar NULL,
+	"refreshTokenExpires" int8 NULL,
+	"userId" int8 NULL,
+	"firstName" varchar NULL,
+	"lastName" varchar NULL,
+	email varchar NULL,
+	"accountOwner" bool NULL,
+	locale varchar NULL,
+	collaborator bool NULL,
+	"emailVerified" bool NULL,
+	CONSTRAINT shopify_sessions_pkey PRIMARY KEY (id)
+);
 
 -- public.bots foreign keys
 
@@ -497,6 +675,15 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.credit_packages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.discounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.banned_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.post_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shopify_sessions_migrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shopify_sessions ENABLE ROW LEVEL SECURITY;
 
 -- 1. PLANS (Public Read-only)
 CREATE POLICY "plans_select_all" ON public.plans FOR SELECT USING (true);
@@ -544,4 +731,31 @@ CREATE POLICY "messages_all_own" ON public.messages FOR ALL USING (
 );
 
 -- 6. CREDIT PACKAGES (Public Read-only for active packages)
-CREATE POLICY "credit_packages_select_active" ON public.credit_packages FOR SELECT USING (is_active = true);
+CREATE POLICY "Cho phép đọc các gói active" ON public.credit_packages FOR SELECT USING (is_active = true);
+
+-- 7. ADMIN / SUPPORT TABLES
+CREATE POLICY "Allow service role all operations" ON public.admin_users
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow service role all operations" ON public.support_tickets
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+CREATE POLICY "support_tickets_select_own" ON public.support_tickets
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "support_tickets_insert_own" ON public.support_tickets
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Allow service role all operations" ON public.discounts
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow service role all operations" ON public.banned_users
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- 8. BLOG TABLES
+CREATE POLICY "categories_select_all" ON public.categories FOR SELECT USING (true);
+
+CREATE POLICY "posts_select_published" ON public.posts
+  FOR SELECT USING (status = 'published'::text);
+
+CREATE POLICY "post_categories_select_all" ON public.post_categories FOR SELECT USING (true);

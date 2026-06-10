@@ -1,0 +1,20 @@
+client_id = "11b02b9700213e42e715fc8336be6589"
+name = "Vielora - Chatbot for Website"
+application_url = "https://vielora.vn/shopify/dashboard"
+embedded = true
+
+[access_scopes]
+scopes = "read_products,read_content"
+
+[auth]
+redirect_urls = [
+  "https://vielora.vn/api/shopify/callback"
+]
+
+[webhooks]
+api_version = "2026-04"
+
+[webhooks.privacy_compliance]
+customer_data_request_url = "https://vielora.vn/api/shopify/webhooks/customers-data"
+customer_deletion_url = "https://vielora.vn/api/shopify/webhooks/customers-redact"
+shop_deletion_url = "https://vielora.vn/api/shopify/webhooks/shop-redact"

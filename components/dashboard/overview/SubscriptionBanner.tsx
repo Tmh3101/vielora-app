@@ -17,6 +17,7 @@ export interface SubscriptionBannerProps {
   usagePercent: number;
   paygCredits?: number;
   onUpgrade: () => void;
+  onBuyCredits?: () => void;
 }
 
 export function SubscriptionBanner({
@@ -27,6 +28,7 @@ export function SubscriptionBanner({
   usagePercent,
   paygCredits = 0,
   onUpgrade,
+  onBuyCredits,
 }: SubscriptionBannerProps) {
   const router = useRouter();
 
@@ -153,12 +155,12 @@ export function SubscriptionBanner({
 
             {usagePercent > 80 && (
               <Button
-                onClick={() => router.push("/dashboard/upgrade")}
+                onClick={onBuyCredits ?? (() => router.push("/dashboard/upgrade"))}
                 variant="outline"
                 className="border-primary/50 text-primary hover:bg-primary/10"
               >
                 <Zap className="mr-2 h-4 w-4" />
-                Nạp Credit lẻ
+                Nạp Credits
               </Button>
             )}
           </div>

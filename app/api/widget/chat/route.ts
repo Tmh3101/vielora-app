@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { generateChatResponse } from "@/lib/rag/generative";
 import { getSystemPrompt } from "@/lib/ai/prompt";
-import { verifyWidgetRequest, apiRateLimitMiddleware } from "@/lib/security";
+import {
+  verifyWidgetRequest,
+  apiRateLimitMiddleware,
+  checkRateLimit,
+  getClientIpFromRequest,
+  type RateLimitResult,
+} from "@/lib/security";
+import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
 import {
   ChatRequest,
   ChatResponse,
@@ -28,9 +35,30 @@ import {
 } from "@/lib/services/conversations.service";
 import { getBotById } from "@/lib/services/bot.service";
 import { insertUsageLog } from "@/lib/services/wallet.service";
+import { isMissingBotError } from "@/lib/helpers";
+import {
+  CHATBOT_UNAVAILABLE_MESSAGE,
+  INSUFFICIENT_CREDITS_ERROR_CODE,
+  INSUFFICIENT_CREDITS_MESSAGE,
+} from "@/lib/constants/chat";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
+}
+
+function createBusinessRateLimitResponse(rateLimitResult: RateLimitResult) {
+  return NextResponse.json(
+    {
+      success: false,
+      message: rateLimitResult.reason || "Rate limit exceeded",
+      code: rateLimitResult.code,
+      rateLimitInfo: {
+        remaining: rateLimitResult.remaining,
+        resetAt: rateLimitResult.resetAt,
+      },
+    },
+    { status: 429, headers: corsHeaders }
+  );
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>> {
@@ -42,6 +70,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       {
         success: false,
         message: `Rate limit exceeded. Try again in ${rateLimitResponse.retryAfter} seconds.`,
+        code: BOT_RATE_LIMIT_ERROR_CODES.ApiExceeded,
       },
       { status: 429, headers: corsHeaders }
     );
@@ -78,12 +107,35 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
     }
 
     // Fetch bot data once
-    const botData = await getBotById(supabase, botId);
+    const botData = await getBotById(supabase, botId).catch((error) => {
+      if (isMissingBotError(error)) return null;
+      throw error;
+    });
 
     if (!botData) {
       return NextResponse.json(
-        { success: false, message: "Bot not found" },
+        { success: false, message: CHATBOT_UNAVAILABLE_MESSAGE },
         { status: 404, headers: corsHeaders }
+      );
+    }
+
+    if (botData.is_banned) {
+      return NextResponse.json(
+        { success: false, message: CHATBOT_UNAVAILABLE_MESSAGE },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    const { data: bannedUser } = await supabase
+      .from("banned_users")
+      .select("user_id")
+      .eq("user_id", botData.user_id)
+      .maybeSingle();
+
+    if (bannedUser) {
+      return NextResponse.json(
+        { success: false, message: CHATBOT_UNAVAILABLE_MESSAGE },
+        { status: 403, headers: corsHeaders }
       );
     }
 
@@ -110,12 +162,22 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       }
 
       // Extract client IP for usage logging
-      const forwardedFor = req.headers.get("x-forwarded-for");
-      clientIp = forwardedFor
-        ? forwardedFor.split(",")[0].trim()
-        : req.headers.get("x-real-ip") || "unknown";
+      clientIp = getClientIpFromRequest(req);
 
       bot = botData;
+
+      if (bot.rate_limit_per_day != null || bot.rate_limit_per_ip != null) {
+        const rateLimitResult = await checkRateLimit({
+          botId: bot.id,
+          clientIp,
+          limitPerDay: bot.rate_limit_per_day,
+          limitPerIp: bot.rate_limit_per_ip,
+        });
+
+        if (!rateLimitResult.allowed) {
+          return createBusinessRateLimitResponse(rateLimitResult);
+        }
+      }
     } else {
       // Widget request: use security middleware
       const securityResult = await verifyWidgetRequest(req, {
@@ -124,10 +186,17 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       });
 
       if (!securityResult.success) {
+        if (securityResult.statusCode === 429 && securityResult.rateLimitResult) {
+          return createBusinessRateLimitResponse(securityResult.rateLimitResult);
+        }
+
         return NextResponse.json(
           {
             success: false,
-            message: securityResult.error || "Unauthorized",
+            message:
+              securityResult.statusCode === 404
+                ? CHATBOT_UNAVAILABLE_MESSAGE
+                : securityResult.error || "Unauthorized",
           },
           { status: securityResult.statusCode || 401, headers: corsHeaders }
         );
@@ -167,7 +236,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       return NextResponse.json(
         {
           success: false,
-          message: deductionResult.message || "Insufficient credits to send chat messages.",
+          message: INSUFFICIENT_CREDITS_MESSAGE,
+          code: INSUFFICIENT_CREDITS_ERROR_CODE,
+          error: deductionResult.message || "Insufficient credits to send chat messages.",
         },
         { status: 402, headers: corsHeaders }
       );
@@ -216,8 +287,20 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
         systemPrompt,
         message,
         conversationHistory
-      ).catch((error) => {
+      ).catch(async (error) => {
         console.error("Gemini API error:", error);
+        // Refund credits if message processing fails
+        if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
+          await refundCredits(supabase, {
+            userId: bot.user_id,
+            deductedFromSubscription,
+            deductedFromPayg,
+            transactionType: ETransactionType.ChatMessageRefund,
+            transactionDescription: `Refunded ${CREDIT_PER_MESSAGE} credit due to chat processing failure on bot ${botId}`,
+          }).catch((refundError) => {
+            console.error("Failed to refund credits after chat processing error:", refundError);
+          });
+        }
         return ERROR_RESPONSE;
       });
 

@@ -57,3 +57,18 @@ export function createAdminClient() {
     },
   });
 }
+
+export function createAuthClient() {
+  const { url, anonKey } = getEnv();
+
+  if (!url || !anonKey) {
+    throw new Error("Supabase auth environment variables are not configured");
+  }
+
+  return createClient(url, anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}

@@ -13,7 +13,7 @@ import {
   htmlToMarkdown,
   classifyError,
   getExtractHiddenItemsScript,
-} from "@/lib/helpers/crawl-website-helpers";
+} from "@/lib/helpers";
 import { EPageErrorType } from "@/types/enums";
 import { SCRAPE_DEFAULT_TIMEOUT, BLOCKED_RESOURCE_TYPES, BLOCKED_URL_PATTERNS } from "@/config";
 import { BrowserManager } from "@/lib/scraper/core/browser-manager";

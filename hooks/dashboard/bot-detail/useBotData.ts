@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { getCreditSummary } from "@/lib/services/credit.service";
@@ -39,6 +39,44 @@ interface UseBotDataParams {
   toast: ToastFn;
   onAfterFetch?: (botId: string) => Promise<void>;
   onBotLoaded?: (bot: BotType) => void;
+  initialBot?: BotType;
+  initialUserId?: string;
+  initialPagesCount?: number;
+}
+
+interface FetchDataOptions {
+  refreshBot?: boolean;
+}
+
+interface LoadBotDetailDataParams {
+  botId: string;
+  userId?: string;
+  supabase: SupabaseClient;
+  initialBot?: BotType;
+  refreshBot?: boolean;
+}
+
+export async function loadBotDetailData({
+  botId,
+  userId,
+  supabase,
+  initialBot,
+  refreshBot = true,
+}: LoadBotDetailDataParams) {
+  const shouldFetchBot = refreshBot || !initialBot;
+
+  const [botData, pagesData, summary, planInfo] = await Promise.all([
+    shouldFetchBot ? getBotById(supabase, botId) : Promise.resolve(initialBot),
+    getPagesByBotId(supabase, botId, [
+      EPageStatus.Completed,
+      EPageStatus.PendingIndex,
+      EPageStatus.Processing,
+    ]),
+    userId ? getCreditSummary(supabase, userId) : Promise.resolve(null),
+    userId ? getUserSubscriptionPlan(supabase, userId) : Promise.resolve(null),
+  ]);
+
+  return { botData, pagesData, summary, planInfo };
 }
 
 export interface UseBotDataResult {
@@ -49,6 +87,7 @@ export interface UseBotDataResult {
   planCode: ESubscriptionPlan;
   botsLimit: number;
   botLoadVersion: number;
+  pagesCount: number;
   fetchData: () => Promise<void>;
   setBot: Dispatch<SetStateAction<BotType | null>>;
   setTotalCredits: Dispatch<SetStateAction<number>>;
@@ -63,70 +102,81 @@ export function useBotData({
   toast,
   onAfterFetch,
   onBotLoaded,
+  initialBot,
+  initialUserId,
+  initialPagesCount = 0,
 }: UseBotDataParams): UseBotDataResult {
-  const [bot, setBot] = useState<BotType | null>(null);
+  const hasFetchedInitialDataRef = useRef(false);
+  const [bot, setBot] = useState<BotType | null>(initialBot ?? null);
   const [pages, setPages] = useState<PageType[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [pagesCount, setPagesCount] = useState(initialPagesCount);
+  const [isLoading, setIsLoading] = useState(!initialBot);
   const [totalCredits, setTotalCredits] = useState(0);
   const [planCode, setPlanCode] = useState<ESubscriptionPlan>(ESubscriptionPlan.Free);
   const [botsLimit, setBotsLimit] = useState<number>(1);
-  const [botLoadVersion, setBotLoadVersion] = useState(0);
+  const [botLoadVersion, setBotLoadVersion] = useState(initialBot ? 1 : 0);
 
-  const fetchData = useCallback(async () => {
-    if (!botId) return;
+  const fetchData = useCallback(
+    async (options: FetchDataOptions = {}) => {
+      if (!botId) return;
 
-    try {
-      const botData = await getBotById(supabase, botId);
+      try {
+        const userId = user?.id ?? initialUserId;
+        const { botData, pagesData, summary, planInfo } = await loadBotDetailData({
+          botId,
+          userId,
+          supabase,
+          initialBot,
+          refreshBot: options.refreshBot ?? true,
+        });
 
-      if (!botData) throw new Error("Bot not found");
-      setBot(botData);
-      setBotLoadVersion((prev) => prev + 1);
-      onBotLoaded?.(botData);
+        if (!botData) throw new Error("Bot not found");
+        setBot(botData);
+        setBotLoadVersion((prev) => prev + 1);
+        onBotLoaded?.(botData);
 
-      const pagesData = await getPagesByBotId(supabase, botId, [
-        EPageStatus.Completed,
-        EPageStatus.PendingIndex,
-        EPageStatus.Processing,
-      ]);
-      setPages(pagesData);
+        setPages(pagesData);
+        setPagesCount(pagesData.length);
 
-      if (user?.id) {
-        const summary = await getCreditSummary(supabase, user.id);
-        setTotalCredits(summary?.totalRemainingCredits ?? 0);
+        if (userId) {
+          setTotalCredits(summary?.totalRemainingCredits ?? 0);
 
-        const planInfo = await getUserSubscriptionPlan(supabase, user.id);
-        if (planInfo) {
-          setPlanCode(planInfo.planCode);
-          setBotsLimit(planInfo.botsLimit);
+          if (planInfo) {
+            setPlanCode(planInfo.planCode);
+            setBotsLimit(planInfo.botsLimit);
+          }
         }
-      }
 
-      if (onAfterFetch) {
-        await onAfterFetch(botId);
+        if (onAfterFetch) {
+          await onAfterFetch(botId);
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải thông tin bot.",
+          variant: "destructive",
+        });
+        router.push("/dashboard");
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      toast({
-        title: "Lỗi",
-        description: "Không thể tải thông tin bot.",
-        variant: "destructive",
-      });
-      router.push("/dashboard");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [botId, onAfterFetch, onBotLoaded, router, supabase, toast, user?.id]);
+    },
+    [botId, initialBot, initialUserId, onAfterFetch, onBotLoaded, router, supabase, toast, user?.id]
+  );
 
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (!authLoading && !user && !initialUserId) {
       router.push("/auth");
       return;
     }
 
-    if (user && botId) {
-      void fetchData();
+    if (botId && (initialBot || (!authLoading && user))) {
+      if (hasFetchedInitialDataRef.current) return;
+      hasFetchedInitialDataRef.current = true;
+      void fetchData({ refreshBot: !initialBot });
     }
-  }, [authLoading, botId, fetchData, router, user]);
+  }, [authLoading, botId, fetchData, initialBot, initialUserId, router, user]);
 
   return {
     bot,
@@ -136,6 +186,7 @@ export function useBotData({
     planCode,
     botsLimit,
     botLoadVersion,
+    pagesCount,
     fetchData,
     setBot,
     setTotalCredits,

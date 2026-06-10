@@ -90,6 +90,12 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
                 >
                   Về chúng tôi
                 </Link>
+                <Link
+                  href="/posts"
+                  className="link-underline py-1 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Blog
+                </Link>
               </nav>
             </>
           )}
@@ -168,6 +174,13 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Về chúng tôi
+                </Link>
+                <Link
+                  href="/posts"
+                  className="rounded-lg px-4 py-3 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Blog
                 </Link>
               </>
             )}

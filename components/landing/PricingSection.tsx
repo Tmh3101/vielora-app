@@ -103,9 +103,13 @@ const PricingSection = () => {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="mb-12 flex justify-center"
+          className="mb-2 flex justify-center"
         >
-          <PricingToggle billingCycle={billingCycle} setBillingCycle={setBillingCycle} />
+          <PricingToggle
+            billingCycle={billingCycle}
+            setBillingCycle={setBillingCycle}
+            variant="landing"
+          />
         </motion.div>
 
         {/* Plans grid */}

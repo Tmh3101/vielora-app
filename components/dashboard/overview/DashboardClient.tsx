@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Home, CreditCard, Settings } from "lucide-react";
+import { CreditCard, HelpCircle, Home } from "lucide-react";
 import { toast } from "sonner";
 import { LogoLoader } from "@/components/ui/logo-loader";
 import { ESubscriptionPlan } from "@/types";
@@ -21,7 +21,7 @@ import { DashboardMobileHeader } from "@/components/dashboard/shared/DashboardMo
 import { SubscriptionBanner } from "@/components/dashboard/overview/SubscriptionBanner";
 import { StatsGrid } from "@/components/dashboard/overview/StatsGrid";
 import { BotsGrid } from "@/components/dashboard/overview/BotsGrid";
-import { getStatusColor, getStatusText } from "@/lib/helpers/bot-helpers";
+import { getStatusColor, getStatusText } from "@/lib/helpers";
 
 const BotLimitDialog = dynamic(
   () => import("@/components/dashboard/shared/BotLimitDialog").then((m) => m.BotLimitDialog),
@@ -119,6 +119,10 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
   const creditsTotalThisMonth = creditSummary?.totalCreditsThisMonth ?? 0;
   const usagePercent = creditSummary?.usagePercent ?? 0;
   const currentPlan = (plan?.code as ESubscriptionPlan | undefined) || ESubscriptionPlan.Free;
+  const totalIndexedDocuments = Object.values(indexedPagesByBot).reduce(
+    (sum, count) => sum + count,
+    0
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -138,7 +142,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
       />
 
       <main className="lg:pl-64">
-        <div className="container mx-auto space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+        <div className="container mx-auto space-y-8 px-4 pb-24 pt-8 sm:px-6 lg:px-8">
           {subscription && (
             <SubscriptionBanner
               subscription={subscription}
@@ -154,6 +158,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
           <StatsGrid
             messagesThisMonth={messagesThisMonth}
             totalConversations={totalConversations}
+            totalIndexedDocuments={totalIndexedDocuments}
             botCount={bots.length}
             botsLimit={botsLimit}
             hasSubscription={Boolean(subscription)}
@@ -172,7 +177,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
       </main>
 
       <div className="fixed bottom-6 left-6 right-6 z-50 lg:hidden">
-        <nav className="flex items-center justify-around rounded-2xl border border-white/10 bg-background/80 p-3 shadow-lg backdrop-blur-xl">
+        <nav className="flex items-center justify-around rounded-2xl border border-white/10 bg-background/80 px-3 py-2 shadow-lg backdrop-blur-xl">
           <Link
             href="/dashboard"
             className="flex flex-col items-center gap-1 rounded-xl p-2 text-primary"
@@ -182,14 +187,16 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
           <Link
             href="/dashboard/upgrade"
             className="flex flex-col items-center gap-1 rounded-xl p-2 text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Quản lý thanh toán"
           >
             <CreditCard className="h-5 w-5" />
           </Link>
           <Link
-            href="/dashboard/settings"
+            href="/dashboard/support"
             className="flex flex-col items-center gap-1 rounded-xl p-2 text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Hỗ trợ"
           >
-            <Settings className="h-5 w-5" />
+            <HelpCircle className="h-5 w-5" />
           </Link>
         </nav>
       </div>

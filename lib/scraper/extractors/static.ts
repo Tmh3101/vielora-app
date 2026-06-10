@@ -9,11 +9,11 @@ import type { CrawlJob, CrawlResult } from "@/types/scrape";
 import {
   transformRelativeUrls,
   extractMetadata,
-  extractLinks,
   extractCleanHtml,
   htmlToMarkdown,
+  extractLinks,
   classifyError,
-} from "@/lib/helpers/crawl-website-helpers";
+} from "@/lib/helpers";
 import { SCRAPE_DEFAULT_TIMEOUT, DEFAULT_USER_AGENT } from "@/config";
 /**
  * Main extraction function

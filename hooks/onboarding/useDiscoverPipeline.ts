@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { getDiscoveredPagesByBotId, type DiscoveredPage } from "@/lib/services/page.service";
 import { startDiscover } from "@/lib/services/bot.service";
-import { EBotStatus, JobTrackerMode } from "@/types";
+import { EBotStatus, EPageStatus, JobTrackerMode } from "@/types";
 import { ONBOARDING_DISCOVERED_PAGES_KEY } from "@/lib/constants/react-query-key";
 import { buildCurationRows, type CurationRow } from "@/components/onboarding/utils";
 import { useJobTracker } from "@/hooks/onboarding/useJobTracker";
@@ -21,6 +21,7 @@ export interface UseDiscoverPipelineReturn {
   retryDiscover: () => Promise<void>;
   currentAction: string;
   crawledCount: number;
+  progress: number;
 }
 
 export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
@@ -136,6 +137,28 @@ export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
   // Job Tracker in Discover Worker
   const jobTracker = useJobTracker({ mode: JobTrackerMode.Job, jobId: activeJobId });
 
+  const discoveredCountQuery = useQuery({
+    queryKey: [ONBOARDING_DISCOVERED_PAGES_KEY, "count", botId],
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from("pages")
+        .select("id", { count: "exact", head: true })
+        .eq("bot_id", botId)
+        .in("status", [EPageStatus.Pending]);
+
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+    enabled:
+      !!botId &&
+      (botStatus === EBotStatus.Pending ||
+        botStatus === EBotStatus.Discovering ||
+        botStatus === EBotStatus.Discovered),
+    refetchInterval:
+      botStatus === EBotStatus.Pending || botStatus === EBotStatus.Discovering ? 4000 : false,
+    retry: 1,
+  });
+
   const discoveredPagesQuery = useQuery({
     queryKey: [ONBOARDING_DISCOVERED_PAGES_KEY, botId],
     queryFn: (): Promise<DiscoveredPage[]> => getDiscoveredPagesByBotId(supabase, botId),
@@ -187,6 +210,7 @@ export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
     isLoadingPages: discoveredPagesQuery.isLoading,
     retryDiscover,
     currentAction: jobTracker.currentAction || "Đang khởi tạo...",
-    crawledCount: jobTracker.uniqueActionCount,
+    crawledCount: Math.max(jobTracker.uniqueActionCount, discoveredCountQuery.data ?? 0),
+    progress: jobTracker.progress,
   };
 }

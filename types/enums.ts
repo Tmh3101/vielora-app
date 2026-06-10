@@ -111,8 +111,20 @@ export enum EMessageRole {
   User = "user",
   Assistant = "assistant",
   System = "system",
+  Bot = "bot",
 }
 
 export enum EUsageAction {
   ChatMessage = "chat_message",
+}
+
+export enum EWidgetBackgroundType {
+  Solid = "solid",
+  Gradient = "gradient",
+  Image = "image",
+}
+
+export enum EWidgetIconType {
+  Preset = "preset",
+  Custom = "custom",
 }

@@ -1,3 +1,5 @@
+import { EWidgetBackgroundType, EWidgetIconType } from "@/types";
+
 /**
  * Widget Position & Sizing Configuration
  */
@@ -7,6 +9,8 @@ export const WIDGET_POSITION = {
   ICON_SIZE: 56,
   PADDING: 16,
 };
+
+export const DEFAULT_WIDGET_POSITION = '{"x":300.3883495145631,"y":328}';
 
 /**
  * Widget Settings Limits
@@ -69,11 +73,11 @@ export const WIDGET_FALLBACK = {
   WELCOME_MESSAGE: "Xin chào! Tôi là AI Assistant với dữ liệu thật. Hãy hỏi tôi bất cứ điều gì!",
   PRIMARY_COLOR: "#3B82F6",
   TEXT_COLOR: "#1f2937",
-  POSITION: '{"x":284,"y":344}',
-  CHAT_BACKGROUND_TYPE: "solid" as const,
+  POSITION: DEFAULT_WIDGET_POSITION,
+  CHAT_BACKGROUND_TYPE: EWidgetBackgroundType.Solid,
   CHAT_BACKGROUND_VALUE: "#ffffff",
   CHAT_BACKGROUND_OPACITY: 100,
-  CHAT_ICON_TYPE: "preset" as const,
+  CHAT_ICON_TYPE: EWidgetIconType.Preset,
   CHAT_ICON_PRESET: "messagecircle",
   CHAT_ICON_COLOR: "#ffffff",
   CHAT_ICON_BG_COLOR: "#3B82F6",
@@ -94,3 +98,8 @@ export const WIDGET_MESSAGES = {
 };
 
 export const CONVERSATION_MAX_AGE = 24 * 60 * 60 * 1000;
+
+export const QR_CODE_SIZE = 220;
+export const AVATAR_SIZE = 32;
+export const TRANSPARENT_AVATAR_SRC =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";

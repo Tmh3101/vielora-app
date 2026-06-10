@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CreditCard, Home, LogOut, Zap } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { ArrowLeft, CreditCard, Home, LogOut, HelpCircle } from "lucide-react";
 // import { Settings } from "lucide-react";
 
 export interface DashboardSidebarProps {
@@ -19,6 +20,22 @@ export function DashboardSidebar({
   currentPlanLabel,
   onSignOut,
 }: DashboardSidebarProps) {
+  const pathname = usePathname();
+
+  const getLinkClass = (paths: string | string[]) => {
+    const activePaths = Array.isArray(paths) ? paths : [paths];
+    const isActive = activePaths.some((path) =>
+      path === "/dashboard"
+        ? pathname === path
+        : pathname === path || pathname.startsWith(`${path}/`)
+    );
+    return `flex items-center gap-3 rounded-xl px-4 py-2.5 font-medium transition-colors ${
+      isActive
+        ? "bg-primary/10 text-primary"
+        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+    }`;
+  };
+
   return (
     <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-64 flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm lg:flex">
       <div className="flex items-center gap-3 border-b border-border/50 p-6">
@@ -42,34 +59,26 @@ export function DashboardSidebar({
       </div>
 
       <nav className="flex-1 space-y-1 p-4">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-3 rounded-xl bg-primary/10 px-4 py-2.5 font-medium text-primary"
-        >
+        <Link href="/dashboard" className={getLinkClass("/dashboard")}>
           <Home className="h-5 w-5" />
           Tổng quan
         </Link>
         <Link
           href="/dashboard/upgrade"
-          className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          className={getLinkClass([
+            "/dashboard/upgrade",
+            "/dashboard/checkout",
+            "/dashboard/credits",
+            "/dashboard/payment",
+          ])}
         >
           <CreditCard className="h-5 w-5" />
-          Nâng cấp
+          Quản lý thanh toán
         </Link>
-        <Link
-          href="/dashboard/upgrade"
-          className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-        >
-          <Zap className="h-5 w-5" />
-          Nạp Credit
+        <Link href="/dashboard/support" className={getLinkClass("/dashboard/support")}>
+          <HelpCircle className="h-5 w-5" />
+          Hỗ trợ
         </Link>
-        {/* <Link
-          href="/dashboard/settings"
-          className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-        >
-          <Settings className="h-5 w-5" />
-          Cài đặt
-        </Link> */}
       </nav>
 
       <div className="space-y-3 border-t border-border/50 px-2 py-4">

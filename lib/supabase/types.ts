@@ -12,8 +12,30 @@ export type Database = {
   };
   public: {
     Tables: {
+      banned_users: {
+        Row: {
+          user_id: string;
+          reason: string | null;
+          banned_at: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          reason?: string | null;
+          banned_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          reason?: string | null;
+          banned_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       bots: {
         Row: {
+          allowed_domains: string[];
           avatar_url: string | null;
           crawl_settings: Json | null;
           created_at: string;
@@ -21,6 +43,7 @@ export type Database = {
           id: string;
           is_public: boolean;
           is_stopped: boolean;
+          is_banned: boolean | null;
           last_crawl_at: string | null;
           name: string;
           rate_limit_per_day: number | null;
@@ -34,6 +57,7 @@ export type Database = {
           widget_settings: Json | null;
         };
         Insert: {
+          allowed_domains?: string[];
           avatar_url?: string | null;
           crawl_settings?: Json | null;
           created_at?: string;
@@ -41,6 +65,7 @@ export type Database = {
           id?: string;
           is_public?: boolean;
           is_stopped?: boolean;
+          is_banned?: boolean | null;
           last_crawl_at?: string | null;
           name: string;
           rate_limit_per_day?: number | null;
@@ -54,6 +79,7 @@ export type Database = {
           widget_settings?: Json | null;
         };
         Update: {
+          allowed_domains?: string[];
           avatar_url?: string | null;
           crawl_settings?: Json | null;
           created_at?: string;
@@ -61,6 +87,7 @@ export type Database = {
           id?: string;
           is_public?: boolean;
           is_stopped?: boolean;
+          is_banned?: boolean | null;
           last_crawl_at?: string | null;
           name?: string;
           rate_limit_per_day?: number | null;
@@ -106,6 +133,27 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      categories: {
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+          slug: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+          slug: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
+          slug?: string;
+        };
+        Relationships: [];
       };
       credit_packages: {
         Row: {
@@ -262,27 +310,33 @@ export type Database = {
       };
       messages: {
         Row: {
+          completion_tokens: number;
           content: string;
           conversation_id: string;
           created_at: string;
           id: string;
           no_answer: boolean | null;
+          prompt_tokens: number;
           role: string;
         };
         Insert: {
+          completion_tokens?: number;
           content: string;
           conversation_id: string;
           created_at?: string;
           id?: string;
           no_answer?: boolean | null;
+          prompt_tokens?: number;
           role: string;
         };
         Update: {
+          completion_tokens?: number;
           content?: string;
           conversation_id?: string;
           created_at?: string;
           id?: string;
           no_answer?: boolean | null;
+          prompt_tokens?: number;
           role?: string;
         };
         Relationships: [
@@ -353,6 +407,75 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      post_categories: {
+        Row: {
+          category_id: string;
+          post_id: string;
+        };
+        Insert: {
+          category_id: string;
+          post_id: string;
+        };
+        Update: {
+          category_id?: string;
+          post_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "post_categories_category_id_fkey";
+            columns: ["category_id"];
+            isOneToOne: false;
+            referencedRelation: "categories";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "post_categories_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "posts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      posts: {
+        Row: {
+          content: string;
+          created_at: string;
+          id: string;
+          published_at: string | null;
+          slug: string;
+          status: string;
+          summary: string;
+          thumbnail_url: string | null;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          content: string;
+          created_at?: string;
+          id?: string;
+          published_at?: string | null;
+          slug: string;
+          status?: string;
+          summary: string;
+          thumbnail_url?: string | null;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          content?: string;
+          created_at?: string;
+          id?: string;
+          published_at?: string | null;
+          slug?: string;
+          status?: string;
+          summary?: string;
+          thumbnail_url?: string | null;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       payments: {
         Row: {
@@ -446,30 +569,75 @@ export type Database = {
         };
         Relationships: [];
       };
-      profiles: {
+      shopify_sessions: {
         Row: {
-          avatar_url: string | null;
-          created_at: string;
-          full_name: string | null;
+          accessToken: string | null;
+          accountOwner: boolean | null;
+          collaborator: boolean | null;
+          email: string | null;
+          emailVerified: boolean | null;
+          expires: number | null;
+          firstName: string | null;
           id: string;
-          updated_at: string;
-          user_id: string;
+          isOnline: boolean;
+          lastName: string | null;
+          locale: string | null;
+          refreshToken: string | null;
+          refreshTokenExpires: number | null;
+          scope: string | null;
+          shop: string;
+          state: string;
+          userId: number | null;
         };
         Insert: {
-          avatar_url?: string | null;
-          created_at?: string;
-          full_name?: string | null;
-          id?: string;
-          updated_at?: string;
-          user_id: string;
+          accessToken?: string | null;
+          accountOwner?: boolean | null;
+          collaborator?: boolean | null;
+          email?: string | null;
+          emailVerified?: boolean | null;
+          expires?: number | null;
+          firstName?: string | null;
+          id: string;
+          isOnline: boolean;
+          lastName?: string | null;
+          locale?: string | null;
+          refreshToken?: string | null;
+          refreshTokenExpires?: number | null;
+          scope?: string | null;
+          shop: string;
+          state: string;
+          userId?: number | null;
         };
         Update: {
-          avatar_url?: string | null;
-          created_at?: string;
-          full_name?: string | null;
+          accessToken?: string | null;
+          accountOwner?: boolean | null;
+          collaborator?: boolean | null;
+          email?: string | null;
+          emailVerified?: boolean | null;
+          expires?: number | null;
+          firstName?: string | null;
           id?: string;
-          updated_at?: string;
-          user_id?: string;
+          isOnline?: boolean;
+          lastName?: string | null;
+          locale?: string | null;
+          refreshToken?: string | null;
+          refreshTokenExpires?: number | null;
+          scope?: string | null;
+          shop?: string;
+          state?: string;
+          userId?: number | null;
+        };
+        Relationships: [];
+      };
+      shopify_sessions_migrations: {
+        Row: {
+          migration_name: string;
+        };
+        Insert: {
+          migration_name: string;
+        };
+        Update: {
+          migration_name?: string;
         };
         Relationships: [];
       };
@@ -591,12 +759,53 @@ export type Database = {
         };
         Relationships: [];
       };
+      support_tickets: {
+        Row: {
+          admin_response: string | null;
+          created_at: string;
+          id: string;
+          message: string;
+          resolved_at: string | null;
+          status: string;
+          subject: string;
+          user_id: string | null;
+        };
+        Insert: {
+          admin_response?: string | null;
+          created_at?: string;
+          id?: string;
+          message: string;
+          resolved_at?: string | null;
+          status?: string;
+          subject: string;
+          user_id?: string | null;
+        };
+        Update: {
+          admin_response?: string | null;
+          created_at?: string;
+          id?: string;
+          message?: string;
+          resolved_at?: string | null;
+          status?: string;
+          subject?: string;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
       generate_verification_token: { Args: never; Returns: string };
+      get_bot_analytics_v2: {
+        Args: {
+          p_bot_id: string;
+          p_start_date: string;
+          p_end_date: string;
+        };
+        Returns: Json;
+      };
       handle_new_user_billing: { Args: never; Returns: unknown };
       hybrid_search: {
         Args: {

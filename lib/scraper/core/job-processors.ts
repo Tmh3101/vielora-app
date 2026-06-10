@@ -4,8 +4,8 @@ import { getRedisPublisher } from "@/lib/config/redis";
 import { extractContent } from "@/lib/scraper/extractors";
 import { processLinks, extractBaseDomain, normalizeUrl } from "./link-processor";
 import { addIndexerJob, getPageCrawlerQueue } from "./queue";
-import { ensureProtocol } from "@/lib/helpers/url-helpers";
-import { createJobRecord as _createJobRecord } from "@/lib/services/job.service";
+import { ensureProtocol } from "@/lib/helpers";
+import { createJobRecord as _createJobRecord, updateJobProgress } from "@/lib/services/job.service";
 import {
   countPagesByBotIdAndStatusesServer,
   updatePageServer,
@@ -37,11 +37,10 @@ import {
 } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { TablesInsert } from "@/lib/supabase/types";
-import { hashContent, fetchSitemapUrls, isSoft404 } from "@/lib/helpers/crawl-website-helpers";
+import { hashContent, fetchSitemapUrls, isSoft404, getJobProgressStreamId } from "@/lib/helpers";
 import { refundCredits } from "@/lib/services/credit.service";
 import { createChunks, embedChunks } from "@/lib/rag-processor";
 import { CREDIT_PER_PAGE, MAX_PAGES, MAX_DEPTH, MIN_CHUNK_SIZE } from "@/config";
-import { getJobProgressStreamId } from "@/lib/helpers/job-tracker-helpers";
 import { sleep } from "@/lib/utils/sleep";
 
 // Debounce finalizeBotIfDone per botId to prevent burst COUNT queries on concurrent completions
@@ -359,6 +358,9 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
       100,
       Math.round((Math.min(seenCount, maxPages) / maxPages) * 100)
     );
+    await updateJobProgress(createAdminClient(), discoverJobId, progressPercent, {
+      current_url: currentUrl,
+    });
     publishProgress(getJobProgressStreamId(discoverJobId), progressPercent, currentUrl);
 
     if (depth >= maxDepth) return;

@@ -1,6 +1,9 @@
 import { getDiscoverSeedUrl } from "./crawl-website-helpers";
 import type { Tables } from "@/lib/supabase/types";
 
+const DOMAIN_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+const TLD_REGEX = /^(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})$/i;
+
 /**
  * Format URL to ensure it has a protocol
  */
@@ -55,6 +58,64 @@ export function ensureProtocol(url: string): string {
   if (!trimmed) return "";
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
+}
+
+function isIpv4Address(hostname: string): boolean {
+  const parts = hostname.split(".");
+  if (parts.length !== 4) return false;
+
+  return parts.every((part) => {
+    if (!/^\d{1,3}$/.test(part)) return false;
+    const value = Number(part);
+    return value >= 0 && value <= 255;
+  });
+}
+
+function isIpAddress(hostname: string): boolean {
+  return isIpv4Address(hostname) || hostname.includes(":");
+}
+
+function isValidDomainHostname(hostname: string): boolean {
+  if (hostname === "localhost") return true;
+  if (isIpAddress(hostname)) return false;
+
+  const labels = hostname.split(".");
+  if (labels.length < 2) return false;
+
+  const tld = labels.at(-1);
+  const domainLabels = labels.slice(0, -1);
+
+  if (!tld || !TLD_REGEX.test(tld)) return false;
+  return domainLabels.every((label) => DOMAIN_LABEL_REGEX.test(label));
+}
+
+export interface WebsiteUrlValidationResult {
+  formattedUrl?: string;
+  hostname?: string;
+  error: string | null;
+}
+
+export function validateWebsiteUrl(value: string): WebsiteUrlValidationResult {
+  const trimmed = value.trim();
+  if (!trimmed) return { error: null };
+
+  try {
+    const formattedUrl = ensureProtocol(trimmed);
+    const parsed = new URL(formattedUrl);
+
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { error: "Domain không hợp lệ" };
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+    if (!isValidDomainHostname(hostname)) {
+      return { error: "Domain không hợp lệ" };
+    }
+
+    return { formattedUrl, hostname, error: null };
+  } catch {
+    return { error: "Domain không hợp lệ" };
+  }
 }
 
 export const canonicalizeActionKey = (value: string): string => {

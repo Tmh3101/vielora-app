@@ -13,6 +13,7 @@ export interface DiscoveringViewProps {
   pagesFailed: number;
   currentAction: string;
   crawledCount: number;
+  progress: number;
   scopeLabel: string;
 }
 
@@ -21,6 +22,7 @@ export function DiscoveringView({
   pagesFailed,
   currentAction,
   crawledCount,
+  progress,
   scopeLabel,
 }: DiscoveringViewProps) {
   return (
@@ -54,6 +56,7 @@ export function DiscoveringView({
             title="Đang thu thập dữ liệu..."
             currentAction={currentAction || "Đang kiểm tra các trang để thu thập dữ liệu..."}
             crawledCount={crawledCount}
+            progress={progress}
           />
         </div>
 

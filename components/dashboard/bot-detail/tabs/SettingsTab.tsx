@@ -1,33 +1,45 @@
 "use client";
 
 // import DomainVerification from "@/components/bot/DomainVerification";
+import React from "react";
+import { StandaloneChatSharePanel } from "@/components/dashboard/StandaloneChatSharePanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Loader2, RefreshCw, Square, Copy, AlertCircle } from "lucide-react";
+import { Loader2, RefreshCw, Square, Copy, Plus, Trash2 } from "lucide-react";
+import { MAX_ALLOWED_DOMAINS } from "@/lib/security/allowed-domains";
 import type { Tables } from "@/lib/supabase/types";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
 
 type BotType = Tables<"bots">;
 
 export interface SettingsTabProps {
   bot: BotType;
   isSaving: boolean;
+  isSavingRateLimit: boolean;
+  isSavingSlugSettings: boolean;
+  isSavingAllowedDomains: boolean;
   isStoppingBot: boolean;
   rateLimitPerDay: string;
   rateLimitPerIp: string;
+  rateLimitPerDayError: string;
+  rateLimitPerIpError: string;
+  allowedDomains: string[];
+  allowedDomainsError: string;
+  isRateLimitFormValid: boolean;
+  isAllowedDomainsFormValid: boolean;
   slug: string;
   isPublic: boolean;
   setRateLimitPerDay: (value: string) => void;
   setRateLimitPerIp: (value: string) => void;
+  setAllowedDomains: (value: string[]) => void;
   setSlug: (value: string) => void;
   setIsPublic: (value: boolean) => void;
   setStopModalOpen: (open: boolean) => void;
   onStartBot: () => Promise<void>;
   onSaveRateLimit: () => Promise<void>;
+  onSaveAllowedDomains: () => Promise<void>;
   onSaveSlugSettings: () => Promise<void>;
   onVerified: () => Promise<void>;
 }
@@ -35,115 +47,120 @@ export interface SettingsTabProps {
 export function SettingsTab({
   bot,
   isSaving,
+  isSavingRateLimit,
+  isSavingSlugSettings,
+  isSavingAllowedDomains,
   isStoppingBot,
   rateLimitPerDay,
   rateLimitPerIp,
+  rateLimitPerDayError,
+  rateLimitPerIpError,
+  allowedDomains,
+  allowedDomainsError,
+  isRateLimitFormValid,
+  isAllowedDomainsFormValid,
   slug,
   isPublic,
   setRateLimitPerDay,
   setRateLimitPerIp,
+  setAllowedDomains,
   setSlug,
   setIsPublic,
   setStopModalOpen,
   onStartBot,
   onSaveRateLimit,
+  onSaveAllowedDomains,
   onSaveSlugSettings,
   // onVerified,
 }: SettingsTabProps) {
   const { toast } = useToast();
-  const [slugError, setSlugError] = useState<string>("");
-  const [isCheckingSlug, setIsCheckingSlug] = useState(false);
 
-  // Validate slug format
-  useEffect(() => {
-    if (!slug) {
-      setSlugError("");
+  const handleRateLimitInputChange = (nextValue: string, setValue: (value: string) => void) => {
+    if (nextValue === "") {
+      setValue("");
       return;
     }
 
-    if (!/^[a-z0-9-]+$/.test(slug)) {
-      setSlugError("Chỉ được sử dụng chữ thường, số và dấu gạch ngang");
-      return;
-    }
-
-    if (slug.length < 3) {
-      setSlugError("Slug phải có ít nhất 3 ký tự");
-      return;
-    }
-
-    setSlugError("");
-  }, [slug]);
-
-  // Check for duplicate slug
-  const checkSlugAvailability = async () => {
-    if (!slug || slugError || slug === bot.slug) return;
-
-    setIsCheckingSlug(true);
-    try {
-      const response = await fetch(`/api/bots/check-slug?slug=${encodeURIComponent(slug)}`);
-      const data = await response.json();
-
-      if (!data.available) {
-        setSlugError("Slug này đã được sử dụng. Vui lòng chọn slug khác.");
-      }
-    } catch (error) {
-      console.error("Error checking slug:", error);
-    } finally {
-      setIsCheckingSlug(false);
+    if (/^[1-9]\d*$/.test(nextValue)) {
+      setValue(nextValue);
     }
   };
 
-  const handleSlugBlur = () => {
-    void checkSlugAvailability();
+  const handleAllowedDomainChange = (index: number, value: string) => {
+    setAllowedDomains(
+      allowedDomains.map((domain, domainIndex) => (domainIndex === index ? value : domain))
+    );
   };
 
-  const handleSaveSlug = async () => {
-    if (slugError) {
-      toast({
-        title: "Lỗi",
-        description: slugError,
-        variant: "destructive",
-      });
-      return;
-    }
-    await onSaveSlugSettings();
+  const handleAddAllowedDomain = () => {
+    if (allowedDomains.length >= MAX_ALLOWED_DOMAINS) return;
+    setAllowedDomains([...allowedDomains, ""]);
+  };
+
+  const handleRemoveAllowedDomain = (index: number) => {
+    setAllowedDomains(allowedDomains.filter((_, domainIndex) => domainIndex !== index));
   };
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-1 items-stretch overflow-hidden rounded-md border">
+          <div className="flex items-center bg-muted px-3 py-2">
+            <span className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm">
+              Bot ID :
+            </span>
+          </div>
+          <Input value={bot.id} readOnly className="border-0 focus-visible:ring-0" />
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Sao chép Bot ID"
+          className="shrink-0 hover:bg-primary"
+          onClick={() => {
+            navigator.clipboard.writeText(bot.id);
+            toast({ title: "Đã sao chép Bot ID!" });
+          }}
+        >
+          <Copy className="h-4 w-4" />
+        </Button>
+      </div>
+
       <Card className="glass">
-        <CardHeader>
-          <CardTitle>Điều khiển Bot</CardTitle>
-          <CardDescription>Khởi động hoặc dừng hoạt động của bot</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-4">
-          {bot.is_stopped ? (
-            <Button variant="default" onClick={() => void onStartBot()} disabled={isSaving}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang khởi động...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Khởi động Bot
-                </>
-              )}
-            </Button>
-          ) : (
-            bot.status !== "failed" && (
-              <Button
-                variant="destructive"
-                onClick={() => setStopModalOpen(true)}
-                disabled={isStoppingBot}
-              >
-                <Square className="mr-2 h-4 w-4" />
-                Dừng Bot
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <CardHeader>
+            <CardTitle>Điều khiển Bot</CardTitle>
+            <CardDescription>Khởi động hoặc dừng hoạt động của bot</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-4 p-6">
+            {bot.is_stopped ? (
+              <Button variant="default" onClick={() => void onStartBot()} disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Đang khởi động...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Khởi động Bot
+                  </>
+                )}
               </Button>
-            )
-          )}
-        </CardContent>
+            ) : (
+              bot.status !== "failed" && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setStopModalOpen(true)}
+                  disabled={isStoppingBot}
+                >
+                  <Square className="mr-2 h-4 w-4" />
+                  Dừng Bot
+                </Button>
+              )
+            )}
+          </CardContent>
+        </div>
       </Card>
 
       <Card className="glass">
@@ -152,88 +169,90 @@ export function SettingsTab({
           <CardDescription>Chia sẻ chatbot qua đường link công khai</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Trạng thái công khai</Label>
-              <p className="text-sm text-muted-foreground">
-                Cho phép mọi người truy cập bot qua link
-              </p>
-            </div>
-            <Switch checked={isPublic} onCheckedChange={setIsPublic} />
-          </div>
+          <StandaloneChatSharePanel
+            botName={bot.name}
+            avatarUrl={bot.avatar_url}
+            slug={slug}
+            savedSlug={bot.slug}
+            isPublic={isPublic}
+            isSaving={isSavingSlugSettings}
+            onSlugChange={setSlug}
+            onPublicChange={setIsPublic}
+            onSave={onSaveSlugSettings}
+          />
+        </CardContent>
+      </Card>
 
-          <div className="space-y-2">
-            <Label htmlFor="slug">Đường link tùy chỉnh</Label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="flex flex-1 items-stretch overflow-hidden rounded-md border">
-                <div className="flex items-center bg-muted px-3 py-2">
-                  <span className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm">
-                    {process.env.NEXT_PUBLIC_APP_URL
-                      ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname
-                      : "localhost"}
-                    /chat/
-                  </span>
+      <Card className="glass">
+        <CardHeader>
+          <CardTitle>Domain được phép</CardTitle>
+          <CardDescription>
+            Chỉ các domain trong danh sách này được phép hiển thị widget chatbot
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">
+                {allowedDomains.filter((domain) => domain.trim()).length}/{MAX_ALLOWED_DOMAINS}
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {allowedDomains.map((domain, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    inputMode="url"
+                    placeholder="example.com"
+                    value={domain}
+                    aria-invalid={!!allowedDomainsError}
+                    onChange={(e) => handleAllowedDomainChange(index, e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Xóa domain"
+                    disabled={isSavingAllowedDomains}
+                    onClick={() => handleRemoveAllowedDomain(index)}
+                    className="hover:border hover:border-destructive hover:bg-white hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Input
-                  id="slug"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                  onBlur={handleSlugBlur}
-                  placeholder="my-business"
-                  className="border-0 focus-visible:ring-0"
-                  disabled={isCheckingSlug}
-                />
-              </div>
-              {slug && isPublic && !slugError && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="shrink-0 hover:bg-primary"
-                  onClick={() => {
-                    navigator.clipboard.writeText(
-                      `${process.env.NEXT_PUBLIC_APP_URL}/chat/${slug}`
-                    );
-                    toast({ title: "Đã sao chép link!" });
-                  }}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              )}
+              ))}
             </div>
 
-            {slugError ? (
-              <div className="flex items-center gap-1 text-xs text-destructive">
-                <AlertCircle className="h-3 w-3" />
-                <span>{slugError}</span>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Chỉ chữ thường, số và dấu gạch ngang (tối thiểu 3 ký tự)
-              </p>
-            )}
+            {allowedDomainsError ? (
+              <p className="text-[0.8rem] text-destructive">{allowedDomainsError}</p>
+            ) : null}
+
+            <p className="text-[0.8rem] text-muted-foreground">
+              Có thể nhập domain hoặc URL đầy đủ. Hệ thống sẽ tự chuẩn hóa về hostname. Domain cha
+              không tự cho phép subdomain.
+            </p>
           </div>
 
-          <Button
-            onClick={() => void handleSaveSlug()}
-            disabled={isSaving || isCheckingSlug || !!slugError}
-          >
-            {(isSaving || isCheckingSlug) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Lưu cài đặt
-          </Button>
-
-          {slug && isPublic && !slugError && (
-            <div className="rounded-md bg-blue-50 p-3">
-              <p className="text-sm font-medium text-blue-900">Link công khai của bạn:</p>
-              <a
-                href={`${process.env.NEXT_PUBLIC_APP_URL}/chat/${slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="break-all text-sm text-blue-600 hover:underline"
-              >
-                {process.env.NEXT_PUBLIC_APP_URL}/chat/{slug}
-              </a>
-            </div>
-          )}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={allowedDomains.length >= MAX_ALLOWED_DOMAINS || isSavingAllowedDomains}
+              onClick={handleAddAllowedDomain}
+              className="border-white bg-white hover:border hover:border-primary hover:bg-white hover:text-primary"
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Thêm domain
+            </Button>
+            <Button
+              onClick={() => void onSaveAllowedDomains()}
+              disabled={isSavingAllowedDomains || !isAllowedDomainsFormValid}
+            >
+              {isSavingAllowedDomains && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Lưu thay đổi
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -250,11 +269,16 @@ export function SettingsTab({
               <Label htmlFor="rateLimitPerDay">Giới hạn tin nhắn / ngày</Label>
               <Input
                 id="rateLimitPerDay"
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[1-9][0-9]*"
                 placeholder="Không giới hạn"
                 value={rateLimitPerDay}
-                onChange={(e) => setRateLimitPerDay(e.target.value)}
+                onChange={(e) => handleRateLimitInputChange(e.target.value, setRateLimitPerDay)}
               />
+              {rateLimitPerDayError ? (
+                <p className="text-[0.8rem] text-destructive">{rateLimitPerDayError}</p>
+              ) : null}
               <p className="text-[0.8rem] text-muted-foreground">
                 Tổng số tin nhắn bot có thể trả lời trong một ngày. Để trống nếu không muốn giới
                 hạn.
@@ -264,11 +288,16 @@ export function SettingsTab({
               <Label htmlFor="rateLimitPerIp">Giới hạn tin nhắn / IP / ngày</Label>
               <Input
                 id="rateLimitPerIp"
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[1-9][0-9]*"
                 placeholder="Không giới hạn"
                 value={rateLimitPerIp}
-                onChange={(e) => setRateLimitPerIp(e.target.value)}
+                onChange={(e) => handleRateLimitInputChange(e.target.value, setRateLimitPerIp)}
               />
+              {rateLimitPerIpError ? (
+                <p className="text-[0.8rem] text-destructive">{rateLimitPerIpError}</p>
+              ) : null}
               <p className="text-[0.8rem] text-muted-foreground">
                 Số tin nhắn tối đa từ một người dùng (IP) trong một ngày. Để trống nếu không muốn
                 giới hạn.
@@ -276,8 +305,11 @@ export function SettingsTab({
             </div>
           </div>
           <div className="flex justify-end pt-2">
-            <Button onClick={() => void onSaveRateLimit()} disabled={isSaving}>
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button
+              onClick={() => void onSaveRateLimit()}
+              disabled={isSavingRateLimit || !isRateLimitFormValid}
+            >
+              {isSavingRateLimit && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Lưu thay đổi
             </Button>
           </div>

@@ -4,10 +4,79 @@ import type { Database } from "@/lib/supabase/types";
 import { getFallbackPagesServer } from "@/lib/services/page.service";
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
 import { MAX_DOCS_RETRIEVAL, FULL_TEXT_WEIGHT, SEMANTIC_WEIGHT } from "@/config";
+import { EPageSourceType } from "@/types/enums";
+import { HYBRID_SEARCH_FUNC_NAME } from "@/lib/constants/rag";
 
-const createResultDocs = (content: string, title?: string, url?: string) => {
-  return `### ${title || "Tài liệu"}\nURL: ${url || "N/A"}\n${content}`;
+export interface HybridSearchRow {
+  id: string;
+  bot_id: string;
+  content: string;
+  metadata: {
+    url?: string;
+    title?: string;
+    chunkIndex?: number;
+    totalChunks?: number;
+  };
+  similarity: number;
+  source_type: EPageSourceType;
+  resolved_url: string | null;
+}
+
+type RetrievedChunk = Pick<
+  HybridSearchRow,
+  "content" | "metadata" | "source_type" | "resolved_url"
+>;
+
+const URL_SOURCE_TYPES = new Set<HybridSearchRow["source_type"]>([
+  EPageSourceType.Website,
+  EPageSourceType.SingleUrl,
+]);
+
+const FILE_SOURCE_TYPES = new Set<HybridSearchRow["source_type"]>([
+  EPageSourceType.File,
+  EPageSourceType.ManualText,
+]);
+
+const escapeAttributeValue = (value: string) =>
+  value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+const getFileNameFromPath = (value?: string | null) => {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const withoutQuery = trimmed.split(/[?#]/)[0];
+  const normalized = withoutQuery.replace(/^file:\/\//i, "");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts.at(-1) || normalized || null;
 };
+
+const getChunkLabel = (metadata?: RetrievedChunk["metadata"] | null) => {
+  return metadata?.title?.trim() || getFileNameFromPath(metadata?.url) || "document";
+};
+
+export const serializeRetrievedChunk = (chunk: RetrievedChunk) => {
+  const content = chunk.content?.trim();
+  if (!content) return "";
+
+  if (URL_SOURCE_TYPES.has(chunk.source_type)) {
+    const resolvedUrl = (chunk.resolved_url || chunk.metadata?.url || "").trim();
+    if (!resolvedUrl) return "";
+
+    return `<c s="url" u="${escapeAttributeValue(resolvedUrl)}">${content}</c>`;
+  }
+
+  if (FILE_SOURCE_TYPES.has(chunk.source_type)) {
+    const fileName = getChunkLabel(chunk.metadata);
+    return `<c s="file" n="${escapeAttributeValue(fileName)}">${content}</c>`;
+  }
+
+  return "";
+};
+
+export const serializeRetrievedContext = (chunks: RetrievedChunk[]) =>
+  chunks.map(serializeRetrievedChunk).filter(Boolean).join("\n");
 
 // Hàm helper xử lý Fallback (Dùng khi RAG lỗi)
 const getFallbackPages = async (botId: string, supabase: SupabaseClient<Database>) => {
@@ -15,9 +84,20 @@ const getFallbackPages = async (botId: string, supabase: SupabaseClient<Database
   try {
     const pages = await getFallbackPagesServer(supabase, botId, MAX_DOCS_RETRIEVAL);
     if (pages.length === 0) return "";
-    return pages
-      .map((p) => createResultDocs(p.content?.slice(0, 1500), p.title, p.url))
-      .join("\n\n---\n\n");
+
+    return serializeRetrievedContext(
+      pages.map((page) => ({
+        content: page.content?.slice(0, 1500) || "",
+        metadata: {
+          title: page.title,
+          url: page.url,
+        },
+        source_type: page.url?.startsWith("file://")
+          ? EPageSourceType.File
+          : EPageSourceType.Website,
+        resolved_url: page.url || null,
+      }))
+    );
   } catch {
     return "";
   }
@@ -32,19 +112,18 @@ export async function hybridRetrival(message: string, botId: string): Promise<st
       isQuery: true,
     });
 
-    const { data: relevantDocs, error: searchError } = (await supabase.rpc("hybrid_search", {
-      query_text: message,
-      query_embedding: `[${queryEmbedding.join(",")}]`,
-      match_count: MAX_DOCS_RETRIEVAL,
-      full_text_weight: FULL_TEXT_WEIGHT,
-      semantic_weight: SEMANTIC_WEIGHT,
-      p_bot_id: botId,
-    })) as {
-      data: Array<{
-        content: string;
-        metadata: { url?: string; title?: string };
-        similarity: number;
-      }> | null;
+    const { data: relevantDocs, error: searchError } = (await supabase.rpc(
+      HYBRID_SEARCH_FUNC_NAME,
+      {
+        query_text: message,
+        query_embedding: `[${queryEmbedding.join(",")}]`,
+        match_count: MAX_DOCS_RETRIEVAL,
+        full_text_weight: FULL_TEXT_WEIGHT,
+        semantic_weight: SEMANTIC_WEIGHT,
+        p_bot_id: botId,
+      }
+    )) as {
+      data: HybridSearchRow[] | null;
       error: PostgrestError | null;
     };
 
@@ -62,11 +141,9 @@ export async function hybridRetrival(message: string, botId: string): Promise<st
       });
 
       return relevantDocs
-        .map((doc) => {
-          const meta = doc.metadata || {};
-          return createResultDocs(doc.content, meta.title, meta.url);
-        })
-        .join("\n\n---\n\n");
+        .map((doc) => serializeRetrievedChunk(doc))
+        .filter(Boolean)
+        .join("\n");
     }
 
     // Trả về chuỗi rỗng nếu không tìm thấy bất kỳ chunk nào phù hợp

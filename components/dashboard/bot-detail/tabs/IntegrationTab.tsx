@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Code, Copy, Plug, Tag } from "lucide-react";
 import { Framework, type FrameworkType } from "@/lib/constants";
-import { getEmbededScript } from "@/lib/helpers/get-embed-script";
+import { getEmbededScript } from "@/lib/helpers";
 
 export interface IntegrationTabProps {
   botId: string;
@@ -97,13 +97,13 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
 
               <div className="relative">
                 <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-sm">
-                  <code>{getEmbededScript(botId, appUrl, Framework.REACT)}</code>
+                  <code>{getEmbededScript(botId, appUrl, Framework.GTM)}</code>
                 </pre>
                 <Button
                   size="sm"
                   variant="secondary"
                   className="absolute right-2 top-2"
-                  onClick={() => onCopyScript(Framework.REACT, "Code")}
+                  onClick={() => onCopyScript(Framework.GTM, "Code")}
                 >
                   <Copy className="mr-1 h-4 w-4" />
                   Copy

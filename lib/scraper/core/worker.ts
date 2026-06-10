@@ -1,7 +1,11 @@
 import { Worker } from "bullmq";
 import { getRedisConnectionOptions } from "@/lib/config/redis";
 import { closeQueue } from "./queue";
-import { createJobRecord as _createJobRecord, updateJobState } from "@/lib/services/job.service";
+import {
+  createJobRecord as _createJobRecord,
+  updateJobProgress,
+  updateJobState,
+} from "@/lib/services/job.service";
 import { normalizeWorkerProgress, publishProgress } from "@/lib/services/worker.service";
 import { EJobStatus } from "@/types";
 import { processDiscoverJob, processIndexerJob, processPageCrawlerJob } from "./job-processors";
@@ -23,7 +27,7 @@ import {
   INDEXER_WORKER_CONCURRENCY,
   PAGE_CRAWLER_WORKER_CONCURRENCY,
 } from "@/lib/constants/job";
-import { getBotIndexStreamId, getJobProgressStreamId } from "@/lib/helpers/job-tracker-helpers";
+import { getBotIndexStreamId, getJobProgressStreamId } from "@/lib/helpers";
 
 let discoverWorker: Worker<DiscoverJobData> | null = null;
 let pageCrawlerWorker: Worker<PageCrawlerJobData> | null = null;
@@ -66,6 +70,14 @@ export function startDiscoverWorker(): Worker<DiscoverJobData> {
   discoverWorker.on("progress", (job, progress) => {
     if (!job?.id) return;
     const { percent, currentUrl } = normalizeWorkerProgress(progress);
+    void updateJobProgress(
+      trackingClient,
+      job.id,
+      percent,
+      currentUrl ? { current_url: currentUrl } : undefined
+    ).catch((error) => {
+      console.error(`[DiscoverWorker] Failed to update job progress for job ${job.id}:`, error);
+    });
     publishProgress(getJobProgressStreamId(job.id), percent, currentUrl);
   });
 
@@ -104,6 +116,14 @@ export function startIndexerWorker(): Worker<IndexerJobData> {
   indexerWorker.on("progress", (job, progress) => {
     if (!job?.id) return;
     const { percent, currentUrl } = normalizeWorkerProgress(progress);
+    void updateJobProgress(
+      trackingClient,
+      job.id,
+      percent,
+      currentUrl ? { current_url: currentUrl } : undefined
+    ).catch((error) => {
+      console.error(`[IndexerWorker] Failed to update job progress for job ${job.id}:`, error);
+    });
     publishProgress(getJobProgressStreamId(job.id), percent, currentUrl);
     if (job.data.botId) publishProgress(getBotIndexStreamId(job.data.botId), percent, currentUrl);
   });
@@ -154,6 +174,14 @@ export function startPageCrawlerWorker(): Worker<PageCrawlerJobData> {
   pageCrawlerWorker.on("progress", (job, progress) => {
     if (job.data.mode !== "single_url_knowledge" || !job.id) return;
     const { percent, currentUrl } = normalizeWorkerProgress(progress);
+    void updateJobProgress(
+      trackingClient,
+      job.id,
+      percent,
+      currentUrl ? { current_url: currentUrl } : undefined
+    ).catch((error) => {
+      console.error(`[PageCrawlerWorker] Failed to update job progress for job ${job.id}:`, error);
+    });
     publishProgress(getJobProgressStreamId(job.id), percent, currentUrl);
   });
 

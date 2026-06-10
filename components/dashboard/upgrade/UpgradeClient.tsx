@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Crown, Sparkles, Zap, CheckCircle2 } from "lucide-react";
+import { CheckCircle2, CreditCard, Crown, Package, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +15,10 @@ import { comparePlans } from "@/lib/utils/pricing";
 import type { Tables } from "@/lib/supabase/types";
 import { ESubscriptionPlan, ESubscriptionCycle } from "@/types";
 import { PaymentAction } from "@/lib/constants";
+import { formatPaymentDate } from "@/lib/helpers/payment-helpers";
+import { formatVND } from "@/lib/utils/currency";
+
+type PurchaseTab = "plans" | "credits";
 
 interface UpgradeClientProps {
   activePlans: Tables<"plans">[];
@@ -37,6 +39,7 @@ export default function UpgradeClient({
 }: UpgradeClientProps) {
   const router = useRouter();
   const [billingCycle, setBillingCycle] = useState<ESubscriptionCycle>(initialBillingCycle);
+  const [purchaseTab, setPurchaseTab] = useState<PurchaseTab>("plans");
   const processingPlan: string | null = null;
 
   const handleChangePlan = (planCode: string) => {
@@ -80,103 +83,77 @@ export default function UpgradeClient({
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border/60 bg-background/80 backdrop-blur">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/dashboard")}
-                className="border-none hover:bg-white hover:text-primary"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Dashboard
-              </Button>
-            </div>
-            <Link href="/" className="flex items-center gap-2">
-              <Image
-                src="/images/logo-full.png"
-                alt="Vielora"
-                width={120}
-                height={40}
-                className="h-16 w-auto"
-                priority
-              />
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-10 sm:px-6 md:py-12 lg:px-8">
-        <Card className="mb-8 border-primary/50 bg-primary/5">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <Crown className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    Gói hiện tại: {currentPlan?.name ?? "Free"}
-                    {currentPlan?.code !== ESubscriptionPlan.Free && (
-                      <Badge variant="secondary" className="ml-2 bg-primary">
-                        <Sparkles className="mr-1 h-3 w-3" />
-                        Premium
-                      </Badge>
-                    )}
-                  </CardTitle>
-                  <CardDescription>
-                    {currentSubscription?.current_period_end && (
-                      <>
-                        Hết hạn:{" "}
-                        {new Date(currentSubscription.current_period_end).toLocaleDateString(
-                          "vi-VN"
-                        )}
-                      </>
-                    )}
-                  </CardDescription>
-                </div>
+    <div className="mx-auto max-w-5xl space-y-10">
+      <Card className="border-primary/50 bg-primary/5">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Crown className="h-6 w-6 text-primary" />
               </div>
-              <div className="hidden text-right sm:block">
-                <p className="text-sm text-muted-foreground">Giới hạn hiện tại</p>
-                <p className="text-sm">{currentPlan?.bots_limit ?? 1} bot tối đa</p>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  Gói hiện tại: {currentPlan?.name ?? "Free"}
+                  {currentPlan?.code !== ESubscriptionPlan.Free && (
+                    <Badge variant="secondary" className="ml-2 bg-primary">
+                      <Sparkles className="mr-1 h-3 w-3" />
+                      Premium
+                    </Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  {currentSubscription?.current_period_end && (
+                    <>Hết hạn: {formatPaymentDate(currentSubscription.current_period_end)}</>
+                  )}
+                </CardDescription>
               </div>
             </div>
-          </CardHeader>
-        </Card>
+            <div className="hidden text-right sm:block">
+              <p className="text-sm text-muted-foreground">Giới hạn hiện tại</p>
+              <p className="text-sm">{currentPlan?.bots_limit ?? 1} bot tối đa</p>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
 
-        <div className="mx-auto mb-8 max-w-2xl text-center">
-          <h1 className="mb-3 text-3xl font-bold text-foreground">Gói Dịch Vụ & Credit</h1>
-          <p className="text-muted-foreground">
-            Chọn gói nâng cấp theo chu kỳ hoặc nạp lẻ credit (Pay-as-you-go)
-          </p>
+      <Tabs
+        value={purchaseTab}
+        onValueChange={(value) => setPurchaseTab(value as PurchaseTab)}
+        className="space-y-8"
+      >
+        <div className="flex justify-center p-0">
+          <TabsList className="glass grid h-auto w-full max-w-xl grid-cols-2">
+            <TabsTrigger
+              value="plans"
+              className="data-[state=active]:bg-gradient-primary flex min-h-10 items-center gap-2 whitespace-normal p-0 text-center text-sm leading-snug data-[state=active]:text-primary-foreground sm:text-base"
+            >
+              <Package className="h-4 w-4 shrink-0" />
+              Gói dịch vụ
+            </TabsTrigger>
+            <TabsTrigger
+              value="credits"
+              className="data-[state=active]:bg-gradient-primary flex min-h-10 items-center gap-2 whitespace-normal p-0 text-center text-sm leading-snug data-[state=active]:text-primary-foreground sm:text-base"
+            >
+              <CreditCard className="h-4 w-4 shrink-0" />
+              Nạp Credit - Pay-as-you-go
+            </TabsTrigger>
+          </TabsList>
         </div>
 
-        <Tabs defaultValue="subscription" className="mx-auto max-w-5xl">
-          <div className="mb-10 flex justify-center">
-            <TabsList className="grid w-[400px] grid-cols-2">
-              <TabsTrigger value="subscription" className="flex items-center gap-2">
-                <Crown className="h-4 w-4" />
-                Gói Nâng Cấp
-              </TabsTrigger>
-              <TabsTrigger value="payg" className="flex items-center gap-2">
-                <Zap className="h-4 w-4" />
-                Pay-as-you-go
-              </TabsTrigger>
-            </TabsList>
-          </div>
+        <TabsContent value="plans" className="mt-0 space-y-8">
+          <section className="space-y-8">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-foreground">Gói dịch vụ</h2>
+              <p className="mt-2 text-muted-foreground">
+                Chọn gói phù hợp với nhu cầu chatbot và credit hàng tháng.
+              </p>
+            </div>
 
-          <TabsContent
-            value="subscription"
-            className="mt-0 space-y-8 duration-500 animate-in fade-in-50"
-          >
             <div className="flex justify-center">
               <PricingToggle billingCycle={billingCycle} setBillingCycle={setBillingCycle} />
             </div>
 
-            <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-3">
               {activePlans.map((plan) => {
                 const features = [
                   `${plan.monthly_credits.toLocaleString()} credits/tháng`,
@@ -243,11 +220,13 @@ export default function UpgradeClient({
                 );
               })}
             </div>
-          </TabsContent>
+          </section>
+        </TabsContent>
 
-          <TabsContent value="payg" className="mt-0 duration-500 animate-in fade-in-50">
+        <TabsContent value="credits" className="mt-0">
+          <section>
             <div className="mb-6 text-center">
-              <h2 className="text-2xl font-bold text-foreground">Nạp lẻ Credit (Pay-as-you-go)</h2>
+              <h2 className="text-2xl font-bold text-foreground">Nạp Credit - Pay-as-you-go</h2>
               <p className="mt-2 text-muted-foreground">
                 Cần thêm credit nhưng không muốn đổi gói? Mua lẻ credit không giới hạn thời gian sử
                 dụng.
@@ -261,15 +240,14 @@ export default function UpgradeClient({
                   className="relative overflow-hidden border-primary/20 bg-card transition-all hover:border-primary/50 hover:shadow-md"
                 >
                   <div className="p-6">
-                    <h3 className="text-lg font-semibold text-foreground">{pkg.name}</h3>
-                    <div className="mt-4 flex flex-col gap-1">
-                      <div className="flex items-baseline text-3xl font-bold text-primary">
-                        {((pkg.price as { VND?: number })?.VND || 0).toLocaleString("vi-VN")}đ
-                      </div>
-                      <div className="text-sm font-medium text-muted-foreground">
-                        ~ ${(pkg.price as { USD?: number })?.USD || 0} USD
-                      </div>
+                    <h3 className="mb-2 text-xl font-semibold text-foreground">{pkg.name}</h3>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-bold text-primary">
+                        {formatVND((pkg.price as { VND?: number })?.VND)}
+                      </span>
+                      <span className="text-primary">đ</span>
                     </div>
+
                     <div className="mt-4 space-y-3 text-sm text-muted-foreground">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -297,25 +275,17 @@ export default function UpgradeClient({
                 </Card>
               ))}
             </div>
-          </TabsContent>
-        </Tabs>
-
-        {/* <div className="mx-auto mt-16 max-w-4xl">
-          <h2 className="mb-8 text-center text-2xl font-bold text-foreground">
-            Chính sách dịch vụ
-          </h2>
-          <PricingPolicies variant="dashboard" />
-        </div> */}
-
-        <div className="mt-12 text-center">
-          <p className="text-muted-foreground">
-            Có câu hỏi?{" "}
-            <a href="mailto:contact@vielora.vn" className="text-primary hover:underline">
-              Liên hệ support
-            </a>
-          </p>
-        </div>
-      </main>
+          </section>
+        </TabsContent>
+      </Tabs>
+      <div className="mt-12 text-center">
+        <p className="text-muted-foreground">
+          Có câu hỏi?{" "}
+          <a href="mailto:contact@vielora.vn" className="text-primary hover:underline">
+            Liên hệ support
+          </a>
+        </p>
+      </div>
     </div>
   );
 }

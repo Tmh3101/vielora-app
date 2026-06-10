@@ -29,17 +29,17 @@ export function KnowledgeBaseTab({
   return (
     <div className="space-y-6">
       <Card className="glass">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <div className="space-y-1">
+        <CardHeader className="flex flex-col gap-4 space-y-0 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-1">
             <CardTitle> Kiến thức hiện tại</CardTitle>
             <CardDescription>Quản lý nguồn dữ liệu cho chatbot của bạn</CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <Button
               onClick={() => void onReindex()}
               disabled={isReindexing}
               variant="outline"
-              className="hover:border-primary hover:bg-white hover:text-primary"
+              className="w-full hover:border-primary hover:bg-white hover:text-primary sm:w-auto"
             >
               {isReindexing ? (
                 <>
@@ -53,7 +53,7 @@ export function KnowledgeBaseTab({
                 </>
               )}
             </Button>
-            <Button onClick={onOpenAddDataSource}>
+            <Button onClick={onOpenAddDataSource} className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Thêm dữ liệu
             </Button>
@@ -67,62 +67,66 @@ export function KnowledgeBaseTab({
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 px-4 py-3">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                      <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              <div className="rounded-lg border border-border/50 bg-muted/30 px-4 py-3">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="xs:grid-cols-2 grid grid-cols-1 gap-3 sm:flex sm:items-center sm:gap-4">
+                    <div className="flex items-center gap-2 rounded-lg bg-background/80 px-3 py-2 sm:bg-transparent sm:px-0 sm:py-0">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                        <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-foreground">
+                          {
+                            pages.filter(
+                              (p) =>
+                                p.source_type === EPageSourceType.ManualText ||
+                                p.source_type === EPageSourceType.File ||
+                                p.url.startsWith("file://")
+                            ).length
+                          }
+                        </p>
+                        <p className="-mt-1 text-xs text-muted-foreground">Tài liệu</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-lg font-bold text-foreground">
-                        {
-                          pages.filter(
-                            (p) =>
-                              p.source_type === EPageSourceType.ManualText ||
-                              p.source_type === EPageSourceType.File ||
-                              p.url.startsWith("file://")
-                          ).length
-                        }
-                      </p>
-                      <p className="-mt-1 text-xs text-muted-foreground">Tài liệu</p>
+                    <div className="hidden h-8 w-px bg-border sm:block" />
+                    <div className="flex items-center gap-2 rounded-lg bg-background/80 px-3 py-2 sm:bg-transparent sm:px-0 sm:py-0">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                        <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-foreground">
+                          {
+                            pages.filter(
+                              (p) =>
+                                p.source_type !== EPageSourceType.ManualText &&
+                                p.source_type !== EPageSourceType.File &&
+                                p.source_type !== EPageSourceType.SingleUrl &&
+                                !p.url.startsWith("file://")
+                            ).length
+                          }
+                        </p>
+                        <p className="-mt-1 text-xs text-muted-foreground">Website</p>
+                      </div>
+                    </div>
+                    <div className="hidden h-8 w-px bg-border sm:block" />
+                    <div className="flex items-center gap-2 rounded-lg bg-background/80 px-3 py-2 sm:bg-transparent sm:px-0 sm:py-0">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                        <Link className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-foreground">
+                          {pages.filter((p) => p.source_type === EPageSourceType.SingleUrl).length}
+                        </p>
+                        <p className="-mt-1 text-xs text-muted-foreground">URL</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="h-8 w-px bg-border" />
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                      <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-foreground">
-                        {
-                          pages.filter(
-                            (p) =>
-                              p.source_type !== EPageSourceType.ManualText &&
-                              p.source_type !== EPageSourceType.File &&
-                              p.source_type !== EPageSourceType.SingleUrl &&
-                              !p.url.startsWith("file://")
-                          ).length
-                        }
-                      </p>
-                      <p className="-mt-1 text-xs text-muted-foreground">Website</p>
-                    </div>
+                  <div className="text-left sm:text-right">
+                    <p className="text-xs text-muted-foreground">Tổng cộng</p>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {pages.length} nguồn
+                    </p>
                   </div>
-                  <div className="h-8 w-px bg-border" />
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                      <Link className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-foreground">
-                        {pages.filter((p) => p.source_type === EPageSourceType.SingleUrl).length}
-                      </p>
-                      <p className="-mt-1 text-xs text-muted-foreground">URL</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Tổng cộng</p>
-                  <p className="text-sm font-medium text-muted-foreground">{pages.length} nguồn</p>
                 </div>
               </div>
 
@@ -143,7 +147,7 @@ export function KnowledgeBaseTab({
                         isProcessing ? "opacity-70" : "hover:border-primary/30 hover:shadow-md"
                       }`}
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                         <div
                           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
                             isManual
@@ -167,7 +171,7 @@ export function KnowledgeBaseTab({
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
                             <h4 className="truncate font-semibold text-foreground">
                               {isTextLike ? page.title : page.title || page.url}
                             </h4>
@@ -197,7 +201,7 @@ export function KnowledgeBaseTab({
                           </p>
                         </div>
 
-                        <div className="flex shrink-0 flex-col items-end gap-1">
+                        <div className="flex shrink-0 flex-col gap-1 text-left sm:items-end sm:text-right">
                           <span className="text-xs font-medium text-muted-foreground">
                             {new Date(page.crawled_at).toLocaleDateString("vi-VN", {
                               day: "2-digit",
@@ -218,7 +222,7 @@ export function KnowledgeBaseTab({
                           )}
                         </div>
 
-                        <div className="flex shrink-0 items-center gap-1 transition-opacity duration-200">
+                        <div className="flex shrink-0 items-center gap-1 self-end transition-opacity duration-200 sm:self-auto">
                           <Button
                             variant="ghost"
                             size="icon"

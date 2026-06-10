@@ -1,19 +1,20 @@
-DROP FUNCTION IF EXISTS public.hybrid_search(text, vector, int4, float8, float8, uuid);
-DROP FUNCTION IF EXISTS public.hybrid_search(text, vector, int4, uuid);
+DROP FUNCTION IF EXISTS public.hybrid_search(text, vector, integer, double precision, double precision, uuid);
 
 CREATE OR REPLACE FUNCTION public.hybrid_search(
   query_text text,
   query_embedding vector,
   match_count integer DEFAULT 5,
-  full_text_weight double precision DEFAULT 1.0, -- Nhận % Lexical từ code TS
-  semantic_weight double precision DEFAULT 1.0,  -- Nhận % Semantic từ code TS
+  full_text_weight double precision DEFAULT 1.0,
+  semantic_weight double precision DEFAULT 1.0,
   p_bot_id uuid DEFAULT NULL::uuid
 ) RETURNS TABLE(
   id uuid,
   bot_id uuid,
   content text,
   metadata jsonb,
-  similarity double precision
+  similarity double precision,
+  source_type text,
+  resolved_url text
 ) LANGUAGE plpgsql
 AS $function$
 declare
@@ -44,22 +45,31 @@ begin
     select
       coalesce(ft.id, sem.id) as id,
       (
-        -- NHÂN THÊM TRỌNG SỐ VÀO ĐIỂM RRF TẠI ĐÂY
         coalesce(full_text_weight * (1.0 / (rrf_k + ft.rank_ix)), 0.0) +
         coalesce(semantic_weight * (1.0 / (rrf_k + sem.rank_ix)), 0.0)
       ) as rrf_score
     from full_text_results ft
     full outer join semantic_results sem on ft.id = sem.id
+  ),
+  top_matches as (
+    select
+      rrf.id,
+      rrf.rrf_score
+    from rrf_results rrf
+    order by rrf.rrf_score desc
+    limit match_count
   )
+  -- Lệnh SELECT cuối cùng thực hiện JOIN tối ưu để lấy thông tin nguồn trang/file
   select
     d.id,
     d.bot_id,
     d.content,
     d.metadata,
-    rrf.rrf_score as similarity
-  from rrf_results rrf
-  join public.documents d on d.id = rrf.id
-  order by rrf.rrf_score desc
-  limit match_count;
+    tm.rrf_score as similarity,
+    coalesce(p.source_type, 'website') as source_type, -- Fallback mặc định là website nếu không tìm thấy liên kết trang
+    p.url as resolved_url
+  from top_matches tm
+  join public.documents d on d.id = tm.id
+  left join public.pages p on d.bot_id = p.bot_id and (d.metadata->>'url') = p.url;
 end;
 $function$;

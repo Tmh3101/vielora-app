@@ -6,8 +6,8 @@ import {
   computeCounts,
   createDefaultCounts,
   getCurrentUrlFromData,
-} from "@/lib/helpers/job-tracker-helpers";
-import { canonicalizeActionKey } from "@/lib/helpers/url-helpers";
+  canonicalizeActionKey,
+} from "@/lib/helpers";
 import {
   EJobStatus,
   JobTrackerMode,

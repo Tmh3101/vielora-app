@@ -2,7 +2,7 @@
  * Widget Security Middleware
  *
  * Provides origin verification and rate limiting for widget API routes.
- * Uses the bot's domain field to validate requests.
+ * Uses the bot's allowed domain list to validate widget embed requests.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -10,6 +10,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getBotForWidgetServer } from "@/lib/services/bot.service";
 import { checkRateLimit, RateLimitResult } from "./rate-limiter";
 import { corsHeaders } from "@/lib/constants";
+import { isOriginAllowedForWidget } from "./allowed-domains";
 
 export interface SecurityContext {
   botId: string;
@@ -18,9 +19,10 @@ export interface SecurityContext {
   bot: {
     id: string;
     domain: string;
+    allowed_domains: string[];
     status: string;
-    rate_limit_per_day: number;
-    rate_limit_per_ip: number;
+    rate_limit_per_day: number | null;
+    rate_limit_per_ip: number | null;
     user_id: string;
     name: string;
     avatar_url: string | null;
@@ -54,49 +56,6 @@ function getClientIp(req: NextRequest): string {
 
   // Fallback
   return "unknown";
-}
-
-/**
- * Normalizes domain for comparison
- * Handles www prefix and protocol differences
- */
-function normalizeDomain(domain: string): string {
-  let normalized = domain.toLowerCase().trim();
-  normalized = normalized.replace(/^https?:\/\//, "");
-  normalized = normalized.replace(/^www\./, "");
-  normalized = normalized.replace(/\/$/, "");
-  normalized = normalized.replace(/:\d+$/, "");
-  return normalized;
-}
-
-/**
- * Validates if origin matches the bot's domain
- * Returns true if:
- * - Bot domain is localhost (dev mode)
- * - Origin matches bot domain (with/without www)
- */
-function validateOrigin(origin: string | null, botDomain: string): boolean {
-  if (!origin) {
-    return false;
-  }
-
-  // Normalize and compare
-  const normalizedOrigin = normalizeDomain(origin);
-  if (normalizedOrigin === normalizeDomain(process.env.NEXT_PUBLIC_APP_URL || "")) {
-    return true;
-  }
-
-  const normalizedBotDomain = normalizeDomain(botDomain);
-  if (normalizedOrigin === normalizedBotDomain) {
-    return true;
-  }
-
-  // Check if origin is a subdomain of bot domain
-  if (normalizedOrigin.endsWith(`.${normalizedBotDomain}`)) {
-    return true;
-  }
-
-  return false;
 }
 
 /**
@@ -149,7 +108,14 @@ export async function verifyWidgetRequest(
     }
 
     // Verify origin
-    if (!validateOrigin(origin, bot.domain)) {
+    if (
+      !isOriginAllowedForWidget({
+        origin,
+        allowedDomains: bot.allowed_domains,
+        fallbackDomain: bot.domain,
+        appUrl: process.env.NEXT_PUBLIC_APP_URL,
+      })
+    ) {
       return {
         success: false,
         error: "Origin not allowed",
@@ -160,13 +126,11 @@ export async function verifyWidgetRequest(
     // Check rate limits if required
     let rateLimitResult: RateLimitResult | undefined;
 
-    // Only check rate limits if both visitorId is provided and bot has limits set (!= NULL)
-    if (checkRateLimits && visitorId && bot.rate_limit_per_day && bot.rate_limit_per_ip) {
+    if (checkRateLimits && (bot.rate_limit_per_day != null || bot.rate_limit_per_ip != null)) {
       rateLimitResult = await checkRateLimit({
         botId: bot.id,
-        visitorId,
         clientIp,
-        limitPerVisitor: bot.rate_limit_per_day,
+        limitPerDay: bot.rate_limit_per_day,
         limitPerIp: bot.rate_limit_per_ip,
       });
 
@@ -189,6 +153,7 @@ export async function verifyWidgetRequest(
         bot: {
           id: bot.id,
           domain: bot.domain,
+          allowed_domains: bot.allowed_domains,
           status: bot.status,
           rate_limit_per_day: bot.rate_limit_per_day,
           rate_limit_per_ip: bot.rate_limit_per_ip,
@@ -196,6 +161,7 @@ export async function verifyWidgetRequest(
           name: bot.name,
           avatar_url: bot.avatar_url,
           widget_settings: bot.widget_settings,
+          is_stopped: bot.is_stopped,
         },
       },
       rateLimitResult,

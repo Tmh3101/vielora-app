@@ -1,11 +1,12 @@
 "use client";
 
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { Bot, Users, Zap } from "lucide-react";
+import { Bot, FileText, Users, Zap } from "lucide-react";
 
 export interface StatsGridProps {
   messagesThisMonth: number;
   totalConversations: number;
+  totalIndexedDocuments: number;
   botCount: number;
   botsLimit?: number;
   hasSubscription: boolean;
@@ -14,12 +15,13 @@ export interface StatsGridProps {
 export function StatsGrid({
   messagesThisMonth,
   totalConversations,
+  totalIndexedDocuments,
   botCount,
   botsLimit,
   hasSubscription,
 }: StatsGridProps) {
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Card className="card-stat">
         <CardDescription className="flex items-center gap-2">
           <Zap className="h-4 w-4 text-primary" />
@@ -47,6 +49,14 @@ export function StatsGrid({
             <span className="text-lg font-normal text-muted-foreground">/{botsLimit}</span>
           )}
         </CardTitle>
+      </Card>
+
+      <Card className="card-stat">
+        <CardDescription className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-primary" />
+          Tài liệu đã index
+        </CardDescription>
+        <CardTitle className="text-3xl">{totalIndexedDocuments}</CardTitle>
       </Card>
     </div>
   );

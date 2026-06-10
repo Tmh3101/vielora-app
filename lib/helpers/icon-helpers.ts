@@ -1,3 +1,5 @@
+import { EWidgetBackgroundType } from "@/types";
+
 export const getIconColorBasedOnBg = (bgColor: string): string => {
   const hex = bgColor.replace("#", "");
   const r = parseInt(hex.substring(0, 2), 16);
@@ -26,18 +28,22 @@ export const getIconSVG = (presetId: string): string => {
   return iconMap[presetId] || iconMap["messagecircle"];
 };
 
-export const generateGradientCSS = (bgType: string, bgValue: string, bgOpacity: number): string => {
-  if (bgType === "solid") {
+export const generateGradientCSS = (
+  bgType: EWidgetBackgroundType,
+  bgValue: string,
+  bgOpacity: number
+): string => {
+  if (bgType === EWidgetBackgroundType.Solid) {
     const hex = bgValue;
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
     const opacity = bgOpacity / 100;
     return `background-color: rgba(${r}, ${g}, ${b}, ${opacity});`;
-  } else if (bgType === "gradient") {
+  } else if (bgType === EWidgetBackgroundType.Gradient) {
     const overlayOpacity = 1 - bgOpacity / 100;
     return `background: ${bgValue}; background-color: rgba(255, 255, 255, ${overlayOpacity}); background-blend-mode: lighten; background-size: cover;`;
-  } else if (bgType === "image") {
+  } else if (bgType === EWidgetBackgroundType.Image) {
     const overlayOpacity = 1 - bgOpacity / 100;
     return `background-image: url("${bgValue}"); background-color: rgba(255, 255, 255, ${overlayOpacity}); background-blend-mode: lighten; background-size: cover; background-position: center; background-repeat: no-repeat;`;
   }

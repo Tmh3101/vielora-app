@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { verifyWidgetRequest, apiRateLimitMiddleware } from "@/lib/security";
+import {
+  verifyWidgetRequest,
+  apiRateLimitMiddleware,
+  checkRateLimit,
+  getClientIpFromRequest,
+} from "@/lib/security";
 import { API_RATE_LIMITS, corsHeaders } from "@/lib/constants";
 import { InitRequest, InitResponse, Message } from "@/types";
-import { EUsageAction, ESubscriptionPlan } from "@/types";
+import { EUsageAction, ESubscriptionPlan, EWidgetBackgroundType, EWidgetIconType } from "@/types";
 import {
   findActiveConversation,
   getConversationMessages,
@@ -11,8 +16,10 @@ import {
 } from "@/lib/services/conversations.service";
 import { getWalletByUserId, getMonthlyBotMessageCount } from "@/lib/services/wallet.service";
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
-import { getBotStatusInfo } from "@/lib/helpers/bot-helpers";
-import { CONVERSATION_MAX_AGE } from "@/config/widget";
+import { getBotStatusInfo, isMissingBotError } from "@/lib/helpers";
+import { CONVERSATION_MAX_AGE, WIDGET_FALLBACK } from "@/config/widget";
+import { getBotById } from "@/lib/services/bot.service";
+import { CHATBOT_UNAVAILABLE_MESSAGE } from "@/lib/constants/chat";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
@@ -50,30 +57,58 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
       );
     }
 
+    const supabase = createAdminClient();
+    const botData = await getBotById(supabase, botId).catch((error) => {
+      if (isMissingBotError(error)) return null;
+      throw error;
+    });
+
+    if (!botData) {
+      return NextResponse.json(
+        { success: false, message: CHATBOT_UNAVAILABLE_MESSAGE },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    if (botData.is_banned) {
+      return NextResponse.json(
+        { success: false, message: CHATBOT_UNAVAILABLE_MESSAGE },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    const { data: bannedUser } = await supabase
+      .from("banned_users")
+      .select("user_id")
+      .eq("user_id", botData.user_id)
+      .maybeSingle();
+
+    if (bannedUser) {
+      return NextResponse.json(
+        { success: false, message: CHATBOT_UNAVAILABLE_MESSAGE },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    if (botData.is_stopped) {
+      const statusInfo = getBotStatusInfo(botData.status, botData.is_stopped);
+
+      return NextResponse.json(
+        {
+          success: false,
+          message: statusInfo.message || "Bot is currently stopped and cannot be initialized",
+        },
+        { status: 423, headers: corsHeaders }
+      );
+    }
+
     // Check if this is a standalone chat request
     const isStandaloneRequest = req.headers.get("x-standalone-chat") === "true";
 
     let bot;
-    let _clientIp: string;
+    let clientIp: string;
 
     if (isStandaloneRequest) {
-      // Standalone chat: verify bot exists and is public
-      const supabase = createAdminClient();
-      const { data: botData, error: botError } = await supabase
-        .from("bots")
-        .select(
-          "id, domain, status, is_stopped, rate_limit_per_day, rate_limit_per_ip, user_id, name, avatar_url, widget_settings, is_public"
-        )
-        .eq("id", botId)
-        .maybeSingle();
-
-      if (botError || !botData) {
-        return NextResponse.json(
-          { success: false, message: "Bot not found" },
-          { status: 404, headers: corsHeaders }
-        );
-      }
-
       if (!botData.is_public) {
         return NextResponse.json(
           { success: false, message: "This bot is not publicly accessible" },
@@ -82,10 +117,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
       }
 
       // Extract client Ip
-      const forwardedFor = req.headers.get("x-forwarded-for");
-      _clientIp = forwardedFor
-        ? forwardedFor.split(",")[0].trim()
-        : req.headers.get("x-real-ip") || "unknown";
+      clientIp = getClientIpFromRequest(req);
 
       bot = botData;
     } else {
@@ -99,16 +131,28 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
         return NextResponse.json(
           {
             success: false,
-            message: securityResult.error || "Unauthorized",
+            message:
+              securityResult.statusCode === 404
+                ? CHATBOT_UNAVAILABLE_MESSAGE
+                : securityResult.error || "Unauthorized",
           },
           { status: securityResult.statusCode || 401, headers: corsHeaders }
         );
       }
 
       bot = securityResult.context!.bot;
-      _clientIp = securityResult.context!.clientIp;
+      clientIp = securityResult.context!.clientIp;
     }
-    const supabase = createAdminClient();
+
+    const rateLimitResult =
+      bot.rate_limit_per_day != null || bot.rate_limit_per_ip != null
+        ? await checkRateLimit({
+            botId: bot.id,
+            clientIp,
+            limitPerDay: bot.rate_limit_per_day,
+            limitPerIp: bot.rate_limit_per_ip,
+          })
+        : undefined;
 
     // Get current month usage
     const startOfMonth = new Date();
@@ -131,12 +175,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
       position?: string;
       welcomeMessage?: string;
       suggestedQuestions?: string[];
-      chatIconType?: "preset" | "custom";
+      chatIconType?: EWidgetIconType;
       chatIconPreset?: string;
       chatIconUrl?: string | null;
       chatIconColor?: string;
       chatIconBgColor?: string;
-      chatBackgroundType?: "solid" | "gradient" | "image";
+      chatBackgroundType?: EWidgetBackgroundType;
       chatBackgroundValue?: string;
       chatBackgroundOpacity?: number;
     } | null;
@@ -179,10 +223,19 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
           messagesRemaining: Math.max(0, messagesLimit - messagesUsed),
           isAvailable: statusInfo.isAvailable,
           statusMessage: statusInfo.message,
+          rateLimitExceeded: rateLimitResult ? !rateLimitResult.allowed : false,
+          rateLimitMessage: rateLimitResult?.reason || null,
+          rateLimitInfo: rateLimitResult
+            ? {
+                remaining: rateLimitResult.remaining,
+                resetAt: rateLimitResult.resetAt,
+              }
+            : undefined,
+          errorCode: rateLimitResult?.code,
           settings: {
             primaryColor: widgetSettings?.primaryColor || "#3B82F6",
             textColor: widgetSettings?.textColor || "#1f2937",
-            position: widgetSettings?.position || "bottom-right",
+            position: widgetSettings?.position || WIDGET_FALLBACK.POSITION,
             welcomeMessage:
               statusInfo.message ||
               widgetSettings?.welcomeMessage ||
@@ -192,13 +245,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
               suggestedQuestions: widgetSettings?.suggestedQuestions || [],
             }),
             // Icon settings
-            chatIconType: widgetSettings?.chatIconType || "preset",
+            chatIconType: widgetSettings?.chatIconType || EWidgetIconType.Preset,
             chatIconPreset: widgetSettings?.chatIconPreset || "messagecircle",
             chatIconUrl: widgetSettings?.chatIconUrl || null,
             chatIconColor: widgetSettings?.chatIconColor || "#ffffff",
             chatIconBgColor: widgetSettings?.chatIconBgColor || "#3B82F6",
             // Background settings
-            chatBackgroundType: widgetSettings?.chatBackgroundType || "solid",
+            chatBackgroundType: widgetSettings?.chatBackgroundType || EWidgetBackgroundType.Solid,
             chatBackgroundValue: widgetSettings?.chatBackgroundValue || "#ffffff",
             chatBackgroundOpacity: widgetSettings?.chatBackgroundOpacity || 100,
           },

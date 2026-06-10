@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { subscribeStreamChanel } from "@/lib/services/worker.service";
-import { getJobProgressStreamId } from "@/lib/helpers/job-tracker-helpers";
+import { getJobProgressStreamId } from "@/lib/helpers";
 
 export const dynamic = "force-dynamic";
 

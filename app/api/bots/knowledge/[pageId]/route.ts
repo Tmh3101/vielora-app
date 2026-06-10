@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addIndexerJob } from "@/lib/scraper";
-import { hashContent } from "@/lib/helpers/crawl-website-helpers";
-import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
+import { hashContent } from "@/lib/helpers";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import { corsHeaders } from "@/lib/constants";
 import { EPageStatus, EPageSourceType, ETransactionType, ESubscriptionPlan } from "@/types";
-import { CREDIT_PER_PAGE } from "@/config";
+import { CREDIT_PER_PAGE, EDIT_KNOWLEDGE_ALLOWED_PLANS } from "@/config";
 import { deductCredits, refundCredits } from "@/lib/services/credit.service";
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
 import { deleteKnowledgeFile } from "@/lib/supabase/upload";
@@ -19,9 +19,6 @@ import {
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
 }
-
-// Plans that are allowed to add/edit knowledge
-const ALLOWED_PLANS = [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro];
 
 interface RouteParams {
   params: Promise<{ pageId: string }>;
@@ -174,7 +171,7 @@ export async function PUT(
     }
 
     // Check if the user's plan allows editing knowledge
-    if (!ALLOWED_PLANS.includes(planCode as ESubscriptionPlan)) {
+    if (!EDIT_KNOWLEDGE_ALLOWED_PLANS.includes(planCode as ESubscriptionPlan)) {
       return NextResponse.json(
         {
           success: false,
@@ -240,12 +237,11 @@ export async function PUT(
     const newUrl = shouldConvertToManual ? `manual://${pageId}` : page.url;
 
     // Deduct credits before updating knowledge
-    const requiredCredits = CREDIT_PER_PAGE;
     const deductionResult = await deductCredits(supabase, {
       userId,
-      creditAmount: requiredCredits,
+      creditAmount: CREDIT_PER_PAGE,
       transactionType: ETransactionType.UpdateKnowledge,
-      transactionDescription: `Deducted ${requiredCredits} credits to update knowledge for bot ${page.bot_id} (${CREDIT_PER_PAGE} credit/page)`,
+      transactionDescription: `Deducted ${CREDIT_PER_PAGE} credits to update knowledge for bot ${page.bot_id} (${CREDIT_PER_PAGE} credit/page)`,
     });
 
     if (!deductionResult.success) {
@@ -287,7 +283,7 @@ export async function PUT(
         deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
         deductedFromPayg: deductionResult.deductedFromPayg || 0,
         transactionType: ETransactionType.UpdateKnowledgeRefund,
-        transactionDescription: `Refunded ${requiredCredits} credits due to an error while updating knowledge for bot ${page.bot_id}`,
+        transactionDescription: `Refunded ${CREDIT_PER_PAGE} credits due to an error while updating knowledge for bot ${page.bot_id}`,
       });
       return NextResponse.json(
         { success: false, message: `Failed to update page: ${updateError.message}` },
@@ -304,7 +300,18 @@ export async function PUT(
       });
     } catch (queueError) {
       console.error("[KnowledgeAPI] Queue indexer job error:", queueError);
-      // Page is updated but not re-indexed - user can manually trigger reindex
+      await refundCredits(supabase, {
+        userId,
+        deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
+        deductedFromPayg: deductionResult.deductedFromPayg || 0,
+        transactionType: ETransactionType.UpdateKnowledgeRefund,
+        transactionDescription: `Refunded ${CREDIT_PER_PAGE} credits due to an error while queueing re-index for bot ${page.bot_id}`,
+      });
+
+      return NextResponse.json(
+        { success: false, message: "Failed to queue knowledge re-index job" },
+        { status: 500, headers: corsHeaders }
+      );
     }
 
     return NextResponse.json(

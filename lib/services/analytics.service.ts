@@ -1,6 +1,4 @@
-import { CREDIT_PER_MESSAGE } from "@/config";
 import type { ServiceClient } from "@/lib/services/types";
-import { EUsageAction } from "@/types";
 import { DAY_MS } from "@/lib/constants/analytics";
 
 export interface AnalyticsRange {
@@ -71,10 +69,6 @@ interface MessageAnalyticsRow {
   created_at: string;
   role: string;
   no_answer: boolean | null;
-}
-
-interface UsageLogRow {
-  count: number | null;
 }
 
 /**
@@ -269,115 +263,99 @@ export function buildRecentQuestions(
   });
 }
 
-/**
- * Sum the `count` values from usage log rows, treating `null` counts as 1.
- *
- * @param logs - Array of usage log rows; if a row's `count` is `null` it is counted as 1
- * @returns The total sum of counts
- */
-function sumUsageCounts(logs: UsageLogRow[]): number {
-  return logs.reduce((sum, log) => sum + (log.count ?? 1), 0);
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
-/**
- * Fetches conversation ids and start timestamps for a bot within an ISO timestamp range.
- *
- * Queries the `conversations` table for rows where `bot_id` equals `botId` and
- * `started_at` is between `fromIso` and `toIso` (inclusive), ordered by `started_at`
- * ascending.
- *
- * @param botId - The bot identifier to filter conversations by
- * @param fromIso - Inclusive start of the time range as an ISO timestamp
- * @param toIso - Inclusive end of the time range as an ISO timestamp
- * @returns An array of conversation rows containing `id` and `started_at`; returns an empty array when no rows match
- * @throws Error when the database query returns an error (message forwarded)
- */
-async function getConversationRows(
-  client: ServiceClient,
-  botId: string,
-  fromIso: string,
-  toIso: string
-): Promise<ConversationTimestampRow[]> {
-  const { data, error } = await client
-    .from("conversations")
-    .select("id, started_at")
-    .eq("bot_id", botId)
-    .gte("started_at", fromIso)
-    .lte("started_at", toIso)
-    .order("started_at", { ascending: true });
-
-  if (error) throw new Error(error.message);
-  return data ?? [];
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
-/**
- * Fetches message rows for the specified bot within the inclusive time range.
- *
- * @param botId - The bot's identifier used to filter conversations.
- * @param fromIso - Inclusive start of the time range as an ISO 8601 string.
- * @param toIso - Inclusive end of the time range as an ISO 8601 string.
- * @returns An array of message rows containing `content`, `created_at`, `role`, and `no_answer`.
- * @throws Error when the underlying database query returns an error.
- */
-async function getMessageRows(
-  client: ServiceClient,
-  botId: string,
-  fromIso: string,
-  toIso: string
-): Promise<MessageAnalyticsRow[]> {
-  const { data, error } = await client
-    .from("messages")
-    .select(
-      `
-      conversation_id,
-      content,
-      created_at,
-      role,
-      no_answer,
-      conversations!inner(bot_id)
-    `
-    )
-    .eq("conversations.bot_id", botId)
-    .gte("created_at", fromIso)
-    .lte("created_at", toIso)
-    .order("created_at", { ascending: true });
-
-  if (error) throw new Error(error.message);
-
-  return (data ?? []).map((row) => ({
-    conversation_id: row.conversation_id,
-    content: row.content,
-    created_at: row.created_at,
-    role: row.role,
-    no_answer: row.no_answer,
-  }));
+function asNumber(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
-/**
- * Fetches usage log rows for chat-message actions for a bot within a time range.
- *
- * @param botId - Bot identifier to filter logs
- * @param fromIso - Inclusive start timestamp in ISO format
- * @param toIso - Inclusive end timestamp in ISO format
- * @returns An array of usage log rows; each row may include a `count` field
- * @throws Error when the database query returns an error
- */
-async function getUsageRows(
-  client: ServiceClient,
-  botId: string,
-  fromIso: string,
-  toIso: string
-): Promise<UsageLogRow[]> {
-  const { data, error } = await client
-    .from("usage_logs")
-    .select("count")
-    .eq("bot_id", botId)
-    .eq("action", EUsageAction.ChatMessage)
-    .gte("created_at", fromIso)
-    .lte("created_at", toIso);
+function asNullableNumber(value: unknown): number | null {
+  return value === null || value === undefined ? null : asNumber(value);
+}
 
-  if (error) throw new Error(error.message);
-  return data ?? [];
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function asBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+function mapComparisonItem(value: unknown): AnalyticsComparisonItem {
+  const item = asRecord(value);
+  return {
+    current: asNumber(item.current),
+    previous: asNumber(item.previous),
+    delta: asNumber(item.delta),
+    deltaPercent: asNullableNumber(item.deltaPercent),
+  };
+}
+
+function mapAnalyticsResponse(value: unknown, fallbackRange: AnalyticsRange): BotAnalyticsResponse {
+  const root = asRecord(value);
+  const kpis = asRecord(root.kpis);
+  const comparison = asRecord(root.comparison);
+  const range = asRecord(root.range);
+
+  return {
+    kpis: {
+      totalConversations: asNumber(kpis.totalConversations),
+      totalMessages: asNumber(kpis.totalMessages),
+      fallbackCount: asNumber(kpis.fallbackCount),
+      fallbackRate: asNumber(kpis.fallbackRate),
+      creditsUsed: asNumber(kpis.creditsUsed),
+    },
+    comparison: {
+      conversations: mapComparisonItem(comparison.conversations),
+      messages: mapComparisonItem(comparison.messages),
+      fallbacks: mapComparisonItem(comparison.fallbacks),
+      creditsUsed: mapComparisonItem(comparison.creditsUsed),
+    },
+    trends: asArray(root.trends).map((point) => {
+      const row = asRecord(point);
+      return {
+        date: asString(row.date),
+        messages: asNumber(row.messages),
+        conversations: asNumber(row.conversations),
+      };
+    }),
+    heatmap: asArray(root.heatmap).map((cell) => {
+      const row = asRecord(cell);
+      return {
+        day: asNumber(row.day),
+        hour: asNumber(row.hour),
+        value: asNumber(row.value),
+      };
+    }),
+    recentQuestions: asArray(root.recentQuestions).map((question) => {
+      const row = asRecord(question);
+      return {
+        content: asString(row.content),
+        createdAt: asString(row.createdAt),
+        answer: asString(row.answer),
+        hasFallback: asBoolean(row.hasFallback),
+      };
+    }),
+    range: {
+      from: asString(range.from) || fallbackRange.from,
+      to: asString(range.to) || fallbackRange.to,
+      previousFrom: asString(range.previousFrom) || fallbackRange.previousFrom,
+      previousTo: asString(range.previousTo) || fallbackRange.previousTo,
+    },
+  };
 }
 
 /**
@@ -402,46 +380,16 @@ export async function getBotAnalytics(
 ): Promise<BotAnalyticsResponse> {
   const range = buildAnalyticsRange(from, to);
 
-  const [
-    currentConversations,
-    previousConversations,
-    currentMessages,
-    previousMessages,
-    currentUsageLogs,
-    previousUsageLogs,
-  ] = await Promise.all([
-    getConversationRows(client, botId, range.from, range.to),
-    getConversationRows(client, botId, range.previousFrom, range.previousTo),
-    getMessageRows(client, botId, range.from, range.to),
-    getMessageRows(client, botId, range.previousFrom, range.previousTo),
-    getUsageRows(client, botId, range.from, range.to),
-    getUsageRows(client, botId, range.previousFrom, range.previousTo),
-  ]);
+  const { data, error } = await client.rpc("get_bot_analytics_v2", {
+    p_bot_id: botId,
+    p_start_date: range.from,
+    p_end_date: range.to,
+  });
 
-  const currentCreditsUsed = sumUsageCounts(currentUsageLogs) * CREDIT_PER_MESSAGE;
-  const previousCreditsUsed = sumUsageCounts(previousUsageLogs) * CREDIT_PER_MESSAGE;
-  const kpis = calculateAnalyticsKpis(
-    currentMessages,
-    currentConversations.length,
-    currentCreditsUsed
-  );
-  const previousKpis = calculateAnalyticsKpis(
-    previousMessages,
-    previousConversations.length,
-    previousCreditsUsed
-  );
+  if (error) {
+    console.error("Failed to resolve bot analytics pipeline:", error);
+    throw new Error(`Failed to fetch bot analytics: ${error.message}`);
+  }
 
-  return {
-    kpis,
-    comparison: {
-      conversations: calculateComparison(kpis.totalConversations, previousKpis.totalConversations),
-      messages: calculateComparison(kpis.totalMessages, previousKpis.totalMessages),
-      fallbacks: calculateComparison(kpis.fallbackCount, previousKpis.fallbackCount),
-      creditsUsed: calculateComparison(kpis.creditsUsed, previousKpis.creditsUsed),
-    },
-    trends: buildTrendSeries(currentConversations, currentMessages, from, to),
-    heatmap: buildHeatmapSeries(currentMessages, from, to),
-    recentQuestions: buildRecentQuestions(currentMessages),
-    range,
-  };
+  return mapAnalyticsResponse(data, range);
 }

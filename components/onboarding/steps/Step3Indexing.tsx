@@ -103,7 +103,7 @@ export function Step3Indexing({ botId, onDone }: Step3IndexingProps) {
 
         <div className="space-y-3 rounded-lg border p-4">
           <ElegantProgress
-            title="Đang index dữ liệu website..."
+            title="Đang index dữ liệu..."
             currentAction={"Đang xử lý dữ liệu..."}
             progress={trackerCounts.percent}
             crawledCount={trackerCounts.completed}
@@ -116,13 +116,13 @@ export function Step3Indexing({ botId, onDone }: Step3IndexingProps) {
           <div className="flex items-center gap-2">
             <CheckCircle className="h-4 w-4 text-green-500" />
             <span>
-              {trackerCounts.completed} / {trackerCounts.total} trang hoàn tất
+              {trackerCounts.completed} / {trackerCounts.total} nguồn hoàn tất
             </span>
           </div>
           {trackerCounts.failed > 0 && (
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="h-4 w-4" />
-              <span>{trackerCounts.failed} trang lỗi</span>
+              <span>{trackerCounts.failed} nguồn lỗi</span>
             </div>
           )}
         </div>

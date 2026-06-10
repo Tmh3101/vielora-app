@@ -22,19 +22,19 @@ export default async function DashboardPage() {
     redirect("/auth");
   }
 
-  const [bots, subscription] = await Promise.all([
+  const [bots, subscription, creditSummary] = await Promise.all([
     getBotsByUserId(supabase, user.id),
     getSubscriptionByUserId(supabase, user.id),
+    getCreditSummary(supabase, user.id),
   ]);
 
   const botIds = bots.map((b) => b.id);
   const planId = subscription?.plan_id;
 
-  const [indexedPagesByBot, totalConversations, plan, creditSummary] = await Promise.all([
+  const [indexedPagesByBot, totalConversations, plan] = await Promise.all([
     bots.length > 0 ? getIndexedPageCountsByBotIds(supabase, botIds) : Promise.resolve({}),
     bots.length > 0 ? getTotalConversationCount(supabase, botIds) : Promise.resolve(0),
     planId ? getPlanById(supabase, planId) : Promise.resolve(null),
-    planId ? getCreditSummary(supabase, user.id) : Promise.resolve(null),
   ]);
 
   const messagesThisMonth = creditSummary?.messageCreditsUsedThisMonth ?? 0;

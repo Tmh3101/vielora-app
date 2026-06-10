@@ -1,8 +1,15 @@
 import type { ServiceClient } from "@/lib/services/types";
 import type { Json, Tables, TablesInsert, TablesUpdate } from "@/lib/supabase/types";
+import {
+  deleteKnowledgeFile,
+  deleteKnowledgeFilesByBotId,
+  uploadKnowledgeFile,
+} from "@/lib/supabase/upload";
 import { deletePagesByBotId } from "@/lib/services/page.service";
 import { getJobById, getActiveJobsByBotId } from "@/lib/services/job.service";
-import { WIDGET_LIMITS } from "@/config";
+import { validateRateLimitValue } from "@/lib/bot-rate-limit";
+import { validateAllowedDomains } from "@/lib/security/allowed-domains";
+import { WIDGET_FALLBACK, WIDGET_LIMITS } from "@/config";
 import {
   CrawlStatusData,
   CrawlStatusResponse,
@@ -74,9 +81,11 @@ export interface AddKnowledgeRequest {
   botId: string;
   isManual?: boolean;
   mode?: "manual" | "file" | "url";
+  context?: "onboarding";
   title?: string;
   content?: string;
   url?: string;
+  filePath?: string;
 }
 
 export interface AddKnowledgeResponse {
@@ -392,24 +401,79 @@ export async function addKnowledgeFile(
   client: ServiceClient,
   request: { botId: string; file: File }
 ): Promise<NonNullable<AddKnowledgeResponse["data"]>> {
-  const headers = await getAuthHeaders(client);
-  const formData = new FormData();
-  formData.append("botId", request.botId);
-  formData.append("file", request.file);
-  formData.append("mode", "file");
-
-  const response = await fetch("/api/bots/knowledge", {
-    method: "POST",
-    headers,
-    body: formData,
-  });
-
-  const res = (await response.json()) as AddKnowledgeResponse;
-  if (!response.ok || !res.success || !res.data) {
-    throw new Error(res.message || "Failed to add file knowledge");
+  const uploadResult = await uploadKnowledgeFile(client, request.file, request.botId);
+  if (!uploadResult.success || !uploadResult.url) {
+    throw new Error(uploadResult.error || "Failed to upload knowledge file");
   }
 
-  return res.data;
+  const headers = {
+    ...(await getAuthHeaders(client)),
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const response = await fetch("/api/bots/knowledge", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        botId: request.botId,
+        mode: "file",
+        filePath: uploadResult.url,
+      }),
+    });
+
+    const res = (await response.json()) as AddKnowledgeResponse;
+    if (!response.ok || !res.success || !res.data) {
+      throw new Error(res.message || "Failed to add file knowledge");
+    }
+
+    return res.data;
+  } catch (error) {
+    await deleteKnowledgeFile(client, uploadResult.url).catch((error) => {
+      console.error("[BotService] Failed to cleanup uploaded knowledge file", error);
+    });
+    throw error;
+  }
+}
+
+export async function addOnboardingKnowledgeFile(
+  client: ServiceClient,
+  request: { botId: string; file: File }
+): Promise<NonNullable<AddKnowledgeResponse["data"]>> {
+  const uploadResult = await uploadKnowledgeFile(client, request.file, request.botId);
+  if (!uploadResult.success || !uploadResult.url) {
+    throw new Error(uploadResult.error || "Failed to upload knowledge file");
+  }
+
+  const headers = {
+    ...(await getAuthHeaders(client)),
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const response = await fetch("/api/bots/knowledge", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        botId: request.botId,
+        mode: "file",
+        context: "onboarding",
+        filePath: uploadResult.url,
+      }),
+    });
+
+    const res = (await response.json()) as AddKnowledgeResponse;
+    if (!response.ok || !res.success || !res.data) {
+      throw new Error(res.message || "Failed to add onboarding file knowledge");
+    }
+
+    return res.data;
+  } catch (error) {
+    await deleteKnowledgeFile(client, uploadResult.url).catch((error) => {
+      console.error("[BotService] Failed to cleanup uploaded onboarding knowledge file", error);
+    });
+    throw error;
+  }
 }
 
 export async function addKnowledgeUrl(
@@ -513,6 +577,7 @@ export interface CreateBotParams {
   name: string;
   domain: string;
   avatarUrl?: string | null;
+  crawlSettings?: Json | null;
 }
 
 export interface WidgetSettingsInput {
@@ -532,6 +597,10 @@ export interface UpdateBotAppearanceParams {
 export interface UpdateBotRateLimitParams {
   rateLimitPerDay?: number | null;
   rateLimitPerIp?: number | null;
+}
+
+export interface UpdateBotAllowedDomainsParams {
+  allowedDomains: string[];
 }
 
 /**
@@ -562,11 +631,30 @@ export async function getBotById(client: ServiceClient, botId: string): Promise<
  * Tạo một bot mới cho user.
  */
 export async function createBot(client: ServiceClient, params: CreateBotParams): Promise<BotRow> {
+  const allowedDomains = validateAllowedDomains([params.domain]);
+
   const newBot: TablesInsert<"bots"> = {
     user_id: params.userId,
     name: params.name,
     domain: params.domain,
+    allowed_domains: allowedDomains.valid ? allowedDomains.domains : [],
+    widget_settings: {
+      primaryColor: WIDGET_FALLBACK.PRIMARY_COLOR,
+      textColor: WIDGET_FALLBACK.TEXT_COLOR,
+      position: WIDGET_FALLBACK.POSITION,
+      welcomeMessage: WIDGET_FALLBACK.WELCOME_MESSAGE,
+      suggestedQuestions: [],
+      chatBackgroundType: WIDGET_FALLBACK.CHAT_BACKGROUND_TYPE,
+      chatBackgroundValue: WIDGET_FALLBACK.CHAT_BACKGROUND_VALUE,
+      chatBackgroundOpacity: WIDGET_FALLBACK.CHAT_BACKGROUND_OPACITY,
+      chatIconType: WIDGET_FALLBACK.CHAT_ICON_TYPE,
+      chatIconPreset: WIDGET_FALLBACK.CHAT_ICON_PRESET,
+      chatIconUrl: null,
+      chatIconColor: WIDGET_FALLBACK.CHAT_ICON_COLOR,
+      chatIconBgColor: WIDGET_FALLBACK.CHAT_ICON_BG_COLOR,
+    },
     ...(params.avatarUrl !== undefined ? { avatar_url: params.avatarUrl } : {}),
+    ...(params.crawlSettings !== undefined ? { crawl_settings: params.crawlSettings } : {}),
   };
 
   const { data, error } = await client.from("bots").insert(newBot).select().single();
@@ -580,6 +668,18 @@ export async function createBot(client: ServiceClient, params: CreateBotParams):
  * Xóa một bot cùng toàn bộ pages liên quan.
  */
 export async function deleteBot(client: ServiceClient, botId: string): Promise<void> {
+  try {
+    const deleteStorageResult = await deleteKnowledgeFilesByBotId(client, botId);
+    if (!deleteStorageResult.success) {
+      console.error(
+        `[BotService] Failed to delete knowledge files for bot ${botId}:`,
+        deleteStorageResult.error
+      );
+    }
+  } catch (storageError) {
+    console.error(`[BotService] Error during storage cleanup for bot ${botId}:`, storageError);
+  }
+
   await deletePagesByBotId(client, botId);
 
   const { error } = await client.from("bots").delete().eq("id", botId);
@@ -611,6 +711,9 @@ export async function updateBotRateLimit(
   botId: string,
   params: UpdateBotRateLimitParams
 ): Promise<void> {
+  validateRateLimitValue(params.rateLimitPerDay, "Giới hạn tin nhắn / ngày");
+  validateRateLimitValue(params.rateLimitPerIp, "Giới hạn tin nhắn / IP / ngày");
+
   const updates: TablesUpdate<"bots"> = {
     rate_limit_per_day: params.rateLimitPerDay ?? null,
     rate_limit_per_ip: params.rateLimitPerIp ?? null,
@@ -618,6 +721,29 @@ export async function updateBotRateLimit(
 
   const { error } = await client.from("bots").update(updates).eq("id", botId);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Cập nhật danh sách domain được phép nhúng widget của bot.
+ */
+export async function updateBotAllowedDomains(
+  client: ServiceClient,
+  botId: string,
+  params: UpdateBotAllowedDomainsParams
+): Promise<string[]> {
+  const validation = validateAllowedDomains(params.allowedDomains);
+  if (!validation.valid) {
+    throw new Error(validation.error || "Danh sách domain không hợp lệ.");
+  }
+
+  const updates: TablesUpdate<"bots"> = {
+    allowed_domains: validation.domains,
+  };
+
+  const { error } = await client.from("bots").update(updates).eq("id", botId);
+  if (error) throw new Error(error.message);
+
+  return validation.domains;
 }
 
 /**
@@ -789,6 +915,7 @@ export type BotForWidget = Pick<
   BotRow,
   | "id"
   | "domain"
+  | "allowed_domains"
   | "status"
   | "is_stopped"
   | "rate_limit_per_day"
@@ -810,7 +937,7 @@ export async function getBotForWidgetServer(
   const { data, error } = await client
     .from("bots")
     .select(
-      "id, domain, status, is_stopped, rate_limit_per_day, rate_limit_per_ip, user_id, name, avatar_url, widget_settings"
+      "id, domain, allowed_domains, status, is_stopped, rate_limit_per_day, rate_limit_per_ip, user_id, name, avatar_url, widget_settings"
     )
     .eq("id", botId)
     .maybeSingle();

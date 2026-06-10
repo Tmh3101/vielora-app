@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Bot, MessageSquareQuote } from "lucide-react";
 import type { RecentQuestionInsight } from "@/lib/services/analytics.service";
-import { parseMarkdown } from "@/lib/helpers/chat-helpers";
+import { parseMarkdown } from "@/lib/helpers";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

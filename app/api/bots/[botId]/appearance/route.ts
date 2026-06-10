@@ -1,20 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsHeaders } from "@/lib/constants";
-import { authenticateRequest, isAuthError } from "@/lib/helpers/auth";
-import { ESubscriptionPlan } from "@/types";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
+import { ESubscriptionPlan, EWidgetBackgroundType, EWidgetIconType } from "@/types";
 import {
   getBotByIdServer,
   updateBotAppearance,
   validateSuggestedQuestions,
 } from "@/lib/services/bot.service";
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
+import { isHexColor } from "@/lib/helpers";
+import { SUGGESTED_QUESTIONS_ALLOWED_PLANS } from "@/config";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
 }
-
-// Plans that are allowed to use suggested questions feature
-const SUGGESTED_QUESTIONS_ALLOWED_PLANS = [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro];
 
 interface AppearanceUpdateRequest {
   name?: string;
@@ -25,10 +24,10 @@ interface AppearanceUpdateRequest {
     position?: string;
     welcomeMessage?: string;
     suggestedQuestions?: string[] | null;
-    chatBackgroundType?: "solid" | "gradient" | "image";
+    chatBackgroundType?: EWidgetBackgroundType;
     chatBackgroundValue?: string;
     chatBackgroundOpacity?: number;
-    chatIconType?: "preset" | "custom";
+    chatIconType?: EWidgetIconType;
     chatIconPreset?: string;
     chatIconUrl?: string | null;
     chatIconColor?: string;
@@ -85,6 +84,36 @@ export async function POST(
     // Parse request body
     const body: AppearanceUpdateRequest = await req.json();
     const { name, avatarUrl, widgetSettings } = body;
+    const normalizedName = typeof name === "string" ? name.trim() : name;
+    const normalizedPrimaryColor =
+      typeof widgetSettings?.primaryColor === "string"
+        ? widgetSettings.primaryColor.trim()
+        : widgetSettings?.primaryColor;
+    const normalizedWelcomeMessage =
+      typeof widgetSettings?.welcomeMessage === "string"
+        ? widgetSettings.welcomeMessage.trim()
+        : widgetSettings?.welcomeMessage;
+
+    if (typeof name === "string" && !normalizedName) {
+      return NextResponse.json(
+        { success: false, message: "Tên Bot không được để trống." },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (typeof widgetSettings?.welcomeMessage === "string" && !normalizedWelcomeMessage) {
+      return NextResponse.json(
+        { success: false, message: "Tin nhắn chào mừng không được để trống." },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (typeof widgetSettings?.primaryColor === "string" && !isHexColor(normalizedPrimaryColor)) {
+      return NextResponse.json(
+        { success: false, message: "Màu thương hiệu phải là mã Hex hợp lệ dạng #RRGGBB." },
+        { status: 400, headers: corsHeaders }
+      );
+    }
 
     // If suggestedQuestions is being set, check plan
     if (widgetSettings?.suggestedQuestions && widgetSettings.suggestedQuestions.length > 0) {
@@ -132,17 +161,17 @@ export async function POST(
       // Merge with new settings
       updatedWidgetSettings = {
         ...currentSettings,
-        ...(widgetSettings.primaryColor !== undefined && {
-          primaryColor: widgetSettings.primaryColor,
+        ...(widgetSettings?.primaryColor !== undefined && {
+          primaryColor: normalizedPrimaryColor,
         }),
-        ...(widgetSettings.textColor !== undefined && {
+        ...(widgetSettings?.textColor !== undefined && {
           textColor: widgetSettings.textColor,
         }),
-        ...(widgetSettings.position !== undefined && { position: widgetSettings.position }),
-        ...(widgetSettings.welcomeMessage !== undefined && {
-          welcomeMessage: widgetSettings.welcomeMessage,
+        ...(widgetSettings?.position !== undefined && { position: widgetSettings.position }),
+        ...(widgetSettings?.welcomeMessage !== undefined && {
+          welcomeMessage: normalizedWelcomeMessage,
         }),
-        ...(widgetSettings.suggestedQuestions !== undefined && {
+        ...(widgetSettings?.suggestedQuestions !== undefined && {
           suggestedQuestions: widgetSettings.suggestedQuestions ?? [],
         }),
         ...(widgetSettings.chatBackgroundType !== undefined && {
@@ -174,7 +203,7 @@ export async function POST(
 
     // Update bot appearance
     await updateBotAppearance(supabase, botId, {
-      name,
+      name: normalizedName,
       avatarUrl,
       widgetSettings: updatedWidgetSettings,
     });

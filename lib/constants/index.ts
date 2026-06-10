@@ -7,3 +7,6 @@ export * from "./react-query-key";
 export * from "./scraper";
 export * from "./widget-appearance";
 export * from "./payment";
+export * from "./chat";
+export * from "./knowledge";
+export * from "./onboarding";

@@ -9,7 +9,7 @@
     settings: {
       primaryColor: '#3B82F6',
       textColor: '#1f2937',
-      position: 'bottom-right',
+      position: '{"x":300.3883495145631,"y":328}',
       welcomeMessage: 'Xin chào! Tôi có thể giúp gì cho bạn?',
       suggestedQuestions: [],
       chatIconType: 'preset',
@@ -21,6 +21,9 @@
   };
 
   var MAX_CHAT_INPUT = 200;
+  var CHATBOT_UNAVAILABLE_MESSAGE = 'Chatbot không còn tồn tại hoặc đã bị xóa.';
+  var INSUFFICIENT_CREDITS_ERROR_CODE = 'INSUFFICIENT_CREDITS';
+  var INSUFFICIENT_CREDITS_MESSAGE = 'Bot hiện đã hết credits. Vui lòng quay lại sau.';
 
   var state = {
     isInitialized: false,
@@ -36,6 +39,9 @@
     messages: [],
     quotaExceeded: false,
     rateLimitExceeded: false,
+    rateLimitMessage: null,
+    insufficientCredits: false,
+    insufficientCreditsMessage: null,
     suggestedQuestionsShown: false
   };
 
@@ -101,6 +107,17 @@
     return id;
   }
 
+  function getRateLimitMessage(botName, rateLimitErrorCode, fallback) {
+    switch (rateLimitErrorCode) {
+    case "BOT_DAILY_LIMIT_EXCEEDED":
+      return `${botName} đã đạt giới hạn tin nhắn trong ngày.`;
+    case "BOT_IP_DAILY_LIMIT_EXCEEDED":
+      return `Bạn đã đạt giới hạn tin nhắn trong ngày.`;
+    default:
+      return fallback || `Đã đạt giới hạn tin nhắn trong ngày.`;
+  }
+};
+
   async function initWidget(botId, options) {
     if (state.isInitialized) return;
     state.isInitialized = true;
@@ -128,18 +145,31 @@
         })
       });
 
+      var data = await response.json();
+      var rateLimitMessCreated = getRateLimitMessage(config.botName || 'Bot', data.data?.errorCode, data.message || 'Đã đạt giới hạn tin nhắn trong ngày.');
+
       if (response.status === 429) {
-        var errorData = await response.json();
-        if (errorData.retryAfter) {
-          console.log('Vielora: Rate limit, retry in ' + errorData.retryAfter + 's');
+        if (data.retryAfter) {
+          console.log('Vielora: Rate limit, retry in ' + data.retryAfter + 's');
           setTimeout(function () {
             state.isInitialized = false;
             initWidget(config.botId, { baseUrl: config.baseUrl });
-          }, (errorData.retryAfter || 60) * 1000);
+          }, (data.retryAfter || 60) * 1000);
         } else {
           state.rateLimitExceeded = true;
+          state.rateLimitMessage = rateLimitMessCreated;
           renderWidget();
+          setTimeout(function () {
+            appendBotMessageOnce(state.rateLimitMessage);
+            syncChatInputState();
+          }, 100);
         }
+        return;
+      }
+
+      if (response.status === 404) {
+        console.log('Vielora: Bot not found (404)');
+        removeWidget();
         return;
       }
 
@@ -148,11 +178,11 @@
         return;
       }
 
-      var data = await response.json();
-
       if (data.success) {
         config.settings = data.data.settings || config.settings;
         state.quotaExceeded = data.data.quotaExceeded;
+        state.rateLimitExceeded = !!data.data.rateLimitExceeded;
+        state.rateLimitMessage = data.data?.errorCode ? getRateLimitMessage(data.data.name || 'Bot', data.data.errorCode, data.data.statusMessage) : null;
         state.isReady = data.data.status === 'ready';
         state.isAvailable = data.data.isAvailable;
         state.statusMessage = data.data.statusMessage;
@@ -171,31 +201,155 @@
 
         if (state.messages.length > 0) {
           loadPreviousMessages();
+          syncChatInputState();
           setTimeout(function () {
-            if (!state.suggestedQuestionsShown && config.settings.suggestedQuestions && config.settings.suggestedQuestions.length > 0) {
+            if (!state.suggestedQuestionsShown && !isChatBlocked() && config.settings.suggestedQuestions && config.settings.suggestedQuestions.length > 0) {
               addSuggestedQuestions(config.settings.suggestedQuestions);
             }
           }, 600);
         } else {
           setTimeout(function () {
             var messages = document.getElementById('chatbotai-messages');
-            if (messages && state.isAvailable) {
+            if (messages && state.rateLimitExceeded) {
+              appendBotMessageOnce(state.rateLimitMessage || `${state.botName} đã đạt giới hạn tin nhắn trong ngày.`);
+            } else if (messages && state.isAvailable) {
               addMessage(config.settings.welcomeMessage, 'bot');
 
-              if (config.settings.suggestedQuestions && config.settings.suggestedQuestions.length > 0) {
+              if (!isChatBlocked() && config.settings.suggestedQuestions && config.settings.suggestedQuestions.length > 0) {
                 addSuggestedQuestions(config.settings.suggestedQuestions);
               }
             } else if (messages && state.statusMessage) {
               addMessage(state.statusMessage, 'bot');
             }
+            syncChatInputState();
           }, 500);
         }
       } else {
-        console.error('Vielora: Init failed', data.error);
+        var initMessage = response.status === 404 ? CHATBOT_UNAVAILABLE_MESSAGE : (data.message || 'Chatbot hiện không khả dụng.');
+        showWidgetInitFailure(initMessage, false);
+        console.error('Vielora: Init failed', initMessage);
       }
     } catch (error) {
       console.error('Vielora: Network error', error);
     }
+  }
+
+  function showWidgetInitFailure(message, openChat) {
+    state.isReady = false;
+    state.isAvailable = false;
+    state.statusMessage = message;
+    renderWidget();
+
+    setTimeout(function () {
+      var chat = document.getElementById('chatbotai-chat');
+      var input = document.getElementById('chatbotai-input');
+      var send = document.getElementById('chatbotai-send');
+      var messages = document.getElementById('chatbotai-messages');
+
+      if (openChat && chat) {
+        state.isOpen = true;
+        chat.style.display = 'flex';
+      }
+
+      if (input) {
+        input.disabled = true;
+        input.placeholder = 'Bot chưa sẵn sàng';
+      }
+      if (send) send.disabled = true;
+      if (messages && messages.children.length === 0) addMessage(message, 'bot');
+    }, 100);
+  }
+
+  function isChatBlocked() {
+    return !!(
+      state.insufficientCredits || state.rateLimitExceeded || state.quotaExceeded || !state.isAvailable
+    );
+  }
+
+  function getBlockedChatMessage() {
+    if (state.insufficientCredits) {
+      return state.insufficientCreditsMessage || INSUFFICIENT_CREDITS_MESSAGE;
+    }
+
+    if (state.rateLimitExceeded) {
+      return state.rateLimitMessage || `${state.botName} đã đạt giới hạn tin nhắn trong ngày.`;
+    }
+
+    return '';
+  }
+
+  function updateRateLimitBanner() {
+    var banner = document.getElementById('chatbotai-rate-limit-banner');
+    if (!banner) return;
+
+    if (state.rateLimitExceeded || state.insufficientCredits) {
+      banner.textContent = getBlockedChatMessage();
+      banner.style.borderColor = state.insufficientCredits ? 'rgba(253, 164, 175, 0.7)' : 'rgba(253, 186, 116, 0.7)';
+      banner.style.background = state.insufficientCredits ? 'rgba(255, 241, 242, 0.92)' : 'rgba(255, 251, 235, 0.88)';
+      banner.style.color = state.insufficientCredits ? '#9f1239' : '#92400e';
+      banner.style.display = 'block';
+    } else {
+      banner.textContent = '';
+      banner.style.display = 'none';
+    }
+  }
+
+  function syncChatInputState() {
+    var input = document.getElementById('chatbotai-input');
+    var send = document.getElementById('chatbotai-send');
+    var blocked = isChatBlocked();
+
+    if (input) {
+      input.disabled = state.isLoading || blocked;
+      input.placeholder = state.insufficientCredits ? 'Bot đã hết credits' : 'Nhập tin nhắn...';
+      input.style.background = blocked ? '#f1f5f9' : UI.inputBg;
+      input.style.opacity = blocked ? '0.6' : '1';
+      input.style.cursor = blocked ? 'not-allowed' : 'text';
+    }
+
+    if (send) {
+      send.disabled = state.isLoading || blocked;
+      send.style.cursor = state.isLoading || blocked ? 'not-allowed' : 'pointer';
+      send.style.opacity = state.isLoading || blocked ? '0.4' : '1';
+    }
+
+    var status = document.getElementById('chatbotai-status');
+    if (status) {
+      status.textContent = state.insufficientCredits
+        ? 'Tạm dừng do hết credits'
+        : (state.isAvailable ? 'Luôn sẵn sàng hỗ trợ' : 'Chưa sẵn sàng');
+    }
+
+    updateRateLimitBanner();
+    if (state.rateLimitExceeded || state.insufficientCredits) {
+      setSuggestedQuestionsDisplay(false);
+    }
+  }
+
+  function appendBotMessageOnce(text) {
+    var messages = document.getElementById('chatbotai-messages');
+    if (!messages) return;
+
+    var lastMessage = messages.lastElementChild;
+    if (
+      lastMessage &&
+      lastMessage.classList &&
+      lastMessage.classList.contains('chatbotai-message') &&
+      lastMessage.classList.contains('bot') &&
+      (lastMessage.textContent || '').trim() === text.trim()
+    ) {
+      return;
+    }
+
+    addMessage(text, 'bot');
+  }
+
+  function removeWidget() {
+    var existingWidget = document.getElementById('chatbotai-widget');
+    if (existingWidget) existingWidget.remove();
+    state.isReady = false;
+    state.isAvailable = false;
+    state.isOpen = false;
   }
 
   function renderWidget() {
@@ -244,7 +398,7 @@
       }
     }
 
-    return { x: 268, y: 328, legacy: true };
+    return { x: 300.3883495145631, y: 328, legacy: true };
   }
 
   function getIconSVG(presetId) {
@@ -282,7 +436,7 @@
   }
 
   function getWidgetHTML() {
-    var positionSetting = config.settings.position || 'bottom-right';
+    var positionSetting = config.settings.position || '{"x":300.3883495145631,"y":328}';
     var parsedPos = parsePosition(positionSetting);
     var isLegacyPosition = parsedPos.legacy;
 
@@ -409,8 +563,8 @@
       }
           <div style="flex: 1;">
             <div style="font-weight: 600; font-size: 16px; margin-bottom: -2px;">${state.botName || "Trợ lý ảo"}</div>
-            <div style="font-size: 12px; opacity: 0.9; display: flex; align-items: center; gap: 6px; line-height: 1;">
-              ${state.isAvailable ? 'Luôn sẵn sàng hỗ trợ' : 'Chưa sẵn sàng'}
+            <div id="chatbotai-status" style="font-size: 12px; opacity: 0.9; display: flex; align-items: center; gap: 6px; line-height: 1;">
+              ${state.insufficientCredits ? 'Tạm dừng do hết credits' : (state.isAvailable ? 'Luôn sẵn sàng hỗ trợ' : 'Chưa sẵn sàng')}
             </div>
           </div>
           <button id="chatbotai-close" style="background: none; border: none; color: white; cursor: pointer; padding: 4px;">
@@ -425,15 +579,18 @@
           <div id="chatbotai-suggested-container" style="display: none; position: absolute; left: 0; right: 0; bottom: 48px; z-index: 2; padding: 8px 12px; background: transparent; overflow: visible; pointer-events: auto;">
             <div id="chatbotai-suggested-buttons" style="display: flex; gap: 6px; flex-wrap: nowrap; padding-right: 8px; overflow-x: auto;"></div>
           </div>
+          <div id="chatbotai-rate-limit-banner" style="display: ${state.rateLimitExceeded || state.insufficientCredits ? 'block' : 'none'}; position: absolute; left: 12px; right: 12px; bottom: 50px; z-index: 3; padding: 6px 12px; border-radius: 12px 12px 0 0; border: 1px solid ${state.insufficientCredits ? 'rgba(253, 164, 175, 0.7)' : 'rgba(253, 186, 116, 0.7)'}; background: ${state.insufficientCredits ? 'rgba(255, 241, 242, 0.92)' : 'rgba(255, 251, 235, 0.88)'}; color: ${state.insufficientCredits ? '#9f1239' : '#92400e'}; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-size: 12px; font-weight: 500; pointer-events: none;">
+            ${getBlockedChatMessage()}
+          </div>
           
           <div id="chatbotai-input-container" style="padding: 2px 12px; display: flex; gap: 8px; background: white; border-radius: 0 0 16px 16px;">
-            <input id="chatbotai-input" type="text" placeholder="${state.isAvailable ? 'Nhập tin nhắn...' : 'Bot chưa sẵn sàng'}" ${state.isAvailable ? '' : 'disabled'} maxlength="${MAX_CHAT_INPUT}" style="
+            <input id="chatbotai-input" type="text" placeholder="Nhập tin nhắn..." ${isChatBlocked() ? 'disabled' : ''} maxlength="${MAX_CHAT_INPUT}" style="
               flex: 1; padding: 8px 16px; border: 1px solid ${UI.inputBorder}; border-radius: 9999px; font-size: 14px; outline: none; transition: border-color 0.2s;
-              color: #0f172a !important; background: ${state.isAvailable ? UI.inputBg : '#f1f5f9'} !important; opacity: ${state.isAvailable ? '1' : '0.6'};
+              color: #0f172a !important; background: ${isChatBlocked() ? '#f1f5f9' : UI.inputBg} !important; opacity: ${isChatBlocked() ? '0.6' : '1'};
             " />
-            <button id="chatbotai-send" ${state.isAvailable ? '' : 'disabled'} style="
-              width: 40px; height: 40px; border-radius: 50%; background-color: ${config.settings.primaryColor}; border: none; cursor: ${state.isAvailable ? 'pointer' : 'not-allowed'}; display: flex; align-items: center; justify-content: center;
-              transition: opacity 0.2s; opacity: ${state.isAvailable ? '1' : '0.4'};
+            <button id="chatbotai-send" ${isChatBlocked() ? 'disabled' : ''} style="
+              width: 40px; height: 40px; border-radius: 50%; background-color: ${config.settings.primaryColor}; border: none; cursor: ${isChatBlocked() ? 'not-allowed' : 'pointer'}; display: flex; align-items: center; justify-content: center;
+              transition: opacity 0.2s; opacity: ${isChatBlocked() ? '0.4' : '1'};
             ">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             </button>
@@ -492,7 +649,10 @@
       .chatbotai-message.bot div { background: ${UI.bubbleBotBg}; color: ${config.settings.textColor}; padding: 12px 16px; border-radius: ${UI.bubbleRadius}px; border-bottom-left-radius: ${UI.bubbleTailRadius}px; }
       .chatbotai-message.bot strong { font-weight: 600; }
       .chatbotai-message.bot a { color: ${config.settings.primaryColor}; text-decoration: underline; }
-      .chatbotai-message.bot ul, .chatbotai-message.bot ol { margin: 8px 0; padding-left: 20px; }
+      .chatbotai-message.bot ul, .chatbotai-message.bot ol { list-style-position: outside; margin: 8px 0; padding-left: 20px; }
+      .chatbotai-message.bot ul { list-style-type: disc; }
+      .chatbotai-message.bot ol { list-style-type: decimal; }
+      .chatbotai-message.bot li { display: list-item; margin-bottom: 3px; }
       .chatbotai-message.bot pre { background: #1f2937; color: #e5e7eb; padding: 8px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
       
       
@@ -554,7 +714,7 @@
     var messages = document.getElementById('chatbotai-messages');
     if (!container) return;
 
-    container.style.display = show ? 'block' : 'none';
+    container.style.display = show && !state.rateLimitExceeded ? 'block' : 'none';
 
     if (!messages) return;
 
@@ -591,8 +751,9 @@
 
       if (state.isOpen) {
         applyBackgroundStyle();
+        syncChatInputState();
         setTimeout(function () {
-          input.focus();
+          if (!isChatBlocked()) input.focus();
           var messages = document.getElementById('chatbotai-messages');
           if (messages) {
             messages.scrollTop = messages.scrollHeight;
@@ -604,7 +765,7 @@
         if (container) {
           setSuggestedQuestionsDisplay(false);
           setTimeout(function () {
-            if (!state.suggestedQuestionsShown && config.settings.suggestedQuestions && config.settings.suggestedQuestions.length > 0) {
+            if (!state.suggestedQuestionsShown && !isChatBlocked() && config.settings.suggestedQuestions && config.settings.suggestedQuestions.length > 0) {
               var btnsDiv = document.getElementById('chatbotai-suggested-buttons');
               if (btnsDiv && btnsDiv.children.length > 0) {
                 setSuggestedQuestionsDisplay(true);
@@ -633,20 +794,26 @@
     if (!message || state.isLoading) return;
 
     if (message.length > MAX_CHAT_INPUT) {
-      addMessage('Tin nhắn quá dài (tối đa ' + MAX_CHAT_INPUT + ' ký tự). Vui lòng rút gọn nội dung.', 'bot');
+      appendBotMessageOnce('Tin nhắn quá dài (tối đa ' + MAX_CHAT_INPUT + ' ký tự). Vui lòng rút gọn nội dung.');
       return;
     }
 
     if (state.quotaExceeded) {
-      addMessage('Hệ thống đang bảo trì. Vui lòng quay lại sau.', 'bot');
+      appendBotMessageOnce('Hệ thống đang bảo trì. Vui lòng quay lại sau.');
+      return;
+    }
+    if (state.insufficientCredits) {
+      input.value = '';
+      appendBotMessageOnce(state.insufficientCreditsMessage || INSUFFICIENT_CREDITS_MESSAGE);
       return;
     }
     if (state.rateLimitExceeded) {
-      addMessage('Bạn đã hết lượt chat miễn phí hôm nay.', 'bot');
+      input.value = '';
+      appendBotMessageOnce(state.rateLimitMessage || `${state.botName} đã đạt giới hạn tin nhắn trong ngày.`);
       return;
     }
     if (!state.isAvailable) {
-      addMessage(state.statusMessage || 'Bot chưa sẵn sàng. Vui lòng đợi trong giây lát.', 'bot');
+      appendBotMessageOnce(state.statusMessage || `${state.botName} chưa sẵn sàng. Vui lòng đợi trong giây lát.`);
       return;
     }
 
@@ -654,6 +821,7 @@
     addMessage(message, 'user');
     showTyping();
     state.isLoading = true;
+    syncChatInputState();
 
     try {
       var response = await fetch(config.baseUrl + '/api/widget/chat', {
@@ -673,28 +841,51 @@
 
       hideTyping();
 
+      var data = await response.json();
+
       if (response.status === 429) {
         state.rateLimitExceeded = true;
-        addMessage('Bạn đã hết lượt chat miễn phí trong ngày.', 'bot');
+        state.rateLimitMessage = getRateLimitMessage(config.botName || 'Bot', data.code, data.message || 'Đã đạt giới hạn tin nhắn trong ngày.');
+        setSuggestedQuestionsDisplay(false);
+        syncChatInputState();
+        appendBotMessageOnce(state.rateLimitMessage);
+        state.isLoading = false;
+        return;
+      }
+      if (response.status === 402 && data.code === INSUFFICIENT_CREDITS_ERROR_CODE) {
+        state.insufficientCredits = true;
+        state.insufficientCreditsMessage = data.message || INSUFFICIENT_CREDITS_MESSAGE;
+        setSuggestedQuestionsDisplay(false);
+        syncChatInputState();
+        appendBotMessageOnce(state.insufficientCreditsMessage);
+        state.isLoading = false;
         return;
       }
       if (response.status === 403) {
-        addMessage('Lỗi xác thực (Origin/Domain không hợp lệ).', 'bot');
+        appendBotMessageOnce('Lỗi xác thực (Origin/Domain không hợp lệ).');
+        state.isLoading = false;
+        syncChatInputState();
         return;
       }
 
-      var data = await response.json();
       if (data.success) {
         state.conversationId = data.data.conversationId;
         addMessage(data.data.message, 'bot');
       } else {
-        addMessage('Có lỗi xảy ra, vui lòng thử lại.', 'bot');
+        var chatMessage = response.status === 404 ? CHATBOT_UNAVAILABLE_MESSAGE : (data.message || 'Có lỗi xảy ra, vui lòng thử lại.');
+        if (response.status === 404) {
+          state.isAvailable = false;
+          state.statusMessage = chatMessage;
+          syncChatInputState();
+        }
+        addMessage(chatMessage, 'bot');
       }
     } catch (error) {
       hideTyping();
-      addMessage('Mất kết nối mạng. Vui lòng kiểm tra lại.', 'bot');
+      appendBotMessageOnce('Mất kết nối mạng. Vui lòng kiểm tra lại.');
     }
     state.isLoading = false;
+    syncChatInputState();
   }
 
   function addMessage(text, role) {
@@ -720,6 +911,7 @@
   function addSuggestedQuestions(questions) {
     if (!questions || questions.length === 0) return;
     if (state.suggestedQuestionsShown) return;
+    if (isChatBlocked()) return;
 
     var container = document.getElementById('chatbotai-suggested-container');
     var buttonsDiv = document.getElementById('chatbotai-suggested-buttons');
@@ -747,6 +939,7 @@
       };
 
       btn.onclick = function () {
+        if (isChatBlocked()) return;
         state.suggestedQuestionsShown = true;
         setSuggestedQuestionsDisplay(false);
         var input = document.getElementById('chatbotai-input');
@@ -783,22 +976,38 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
+    result = result.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    result = result.replace(/`([^`]+)`/g, '<code style="background-color: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-size: 0.9em; font-family: monospace;">$1</code>');
+
+    var linkColor = config.settings.primaryColor || '#3B82F6';
     result = result.replace(
       /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline; text-underline-offset: 2px; font-weight: 500;">$1</a>'
+      '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: ' + linkColor + '; text-decoration: underline; text-underline-offset: 2px; font-weight: 600;">$1</a>'
     );
 
-    result = result.replace(
-      /(^|\s)(https?:\/\/[^\s<]+)/g,
-      '$1<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline; text-underline-offset: 2px; font-weight: 500;">$2</a>'
-    );
+    var lines = result.split('\n');
+    var blocks = [];
+    var listItems = [];
 
-    result = result
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/`([^`]+)`/g, '<code style="background-color: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-size: 0.9em;">$1</code>')
-      .replace(/\n/g, '<br>');
+    function flushList() {
+      if (!listItems.length) return;
+      blocks.push('<ul style="list-style-type: disc; list-style-position: outside; margin: 6px 0; padding-left: 20px;">' + listItems.join('') + '</ul>');
+      listItems = [];
+    }
 
-    return result;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (line.indexOf('- ') === 0 || line.indexOf('* ') === 0) {
+        listItems.push('<li style="margin-bottom: 3px;">' + line.substring(2) + '</li>');
+        continue;
+      }
+
+      flushList();
+      blocks.push(lines[i]);
+    }
+
+    flushList();
+    return blocks.join('<br>');
   }
 
   function loadPreviousMessages() {

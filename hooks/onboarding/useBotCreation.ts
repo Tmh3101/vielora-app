@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { createBot, startDiscover, updateBotStatus } from "@/lib/services/bot.service";
 import { uploadBotAvatar } from "@/lib/supabase/upload";
-import { normalizeSeedUrl } from "@/lib/helpers/url-helpers";
+import { normalizeSeedUrl, validateWebsiteUrl } from "@/lib/helpers";
 import { EBotStatus } from "@/types";
+import { ONBOARDING_SOURCE_MODE } from "@/lib/constants";
 
 export interface BotAvatarInput {
   url: string | null;
@@ -20,9 +21,16 @@ export interface CreateBotAndStartDiscoverInput {
   includeSubdomains: boolean;
 }
 
+export interface CreateFileOnboardingBotInput {
+  userId: string;
+  botName: string;
+  botAvatar: BotAvatarInput;
+}
+
 export interface UseBotCreationReturn {
   isCreating: boolean;
   createBotAndStartDiscover: (input: CreateBotAndStartDiscoverInput) => Promise<string>;
+  createFileOnboardingBot: (input: CreateFileOnboardingBotInput) => Promise<string>;
 }
 
 export function useBotCreation(): UseBotCreationReturn {
@@ -37,12 +45,13 @@ export function useBotCreation(): UseBotCreationReturn {
     setIsCreating(true);
 
     try {
-      let formattedUrl = websiteUrl.trim();
-      if (!formattedUrl.startsWith("http")) {
-        formattedUrl = `https://${formattedUrl}`;
+      const validation = validateWebsiteUrl(websiteUrl);
+      if (validation.error || !validation.formattedUrl || !validation.hostname) {
+        throw new Error("Domain không hợp lệ");
       }
 
-      const domain = new URL(formattedUrl).hostname;
+      const formattedUrl = validation.formattedUrl;
+      const domain = validation.hostname;
       const bot = await createBot(supabase, { userId, name: botName, domain });
       const seedUrl = normalizeSeedUrl(formattedUrl);
       const crawlSettings =
@@ -69,17 +78,49 @@ export function useBotCreation(): UseBotCreationReturn {
 
       await updateBotStatus(supabase, bot.id, EBotStatus.Discovering);
 
-      setTimeout(async () => {
-        try {
-          await startDiscover(supabase, {
-            botId: bot.id,
-            url: formattedUrl,
-            includeSubdomains,
-          });
-        } catch {
-          // Step 2 will surface pipeline failure via polling.
+      try {
+        await startDiscover(supabase, {
+          botId: bot.id,
+          url: formattedUrl,
+          includeSubdomains,
+        });
+      } catch (error) {
+        await updateBotStatus(supabase, bot.id, EBotStatus.Failed);
+        throw error;
+      }
+
+      return bot.id;
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const createFileOnboardingBot = async (input: CreateFileOnboardingBotInput): Promise<string> => {
+    const { userId, botName, botAvatar } = input;
+
+    setIsCreating(true);
+
+    try {
+      const bot = await createBot(supabase, {
+        userId,
+        name: botName,
+        domain: "manual-upload.local",
+        crawlSettings: {
+          onboardingSourceMode: ONBOARDING_SOURCE_MODE.FILES,
+        },
+      });
+
+      if (botAvatar.file) {
+        const uploadResult = await uploadBotAvatar(botAvatar.file, bot.id);
+        if (uploadResult.success && uploadResult.url) {
+          await supabase
+            .from("bots")
+            .update({ avatar_url: uploadResult.url as string } as never)
+            .eq("id", bot.id);
         }
-      }, 1000);
+      }
+
+      await updateBotStatus(supabase, bot.id, EBotStatus.Pending);
 
       return bot.id;
     } finally {
@@ -90,5 +131,6 @@ export function useBotCreation(): UseBotCreationReturn {
   return {
     isCreating,
     createBotAndStartDiscover,
+    createFileOnboardingBot,
   };
 }
