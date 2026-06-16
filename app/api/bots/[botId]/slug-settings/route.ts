@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { updateBotSlugSettings, getBotByOwner } from "@/lib/services/bot.service";
+import { RESERVED_SUBDOMAINS } from "@/config";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ botId: string }> }) {
   try {
@@ -24,6 +25,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
 
     const body = await req.json();
     const { slug, isPublic } = body;
+
+    if (
+      slug &&
+      RESERVED_SUBDOMAINS.includes(slug.toLowerCase() as (typeof RESERVED_SUBDOMAINS)[number])
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "This domain/slug is reserved for system use. Please choose another name.",
+        },
+        { status: 400 }
+      );
+    }
 
     await updateBotSlugSettings(supabase, botId, { slug, isPublic });
 

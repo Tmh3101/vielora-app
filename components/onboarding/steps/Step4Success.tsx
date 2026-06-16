@@ -220,6 +220,7 @@ export function Step4Success({ botId }: Step4SuccessProps) {
                 slug={standaloneSlug}
                 savedSlug={savedStandaloneSlug}
                 isPublic={standaloneIsPublic}
+                savedIsPublic={botQuery.data?.is_public ?? false}
                 isSaving={isSavingStandalone}
                 onSlugChange={setStandaloneSlug}
                 onPublicChange={setStandaloneIsPublic}

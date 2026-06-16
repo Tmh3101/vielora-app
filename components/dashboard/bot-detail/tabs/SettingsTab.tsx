@@ -175,6 +175,7 @@ export function SettingsTab({
             slug={slug}
             savedSlug={bot.slug}
             isPublic={isPublic}
+            savedIsPublic={bot.is_public}
             isSaving={isSavingSlugSettings}
             onSlugChange={setSlug}
             onPublicChange={setIsPublic}

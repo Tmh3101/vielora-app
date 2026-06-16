@@ -1,7 +1,7 @@
 <div align="center">
   <img src="public/images/logo-footer.png" alt="Vielora Logo" width="250"/>
 
-# Vielora - AI Chatbot Builder
+# Vielora - SaaS platform creates AI assistants for everyone.
 
 **Empower your website with an intelligent AI chatbot in minutes**
 
@@ -16,8 +16,13 @@
 
 Vielora is an AI chatbot platform for creating, training, customizing, and deploying website assistants. It combines website crawling, manual knowledge, file ingestion, and single-URL knowledge with a RAG pipeline so chatbots can answer from the owner's approved content.
 
-## 🚀 Version 2.1.0 Highlights
+## 🚀 Version 2.2.0 Highlights
 
+- **PWA Support**: Progressive Web App with service worker, offline page, manifest, and install prompts for desktop and iOS.
+- **Offline Banner**: Real-time network status detection with animated connection-loss and recovery notifications.
+- **Apple Touch Icon**: Dynamic apple-touch-icon.png generation for public bot PWA branding using Sharp.
+- **Public Bot PWA**: Full PWA metadata generation, manifest handling, and service worker integration for public chatbot pages.
+- **iOS Installation**: Browser detection with tailored installation instructions for Safari (`components/chat/pwa-install/`).
 - **Single URL Knowledge**: Add one article, blog post, or documentation page directly to a bot without re-crawling the root website.
 - **Expanded Knowledge Base**: Manual text, uploaded files, and URL entries now share the same credit/refund and indexing workflow.
 - **Improved Crawler Pipeline**: Separate discovery, page crawl, and indexer queue tracking with better failure handling for URL knowledge jobs.
@@ -41,7 +46,7 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - **Server State**: [TanStack Query](https://tanstack.com/query)
 - **Client State**: [Zustand](https://zustand-demo.pmnd.rs/)
 - **AI/LLM**: [Google Gemini](https://ai.google.dev/)
-  - Chat: `gemini-2.5-flash-lite`
+  - Chat: `gemini-3.1-flash-lite`
   - Embeddings: `gemini-embedding-001`
   - PDF fallback extraction: configurable via `PDF_FALLBACK_MODEL`
 - **Web Scraping**: Self-hosted async crawler
@@ -51,6 +56,8 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - **Billing Cron**: Standalone BullMQ worker for subscription lifecycle jobs
 - **Email**: Resend for transactional emails
 - **Fingerprinting**: [FingerprintJS](https://fingerprint.com/) for visitor identification
+- **PWA**: Service Worker, Web App Manifest, dynamic apple-touch-icon
+- **Offline Detection**: `navigator.onLine` + event listeners with UI banner
 - **Payment Gateways**: PayOS and VNPay
 
 ## ✨ Core Features
@@ -68,6 +75,8 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - 💳 **Credit Management**: Subscription and PAYG wallets with refunds on processing failures.
 - 🧾 **Payment History**: Upgrade area includes purchase history and formatted payment records.
 - 🎫 **Support Portal**: Authenticated users can create and review support tickets.
+- 📱 **PWA Ready**: Installable as a standalone app with offline page and service worker caching.
+- 📶 **Offline Detection**: Real-time network status monitoring with animated connection-loss and recovery banners.
 - 🎨 **White-labeling**: Configure bot name, avatar, colors, chat background, icon, position, and suggested questions.
 - 🔒 **Security Controls**: Origin verification, API rate limiting, bot rate limits, login cooldowns, and visitor tracking.
 

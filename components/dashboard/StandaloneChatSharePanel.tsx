@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useState } from "react";
-import { AlertCircle, Copy, Loader2, QrCode } from "lucide-react";
+import { AlertCircle, Copy, ExternalLink, Loader2, QrCode } from "lucide-react";
 import { StandaloneChatPageQRCode } from "@/components/dashboard/StandaloneChatPageQRCode";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +16,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { RESERVED_SUBDOMAINS } from "@/config";
+import {
+  getStandaloneChatAppUrl,
+  getStandaloneChatUrlParts,
+} from "@/lib/utils/standalone-chat-url";
 
 export interface StandaloneChatSharePanelProps {
   botName: string;
@@ -23,6 +28,7 @@ export interface StandaloneChatSharePanelProps {
   slug: string;
   savedSlug: string | null;
   isPublic: boolean;
+  savedIsPublic: boolean;
   isSaving: boolean;
   onSlugChange: (value: string) => void;
   onPublicChange: (value: boolean) => void;
@@ -31,20 +37,13 @@ export interface StandaloneChatSharePanelProps {
   variant?: "default" | "dropdown";
 }
 
-function getDisplayHostname(appUrl: string): string {
-  try {
-    return new URL(appUrl).hostname;
-  } catch {
-    return appUrl.replace(/^https?:\/\//, "").split("/")[0];
-  }
-}
-
 export function StandaloneChatSharePanel({
   botName,
   avatarUrl,
   slug,
   savedSlug,
   isPublic,
+  savedIsPublic,
   isSaving,
   onSlugChange,
   onPublicChange,
@@ -57,13 +56,15 @@ export function StandaloneChatSharePanel({
   const [slugError, setSlugError] = useState<string>("");
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
 
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
-  const displayHostname = getDisplayHostname(appUrl);
-  const standaloneUrl = slug ? `${appUrl}/chat/${slug}` : "";
+  const appUrl = getStandaloneChatAppUrl();
+  const standaloneUrlParts = getStandaloneChatUrlParts(appUrl, slug);
+  const standaloneUrl = standaloneUrlParts.href;
+  const savedStandaloneUrl = getStandaloneChatUrlParts(appUrl, savedSlug ?? "").href;
   const canShareStandalone = Boolean(slug && isPublic && !slugError);
   const canShowShareActions = Boolean(slug && !slugError);
+  const canPreviewSavedStandalone = Boolean(
+    savedSlug && slug === savedSlug && isPublic && savedIsPublic && !slugError
+  );
   const isDropdown = variant === "dropdown";
 
   useEffect(() => {
@@ -79,6 +80,11 @@ export function StandaloneChatSharePanel({
 
     if (slug.length < 3) {
       setSlugError("Slug phải có ít nhất 3 ký tự");
+      return;
+    }
+
+    if (RESERVED_SUBDOMAINS.includes(slug.toLowerCase() as (typeof RESERVED_SUBDOMAINS)[number])) {
+      setSlugError("Tên miền/slug này dành riêng cho hệ thống. Vui lòng chọn tên khác.");
       return;
     }
 
@@ -138,7 +144,7 @@ export function StandaloneChatSharePanel({
           <div className="flex flex-1 items-stretch overflow-hidden rounded-md border">
             <div className="flex items-center bg-muted px-3 py-2">
               <span className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm">
-                {displayHostname}/chat/
+                {standaloneUrlParts.prefix}
               </span>
             </div>
             <Input
@@ -152,19 +158,75 @@ export function StandaloneChatSharePanel({
               className="border-0 focus-visible:ring-0"
               disabled={isCheckingSlug}
             />
+            {standaloneUrlParts.suffix && (
+              <div className="flex items-center bg-muted px-3 py-2">
+                <span className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm">
+                  {standaloneUrlParts.suffix}
+                </span>
+              </div>
+            )}
           </div>
-          {canShowShareActions && (
+          <div className="flex shrink-0 gap-2">
             <Button
               variant="outline"
               size="icon"
-              aria-label="Sao chép link chat"
-              className="shrink-0 hover:bg-primary"
-              disabled={!canShareStandalone}
-              onClick={() => void handleCopyLink()}
+              aria-label="Mở trang chat công khai"
+              className={cn(
+                "shrink-0",
+                canPreviewSavedStandalone
+                  ? "hover:border-primary hover:bg-white hover:text-primary"
+                  : "opacity-50"
+              )}
+              disabled={!canPreviewSavedStandalone}
+              asChild={canPreviewSavedStandalone}
             >
-              <Copy className="h-4 w-4" />
+              {canPreviewSavedStandalone ? (
+                <a href={savedStandaloneUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              ) : (
+                <ExternalLink className="h-4 w-4" />
+              )}
             </Button>
-          )}
+            {canShowShareActions && (
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Sao chép link chat"
+                  className="shrink-0 hover:border-primary hover:bg-white hover:text-primary"
+                  disabled={!canShareStandalone}
+                  onClick={() => void handleCopyLink()}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="Hiển thị mã QR"
+                      className="shrink-0 hover:border-primary hover:bg-white hover:text-primary"
+                      disabled={!canShareStandalone}
+                    >
+                      <QrCode className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[360px]">
+                    <DialogHeader>
+                      <DialogTitle>Mã QR trang chat</DialogTitle>
+                    </DialogHeader>
+                    <StandaloneChatPageQRCode
+                      url={standaloneUrl}
+                      avatarUrl={avatarUrl}
+                      botName={botName}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
+          </div>
         </div>
 
         {slugError ? (
@@ -187,52 +249,6 @@ export function StandaloneChatSharePanel({
         {(isSaving || isCheckingSlug) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Lưu cài đặt
       </Button>
-
-      {canShareStandalone && (
-        <div
-          className={`rounded-md p-3 transition-opacity ${
-            canShareStandalone ? "bg-blue-50" : "bg-muted/60 opacity-60"
-          }`}
-        >
-          <p className="text-sm font-medium text-blue-900">Link công khai của bạn:</p>
-          <div className="flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <a
-                href={standaloneUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block truncate text-sm text-blue-600 hover:underline"
-              >
-                {standaloneUrl}
-              </a>
-            </div>
-
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button
-                  type="button"
-                  size="icon"
-                  aria-label="Hiển thị mã QR"
-                  className="bg-transparent p-0 text-primary hover:border hover:border-primary hover:bg-transparent hover:text-primary"
-                  disabled={!canShareStandalone}
-                >
-                  <QrCode className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[360px]">
-                <DialogHeader>
-                  <DialogTitle>Mã QR trang chat</DialogTitle>
-                </DialogHeader>
-                <StandaloneChatPageQRCode
-                  url={standaloneUrl}
-                  avatarUrl={avatarUrl}
-                  botName={botName}
-                />
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

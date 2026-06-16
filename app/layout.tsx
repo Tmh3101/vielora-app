@@ -14,6 +14,8 @@ const baseUrl =
   process.env.NEXT_PUBLIC_BASE_URL ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://vielora.vn");
 
+// Root icons (app/icon.png, app/apple-icon.png) apply to the main app only.
+// Public bot subdomains override icons in app/public-bot/[botSlug]/layout.tsx.
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
   title: {

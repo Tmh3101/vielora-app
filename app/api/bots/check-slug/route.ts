@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { RESERVED_SUBDOMAINS } from "@/config";
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,6 +12,14 @@ export async function GET(req: NextRequest) {
     }
 
     const slug = rawSlug.toLowerCase();
+
+    if (RESERVED_SUBDOMAINS.includes(slug as (typeof RESERVED_SUBDOMAINS)[number])) {
+      return NextResponse.json(
+        { available: false, message: "This domain/slug is reserved for system use." },
+        { status: 200 }
+      );
+    }
+
     const supabase = await createServerClient();
     const { data, error } = await supabase.from("bots").select("id").eq("slug", slug).maybeSingle();
 

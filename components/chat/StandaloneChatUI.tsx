@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,21 @@ import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
 import type { BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
 import { EMessageRole, EWidgetBackgroundType } from "@/types/enums";
 import type { ChatResponse } from "@/types/widget-api";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { OfflineBanner } from "@/components/chat/OfflineBanner";
+
+const PWAInstallRoot = dynamic(
+  () => import("./pwa-install/PWAInstallRoot").then((mod) => mod.PWAInstallRoot),
+  { ssr: false }
+);
+const PWAInstallHeaderButton = dynamic(
+  () => import("./pwa-install/PWAInstallHeaderButton").then((mod) => mod.PWAInstallHeaderButton),
+  { ssr: false }
+);
+const PWAInstallBanner = dynamic(
+  () => import("./pwa-install/PWAInstallBanner").then((mod) => mod.PWAInstallBanner),
+  { ssr: false }
+);
 
 interface ChatMessage {
   role: EMessageRole;
@@ -51,7 +67,13 @@ declare global {
   }
 }
 
-export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
+export function StandaloneChatUI({
+  bot,
+  isMobile = false,
+}: {
+  bot: PublicBotData;
+  isMobile?: boolean;
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -69,6 +91,7 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [suggestedQuestionsShown, setSuggestedQuestionsShown] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const isOnline = useNetworkStatus();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -253,7 +276,7 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
     if (e) e.preventDefault();
 
     const messageToSend = (overrideInput || input).trim();
-    if (!messageToSend || isLoading || !visitorId) return;
+    if (!messageToSend || isLoading || !visitorId || !isOnline) return;
 
     if (messageToSend.length > 200) {
       appendAssistantMessage("Tin nhắn quá dài (tối đa 200 ký tự). Vui lòng rút gọn nội dung.");
@@ -396,30 +419,77 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
       `}</style>
 
       {/* Header */}
-      <div
-        className="flex items-center gap-3 px-6 py-4 shadow-sm"
-        style={{
-          backgroundColor: primaryColor,
-          color: getUserMessageTextColor(primaryColor),
-        }}
-      >
-        <Avatar className="h-10 w-10 rounded-2xl border-2 border-white/30 shadow-sm transition-shadow">
-          <AvatarImage src={bot.avatar_url || undefined} alt={bot.name} className="object-cover" />
-          <AvatarFallback className="rounded-2xl bg-white/10 text-white">
-            <Bot className="h-6 w-6" />
-          </AvatarFallback>
-        </Avatar>
-        <div>
-          <h1 className="text-lg font-semibold leading-tight">{bot.name}</h1>
-          <p className="text-sm opacity-90">
-            {insufficientCredits
-              ? "Tạm dừng do hết credits"
-              : isAvailable
-                ? "Luôn sẵn sàng hỗ trợ"
-                : statusMessage || "Chưa sẵn sàng"}
-          </p>
-        </div>
+      <div className="sticky top-0 z-20">
+        {isMobile ? (
+          <PWAInstallRoot
+            appName={bot.name}
+            primaryColor={primaryColor}
+            headerForeground={getUserMessageTextColor(primaryColor)}
+          >
+            <div
+              className="flex items-center gap-3 px-6 py-4 shadow-sm"
+              style={{
+                backgroundColor: primaryColor,
+                color: getUserMessageTextColor(primaryColor),
+              }}
+            >
+              <Avatar className="h-10 w-10 rounded-2xl border-2 border-white/30 shadow-sm transition-shadow">
+                <AvatarImage
+                  src={bot.avatar_url || undefined}
+                  alt={bot.name}
+                  className="object-cover"
+                />
+                <AvatarFallback className="rounded-2xl bg-white/10 text-white">
+                  <Bot className="h-6 w-6" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <h1 className="truncate text-lg font-semibold leading-tight">{bot.name}</h1>
+                <p className="truncate text-sm opacity-90">
+                  {insufficientCredits
+                    ? "Tạm dừng do hết credits"
+                    : isAvailable
+                      ? "Luôn sẵn sàng hỗ trợ"
+                      : statusMessage || "Chưa sẵn sàng"}
+                </p>
+              </div>
+              <PWAInstallHeaderButton />
+            </div>
+            <PWAInstallBanner />
+          </PWAInstallRoot>
+        ) : (
+          <div
+            className="flex items-center gap-3 px-6 py-4 shadow-sm"
+            style={{
+              backgroundColor: primaryColor,
+              color: getUserMessageTextColor(primaryColor),
+            }}
+          >
+            <Avatar className="h-10 w-10 rounded-2xl border-2 border-white/30 shadow-sm transition-shadow">
+              <AvatarImage
+                src={bot.avatar_url || undefined}
+                alt={bot.name}
+                className="object-cover"
+              />
+              <AvatarFallback className="rounded-2xl bg-white/10 text-white">
+                <Bot className="h-6 w-6" />
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h1 className="text-lg font-semibold leading-tight">{bot.name}</h1>
+              <p className="text-sm opacity-90">
+                {insufficientCredits
+                  ? "Tạm dừng do hết credits"
+                  : isAvailable
+                    ? "Luôn sẵn sàng hỗ trợ"
+                    : statusMessage || "Chưa sẵn sàng"}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
+
+      <OfflineBanner isOnline={isOnline} />
 
       {/* Messages */}
       <div
@@ -509,7 +579,8 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
       {!suggestedQuestionsShown &&
         suggestedQuestions.length > 0 &&
         isAvailable &&
-        !isChatBlocked && (
+        !isChatBlocked &&
+        isOnline && (
           <div className="bg-background/95 bg-white px-4 py-2">
             <div className="scrollbar-hide mx-auto flex max-w-3xl gap-2 overflow-x-auto">
               {suggestedQuestions.map((q, i) => (
@@ -542,18 +613,21 @@ export function StandaloneChatUI({ bot }: { bot: PublicBotData }) {
             </div>
           </div>
         )}
-        <form onSubmit={handleSubmit} className="mx-auto flex max-w-3xl gap-2">
+        <form
+          onSubmit={handleSubmit}
+          className={`mx-auto flex max-w-3xl gap-2 ${!isOnline ? "opacity-60" : ""}`}
+        >
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={insufficientCredits ? "Bot đã hết credits" : "Nhập tin nhắn..."}
-            disabled={isLoading || isChatBlocked}
+            disabled={isLoading || isChatBlocked || !isOnline}
             maxLength={200}
             className="flex-1 rounded-2xl"
           />
           <Button
             type="submit"
-            disabled={isLoading || !input.trim() || isChatBlocked}
+            disabled={isLoading || !input.trim() || isChatBlocked || !isOnline}
             className="rounded-full shadow-sm transition-shadow hover:shadow-md"
             style={{ backgroundColor: primaryColor }}
           >

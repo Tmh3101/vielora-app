@@ -128,3 +128,18 @@ export enum EWidgetIconType {
   Preset = "preset",
   Custom = "custom",
 }
+
+export enum EIOSBrowser {
+  Safari = "safari",
+  Chrome = "chrome",
+  Firefox = "firefox",
+  Edge = "edge",
+  Brave = "brave",
+  Other = "other",
+}
+
+export enum BannerState {
+  Hidden = "hidden",
+  Offline = "offline",
+  Recovering = "recovering",
+}
