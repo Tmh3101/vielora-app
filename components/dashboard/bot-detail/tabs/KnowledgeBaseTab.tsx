@@ -5,17 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EPageSourceType, EPageStatus } from "@/types";
 import { FileText, Globe, Link, Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
-import type { Tables } from "@/lib/supabase/types";
-
-type PageType = Tables<"pages">;
+import type { PageListItem } from "@/lib/services/page.service";
 
 export interface KnowledgeBaseTabProps {
-  pages: PageType[];
+  pages: PageListItem[];
   isReindexing: boolean;
   onReindex: () => Promise<void>;
   onOpenAddDataSource: () => void;
-  onOpenEditKnowledge: (page: PageType) => void;
-  onOpenDeleteKnowledge: (page: PageType) => void;
+  onOpenEditKnowledge: (page: PageListItem) => Promise<void>;
+  onOpenDeleteKnowledge: (page: PageListItem) => void;
 }
 
 export function KnowledgeBaseTab({

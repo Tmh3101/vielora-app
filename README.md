@@ -16,23 +16,23 @@
 
 Vielora is an AI chatbot platform for creating, training, customizing, and deploying website assistants. It combines website crawling, manual knowledge, file ingestion, and single-URL knowledge with a RAG pipeline so chatbots can answer from the owner's approved content.
 
-## 🚀 Version 2.2.0 Highlights
+## 🚀 Version 2.4.0 Highlights
 
-- **PWA Support**: Progressive Web App with service worker, offline page, manifest, and install prompts for desktop and iOS.
-- **Offline Banner**: Real-time network status detection with animated connection-loss and recovery notifications.
-- **Apple Touch Icon**: Dynamic apple-touch-icon.png generation for public bot PWA branding using Sharp.
-- **Public Bot PWA**: Full PWA metadata generation, manifest handling, and service worker integration for public chatbot pages.
-- **iOS Installation**: Browser detection with tailored installation instructions for Safari (`components/chat/pwa-install/`).
-- **Single URL Knowledge**: Add one article, blog post, or documentation page directly to a bot without re-crawling the root website.
-- **Expanded Knowledge Base**: Manual text, uploaded files, and URL entries now share the same credit/refund and indexing workflow.
-- **Improved Crawler Pipeline**: Separate discovery, page crawl, and indexer queue tracking with better failure handling for URL knowledge jobs.
-- **Bot Detail Dashboard**: Refactored bot management UI with dedicated tabs for overview, knowledge, analytics, appearance, integration, and settings.
+- **Shopify Integration**: Full embedded app with OAuth, SSO, webhooks (customer/shop redaction), and native App Bridge dashboard embedding.
+- **Blog Engine**: Public blog pages with categories, posts, SEO metadata, category filtering, and dynamic routing (`/posts/`).
+- **Admin Portal**: Support ticket management, banned users, discounts, bot lifecycle oversight, and dashboard lock for blocked users.
+- **Public Bot PWA**: Full PWA metadata generation, manifest handling, service worker integration, and dynamic apple-touch-icon for public chatbot pages.
+- **Standalone Chat Sharing**: Shareable chat pages with custom slugs, visibility toggles, QR code generation, and PWA install prompts.
+- **Allowed Domains**: Per-bot domain allowlisting with validation and UI management in bot settings.
+- **Onboarding Enhancements**: Multi-step wizard with file upload step, knowledge mode selection (manual/URL/website), and improved state persistence.
+- **Partner Showcase**: Landing page sections for partner logos and customer testimonials.
+- **About Us Page**: Dedicated `/about-us` page with hero, mission, team, and product sections.
+- **Dynamic Subdomain Middleware**: Middleware refactored for dynamic subdomain handling and route matching.
+- **RAG Pipeline Enhancements**: Improved null handling, list formatting in responses, hybrid search refinement, and hallucination reduction via generation config tuning.
 - **Widget & Chat Hardening**: Bot availability checks, bot-level rate limits, clearer exceeded-limit messages, and better standalone chat initialization.
 - **Authentication Security**: Password login now uses a server route with failed-attempt tracking and cooldown responses.
 - **Support Portal**: Dashboard users can submit and review support tickets from `/dashboard/support`.
 - **Billing Updates**: PAYG pricing supports JSONB price data, upgrade flow includes payment history, and the dashboard shows subscription plus PAYG credit balances.
-- **Embed Options**: Integration tab now supports standard script embedding and Google Tag Manager snippets.
-- **Appearance Controls**: Live color previews, icon/background upload handling, hex color validation, and position persistence improvements.
 
 ## 🛠 Tech Stack
 
@@ -59,6 +59,7 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - **PWA**: Service Worker, Web App Manifest, dynamic apple-touch-icon
 - **Offline Detection**: `navigator.onLine` + event listeners with UI banner
 - **Payment Gateways**: PayOS and VNPay
+- **Shopify Integration**: Shopify App Bridge, OAuth, webhooks, embedded admin dashboard
 
 ## ✨ Core Features
 
@@ -79,10 +80,17 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - 📶 **Offline Detection**: Real-time network status monitoring with animated connection-loss and recovery banners.
 - 🎨 **White-labeling**: Configure bot name, avatar, colors, chat background, icon, position, and suggested questions.
 - 🔒 **Security Controls**: Origin verification, API rate limiting, bot rate limits, login cooldowns, and visitor tracking.
+- 🛍️ **Shopify Embedded App**: Native Shopify integration with SSO, OAuth, App Bridge, and webhook handling.
+- 📝 **Blog Engine**: Public blog with categories, SEO metadata, and dynamic post routing.
+- 🔐 **Admin Dashboard**: Support tickets, user management, bot oversight, and ban controls.
+- 🔗 **Standalone Chat Sharing**: Shareable chat pages with custom slugs, visibility settings, and QR codes.
+- 🌐 **Allowed Domains Restriction**: Per-bot domain allowlisting with validation.
+- 🤝 **Partner Showcase**: Landing page with partner logos and customer testimonials.
+- 📖 **About Us Page**: Company information with hero, mission, team, and product sections.
 
 ## 📂 Project Structure
 
-- `app/`: Next.js App Router pages and API routes.
+- `app/`: Next.js App Router pages and API routes (including `chat/[slug]/`, `posts/`, `public-bot/[botSlug]/`, `shopify/`).
 - `components/`: Feature-oriented UI components plus shared shadcn/ui primitives.
 - `config/`: App-wide constants for credits, knowledge limits, pricing, RAG, scraper, storage, and widget behavior.
 - `hooks/`: Dashboard, onboarding, and feature-specific React hooks.
@@ -93,6 +101,7 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
   - `security/`: Rate limiting, widget security, and login-attempt tracking.
   - `helpers/`: Shared formatting, URL, color, icon, embed, payment, and auth helpers.
 - `scripts/`: Worker, cron, deployment, and maintenance scripts.
+- `plugins/`: Third-party platform extensions (Shopify app, WordPress plugin).
 - `supabase/`: Database migrations, generated types, and storage-related schema.
 - `types/`: Shared TypeScript types and enums.
 
@@ -107,6 +116,7 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - PayOS credentials for PayOS payments
 - VNPay credentials if VNPay payments are enabled
 - Resend credentials if transactional emails are enabled
+- Shopify API credentials if Shopify integration is enabled (client ID, client secret, app URL)
 
 ### Environment Setup
 
@@ -153,6 +163,10 @@ PAYOS_TEST_MODE=true
 # Email
 RESEND_API_KEY=your_resend_api_key
 RESEND_FROM_EMAIL=no-reply@your-domain.com
+
+# Shopify
+NEXT_PUBLIC_SHOPIFY_CLIENT_ID=your_shopify_client_id
+SHOPIFY_CLIENT_SECRET=your_shopify_client_secret
 ```
 
 ### Installation & Development
@@ -198,10 +212,11 @@ Knowledge can enter the system through manual text, uploaded files, single URLs,
 Vielora implements layered protection for dashboard, auth, and widget traffic.
 
 1. **Origin Verification**: Ensures widgets run only from authorized domains.
-2. **API Rate Limiting**: Protects public widget endpoints from abuse.
-3. **Bot Rate Limits**: Enforces bot-level daily and per-IP message caps.
-4. **Visitor ID Tracking**: Uses FingerprintJS to reduce anonymous abuse.
-5. **Login Cooldowns**: Tracks failed password attempts and returns cooldown metadata.
+2. **Allowed Domains**: Per-bot domain allowlisting with validation for granular access control.
+3. **API Rate Limiting**: Protects public widget endpoints from abuse.
+4. **Bot Rate Limits**: Enforces bot-level daily and per-IP message caps.
+5. **Visitor ID Tracking**: Uses FingerprintJS to reduce anonymous abuse.
+6. **Login Cooldowns**: Tracks failed password attempts and returns cooldown metadata.
 
 ## 🐳 Deployment
 

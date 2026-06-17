@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { Tables } from "@/lib/supabase/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { useDashboardUIStore } from "@/store/useDashboardUIStore";
 import { activateBots, stopBots } from "@/lib/services/bot.service";
 import {
   useDashboardData,
@@ -25,9 +26,7 @@ interface UseBotSelectionAlertParams {
 
 export interface UseBotSelectionAlertResult {
   limitDialogOpen: boolean;
-  setLimitDialogOpen: (open: boolean) => void;
   botSelectorOpen: boolean;
-  setBotSelectorOpen: (open: boolean) => void;
   selectedBotIds: Set<string>;
   handleToggleBotSelection: (botId: string) => void;
   handleConfirmBotSelection: () => Promise<void>;
@@ -42,8 +41,10 @@ export function useBotSelectionAlert({
   supabase,
   onRefresh,
 }: UseBotSelectionAlertParams): UseBotSelectionAlertResult {
-  const [limitDialogOpen, setLimitDialogOpen] = useState(false);
-  const [botSelectorOpen, setBotSelectorOpen] = useState(false);
+  const limitDialogOpen = useDashboardUIStore((s) => s.limitDialogOpen);
+  const setLimitDialogOpen = useDashboardUIStore((s) => s.setLimitDialogOpen);
+  const botSelectorOpen = useDashboardUIStore((s) => s.botSelectorOpen);
+  const setBotSelectorOpen = useDashboardUIStore((s) => s.setBotSelectorOpen);
   const [selectedBotIds, setSelectedBotIds] = useState<Set<string>>(new Set());
   const [isSavingBotSelection, setIsSavingBotSelection] = useState(false);
 
@@ -55,7 +56,7 @@ export function useBotSelectionAlert({
       setSelectedBotIds(new Set(activeBots.map((b) => b.id)));
       setBotSelectorOpen(true);
     }
-  }, [isLoading, subscription, bots]);
+  }, [isLoading, subscription, bots, setBotSelectorOpen]);
 
   const handleToggleBotSelection = useCallback(
     (botId: string) => {
@@ -109,13 +110,11 @@ export function useBotSelectionAlert({
     } finally {
       setIsSavingBotSelection(false);
     }
-  }, [bots, onRefresh, selectedBotIds, subscription, supabase]);
+  }, [bots, onRefresh, selectedBotIds, subscription, supabase, setBotSelectorOpen]);
 
   return {
     limitDialogOpen,
-    setLimitDialogOpen,
     botSelectorOpen,
-    setBotSelectorOpen,
     selectedBotIds,
     handleToggleBotSelection,
     handleConfirmBotSelection,

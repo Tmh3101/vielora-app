@@ -13,6 +13,7 @@ import {
   getUserMessageTextColor,
   getBackgroundStyle,
   getRateLimitMessage,
+  getChatBlockedData,
 } from "@/lib/helpers";
 import type { Message as ApiMessage, InitResponse } from "@/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,7 +25,7 @@ import {
 import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
 import type { BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
 import { EMessageRole, EWidgetBackgroundType } from "@/types/enums";
-import type { ChatResponse } from "@/types/widget-api";
+import type { ChatResponse, ChatMessage } from "@/types/widget-api";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { OfflineBanner } from "@/components/chat/OfflineBanner";
 
@@ -40,12 +41,6 @@ const PWAInstallBanner = dynamic(
   () => import("./pwa-install/PWAInstallBanner").then((mod) => mod.PWAInstallBanner),
   { ssr: false }
 );
-
-interface ChatMessage {
-  role: EMessageRole;
-  content: string;
-  isHistory?: boolean;
-}
 
 interface WidgetSettings {
   primaryColor?: string;
@@ -80,7 +75,6 @@ export function StandaloneChatUI({
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [visitorId, setVisitorId] = useState<string | null>(null);
 
-  // Bot state and settings
   const [isAvailable, setIsAvailable] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
@@ -94,19 +88,42 @@ export function StandaloneChatUI({
   const isOnline = useNetworkStatus();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
   const widgetSettings = (bot.widget_settings as Json as WidgetSettings | null) || {};
   const primaryColor = widgetSettings?.primaryColor || "#3B82F6";
   const welcomeMessage = widgetSettings?.welcomeMessage || "Hello! How can I help you?";
   const bgType = widgetSettings?.chatBackgroundType || EWidgetBackgroundType.Solid;
   const bgValue = widgetSettings?.chatBackgroundValue || "#ffffff";
   const bgOpacity = (widgetSettings?.chatBackgroundOpacity || 100) / 100;
-  const blockedChatMessage = insufficientCredits
-    ? insufficientCreditsMessage || INSUFFICIENT_CREDITS_MESSAGE
-    : rateLimitExceeded
-      ? rateLimitMessage || `${bot.name} đã đạt giới hạn tin nhắn trong ngày.`
-      : null;
-  const isChatBlocked = insufficientCredits || rateLimitExceeded || quotaExceeded || !isAvailable;
+  const { blockedChatMessage, isChatBlocked: baseChatBlocked } = getChatBlockedData(
+    insufficientCredits,
+    rateLimitExceeded,
+    insufficientCreditsMessage,
+    rateLimitMessage,
+    bot.name
+  );
+  const isChatBlocked = baseChatBlocked || quotaExceeded || !isAvailable;
+  const headerTextColor = getUserMessageTextColor(primaryColor);
+
+  const headerInfo = (
+    <>
+      <Avatar className="h-10 w-10 rounded-2xl border-2 border-white/30 shadow-sm transition-shadow">
+        <AvatarImage src={bot.avatar_url || undefined} alt={bot.name} className="object-cover" />
+        <AvatarFallback className="rounded-2xl bg-white/10 text-white">
+          <Bot className="h-6 w-6" />
+        </AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <h1 className="truncate text-lg font-semibold leading-tight">{bot.name}</h1>
+        <p className="truncate text-sm opacity-90">
+          {insufficientCredits
+            ? "Tạm dừng do hết credits"
+            : isAvailable
+              ? "Luôn sẵn sàng hỗ trợ"
+              : statusMessage || "Chưa sẵn sàng"}
+        </p>
+      </div>
+    </>
+  );
 
   // Load FingerprintJS
   const loadFingerprintJS = (): Promise<string | null> => {
@@ -216,9 +233,7 @@ export function StandaloneChatUI({
             if (data.data.messages && data.data.messages.length > 0) {
               setMessages(
                 data.data.messages.map((msg: ApiMessage) => ({
-                  role: (msg.role === EMessageRole.Assistant
-                    ? EMessageRole.Assistant
-                    : EMessageRole.User) as EMessageRole,
+                  role: msg.role,
                   content: msg.content,
                   isHistory: true,
                 }))
@@ -424,35 +439,13 @@ export function StandaloneChatUI({
           <PWAInstallRoot
             appName={bot.name}
             primaryColor={primaryColor}
-            headerForeground={getUserMessageTextColor(primaryColor)}
+            headerForeground={headerTextColor}
           >
             <div
               className="flex items-center gap-3 px-6 py-4 shadow-sm"
-              style={{
-                backgroundColor: primaryColor,
-                color: getUserMessageTextColor(primaryColor),
-              }}
+              style={{ backgroundColor: primaryColor, color: headerTextColor }}
             >
-              <Avatar className="h-10 w-10 rounded-2xl border-2 border-white/30 shadow-sm transition-shadow">
-                <AvatarImage
-                  src={bot.avatar_url || undefined}
-                  alt={bot.name}
-                  className="object-cover"
-                />
-                <AvatarFallback className="rounded-2xl bg-white/10 text-white">
-                  <Bot className="h-6 w-6" />
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <h1 className="truncate text-lg font-semibold leading-tight">{bot.name}</h1>
-                <p className="truncate text-sm opacity-90">
-                  {insufficientCredits
-                    ? "Tạm dừng do hết credits"
-                    : isAvailable
-                      ? "Luôn sẵn sàng hỗ trợ"
-                      : statusMessage || "Chưa sẵn sàng"}
-                </p>
-              </div>
+              {headerInfo}
               <PWAInstallHeaderButton />
             </div>
             <PWAInstallBanner />
@@ -460,31 +453,9 @@ export function StandaloneChatUI({
         ) : (
           <div
             className="flex items-center gap-3 px-6 py-4 shadow-sm"
-            style={{
-              backgroundColor: primaryColor,
-              color: getUserMessageTextColor(primaryColor),
-            }}
+            style={{ backgroundColor: primaryColor, color: headerTextColor }}
           >
-            <Avatar className="h-10 w-10 rounded-2xl border-2 border-white/30 shadow-sm transition-shadow">
-              <AvatarImage
-                src={bot.avatar_url || undefined}
-                alt={bot.name}
-                className="object-cover"
-              />
-              <AvatarFallback className="rounded-2xl bg-white/10 text-white">
-                <Bot className="h-6 w-6" />
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h1 className="text-lg font-semibold leading-tight">{bot.name}</h1>
-              <p className="text-sm opacity-90">
-                {insufficientCredits
-                  ? "Tạm dừng do hết credits"
-                  : isAvailable
-                    ? "Luôn sẵn sàng hỗ trợ"
-                    : statusMessage || "Chưa sẵn sàng"}
-              </p>
-            </div>
+            {headerInfo}
           </div>
         )}
       </div>
@@ -525,7 +496,7 @@ export function StandaloneChatUI({
                     msg.role === EMessageRole.User
                       ? {
                           backgroundColor: primaryColor,
-                          color: getUserMessageTextColor(primaryColor),
+                          color: headerTextColor,
                         }
                       : {}
                   }

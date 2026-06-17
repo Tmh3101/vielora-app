@@ -5,14 +5,13 @@ import type { Dispatch, SetStateAction } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { getCreditSummary } from "@/lib/services/credit.service";
 import { getBotById } from "@/lib/services/bot.service";
-import { getPagesByBotId } from "@/lib/services/page.service";
+import { getPagesByBotId, type PageListItem } from "@/lib/services/page.service";
 import { getUserSubscriptionPlan } from "@/lib/services/subscription.service";
 import type { Tables } from "@/lib/supabase/types";
 import { EPageStatus, ESubscriptionPlan } from "@/types";
 
 type SupabaseClient = ReturnType<typeof createBrowserSupabaseClient>;
 type BotType = Tables<"bots">;
-type PageType = Tables<"pages">;
 
 interface ToastPayload {
   title?: string;
@@ -81,7 +80,7 @@ export async function loadBotDetailData({
 
 export interface UseBotDataResult {
   bot: BotType | null;
-  pages: PageType[];
+  pages: PageListItem[];
   isLoading: boolean;
   totalCredits: number;
   planCode: ESubscriptionPlan;
@@ -108,7 +107,7 @@ export function useBotData({
 }: UseBotDataParams): UseBotDataResult {
   const hasFetchedInitialDataRef = useRef(false);
   const [bot, setBot] = useState<BotType | null>(initialBot ?? null);
-  const [pages, setPages] = useState<PageType[]>([]);
+  const [pages, setPages] = useState<PageListItem[]>([]);
   const [pagesCount, setPagesCount] = useState(initialPagesCount);
   const [isLoading, setIsLoading] = useState(!initialBot);
   const [totalCredits, setTotalCredits] = useState(0);

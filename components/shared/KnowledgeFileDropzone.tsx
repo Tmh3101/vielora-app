@@ -2,44 +2,18 @@
 
 import { useRef, useState } from "react";
 import { Upload, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ALLOWED_KNOWLEDGE_FILE_EXTENSIONS, MAX_KNOWLEDGE_FILE_SIZE } from "@/config/knowledge";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { ALLOWED_KNOWLEDGE_FILE_EXTENSIONS } from "@/config/knowledge";
+import { validateKnowledgeFile } from "@/lib/helpers";
 
-export interface KnowledgeFileValidationResult {
-  valid: boolean;
-  error?: string;
-}
-
-export interface KnowledgeFileDropzoneProps {
+interface KnowledgeFileDropzoneProps {
   files: File[];
   onFilesChange: (files: File[]) => void;
   disabled?: boolean;
   multiple?: boolean;
   maxFiles?: number;
   className?: string;
-}
-
-export function validateKnowledgeFile(file: File): KnowledgeFileValidationResult {
-  const allowedExtensions = ALLOWED_KNOWLEDGE_FILE_EXTENSIONS.map((ext) => ext.toLowerCase());
-  const fileName = file.name.toLowerCase();
-  const isAllowedExtension = allowedExtensions.some((ext) => fileName.endsWith(ext));
-
-  if (!isAllowedExtension) {
-    return {
-      valid: false,
-      error: `Định dạng tệp không được hỗ trợ. Chỉ chấp nhận: ${ALLOWED_KNOWLEDGE_FILE_EXTENSIONS.join(", ")}.`,
-    };
-  }
-
-  if (file.size > MAX_KNOWLEDGE_FILE_SIZE) {
-    return {
-      valid: false,
-      error: "Tệp vượt quá 10MB. Vui lòng chọn tệp nhỏ hơn.",
-    };
-  }
-
-  return { valid: true };
 }
 
 export function KnowledgeFileDropzone({

@@ -10,6 +10,7 @@ import {
   addKnowledgeUrl,
   deleteKnowledge,
   editKnowledge,
+  getKnowledge,
   pollPipelineStatus,
   startDiscover,
   submitSelection,
@@ -22,6 +23,8 @@ import { CREDIT_PER_PAGE } from "@/config";
 import { EPageSourceType, EPageStatus, ESubscriptionPlan } from "@/types";
 import type { CrawlScopeType } from "@/types/scrape";
 import { CrawlScope } from "@/lib/constants";
+import { useBotDetailUIStore } from "@/store/useBotDetailUIStore";
+import type { PageListItem } from "@/lib/services/page.service";
 
 type SupabaseClient = ReturnType<typeof createBrowserSupabaseClient>;
 type BotType = Tables<"bots">;
@@ -66,8 +69,9 @@ export interface UseKnowledgeBaseResult {
   editKnowledgeOpen: boolean;
   editingPage: PageType | null;
   isSavingKnowledge: boolean;
+  isLoadingPageDetail: boolean;
   deleteKnowledgeOpen: boolean;
-  deletingPage: PageType | null;
+  deletingPage: PageListItem | null;
   isDeletingKnowledge: boolean;
   selectedPendingCount: number;
   selectedUrlCount: number;
@@ -80,11 +84,6 @@ export interface UseKnowledgeBaseResult {
   reindexCrawledCount: number;
   reindexScope: CrawlScopeType;
   hasStartedReindexDiscover: boolean;
-  setReindexModalOpen: (open: boolean) => void;
-  setReindexScope: (scope: CrawlScopeType) => void;
-  setAddDataSourceOpen: (open: boolean) => void;
-  setEditKnowledgeOpen: (open: boolean) => void;
-  setDeleteKnowledgeOpen: (open: boolean) => void;
   handleReindex: () => Promise<void>;
   handleStartReindexDiscover: () => Promise<void>;
   handleUpdateSelected: () => Promise<void>;
@@ -95,9 +94,9 @@ export interface UseKnowledgeBaseResult {
   handleAddDataSource: (title: string, content: string) => Promise<void>;
   handleAddFileDataSource: (file: File) => Promise<void>;
   handleAddUrlDataSource: (url: string) => Promise<void>;
-  handleOpenEditKnowledge: (page: PageType) => void;
+  handleOpenEditKnowledge: (page: PageListItem) => Promise<void>;
   handleSaveEditKnowledge: (title: string, content: string) => Promise<void>;
-  handleOpenDeleteKnowledge: (page: PageType) => void;
+  handleOpenDeleteKnowledge: (page: PageListItem) => void;
   handleConfirmDeleteKnowledge: () => Promise<void>;
   clearEditingPage: () => void;
 }
@@ -114,24 +113,31 @@ export function useKnowledgeBase({
   onRequireUpgrade,
 }: UseKnowledgeBaseParams): UseKnowledgeBaseResult {
   const [isReindexing, setIsReindexing] = useState(false);
-  const [reindexModalOpen, setReindexModalOpen] = useState(false);
+  const reindexModalOpen = useBotDetailUIStore((s) => s.reindexModalOpen);
+  const setReindexModalOpen = useBotDetailUIStore((s) => s.setReindexModalOpen);
+  const reindexScope = useBotDetailUIStore((s) => s.reindexScope);
+  const setReindexScope = useBotDetailUIStore((s) => s.setReindexScope);
+  const hasStartedReindexDiscover = useBotDetailUIStore((s) => s.hasStartedReindexDiscover);
+  const setHasStartedReindexDiscover = useBotDetailUIStore((s) => s.setHasStartedReindexDiscover);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [previewPages, setPreviewPages] = useState<PageStatus[]>([]);
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
   const [previewErrors, setPreviewErrors] = useState<Array<{ url: string; error: string }>>([]);
   const [reindexDiscoverJobId, setReindexDiscoverJobId] = useState<string | null>(null);
-  const [reindexScope, setReindexScope] = useState<CrawlScopeType>(CrawlScope.FULL_WEBSITE);
-  const [hasStartedReindexDiscover, setHasStartedReindexDiscover] = useState(false);
 
-  const [addDataSourceOpen, setAddDataSourceOpen] = useState(false);
+  const addDataSourceOpen = useBotDetailUIStore((s) => s.addDataSourceOpen);
+  const setAddDataSourceOpen = useBotDetailUIStore((s) => s.setAddDataSourceOpen);
   const [isSubmittingDataSource, setIsSubmittingDataSource] = useState(false);
 
-  const [editKnowledgeOpen, setEditKnowledgeOpen] = useState(false);
+  const editKnowledgeOpen = useBotDetailUIStore((s) => s.editKnowledgeOpen);
+  const setEditKnowledgeOpen = useBotDetailUIStore((s) => s.setEditKnowledgeOpen);
+  const deleteKnowledgeOpen = useBotDetailUIStore((s) => s.deleteKnowledgeOpen);
+  const setDeleteKnowledgeOpen = useBotDetailUIStore((s) => s.setDeleteKnowledgeOpen);
   const [editingPage, setEditingPage] = useState<PageType | null>(null);
   const [isSavingKnowledge, setIsSavingKnowledge] = useState(false);
+  const [isLoadingPageDetail, setIsLoadingPageDetail] = useState(false);
 
-  const [deleteKnowledgeOpen, setDeleteKnowledgeOpen] = useState(false);
-  const [deletingPage, setDeletingPage] = useState<PageType | null>(null);
+  const [deletingPage, setDeletingPage] = useState<PageListItem | null>(null);
   const [isDeletingKnowledge, setIsDeletingKnowledge] = useState(false);
 
   const selectedPendingCount = useMemo(
@@ -183,7 +189,7 @@ export function useKnowledgeBase({
       setHasStartedReindexDiscover(false);
       setIsLoadingPreview(false);
     }
-  }, [bot, supabase, toast]);
+  }, [bot, supabase, toast, setReindexModalOpen, setHasStartedReindexDiscover]);
 
   const {
     isDiscovering,
@@ -222,7 +228,16 @@ export function useKnowledgeBase({
       setReindexModalOpen(false);
       setIsLoadingPreview(false);
     }
-  }, [bot, setTotalCredits, supabase, toast, userId]);
+  }, [
+    bot,
+    setTotalCredits,
+    supabase,
+    toast,
+    userId,
+    setReindexModalOpen,
+    setHasStartedReindexDiscover,
+    setReindexScope,
+  ]);
 
   const handleStartReindexDiscover = useCallback(async () => {
     if (!bot || isDiscovering || isLoadingPreview) return;
@@ -252,7 +267,15 @@ export function useKnowledgeBase({
       setHasStartedReindexDiscover(false);
       setIsLoadingPreview(false);
     }
-  }, [bot, isDiscovering, isLoadingPreview, reindexScope, supabase, toast]);
+  }, [
+    bot,
+    isDiscovering,
+    isLoadingPreview,
+    reindexScope,
+    supabase,
+    toast,
+    setHasStartedReindexDiscover,
+  ]);
 
   const handleUpdateSelected = useCallback(async () => {
     if (!bot || selectedUrlCount === 0) return;
@@ -299,6 +322,7 @@ export function useKnowledgeBase({
     supabase,
     toast,
     totalCredits,
+    setReindexModalOpen,
   ]);
 
   const handleSelectAll = useCallback(() => {
@@ -338,7 +362,7 @@ export function useKnowledgeBase({
       return;
     }
     setAddDataSourceOpen(true);
-  }, [onRequireUpgrade, planCode]);
+  }, [onRequireUpgrade, planCode, setAddDataSourceOpen]);
 
   const handleAddDataSource = useCallback(
     async (title: string, content: string) => {
@@ -392,7 +416,7 @@ export function useKnowledgeBase({
         setIsSubmittingDataSource(false);
       }
     },
-    [bot, fetchData, supabase, toast]
+    [bot, fetchData, supabase, toast, setAddDataSourceOpen]
   );
 
   const handleAddFileDataSource = useCallback(
@@ -427,7 +451,7 @@ export function useKnowledgeBase({
         setIsSubmittingDataSource(false);
       }
     },
-    [bot, fetchData, supabase, toast]
+    [bot, fetchData, supabase, toast, setAddDataSourceOpen]
   );
 
   const handleAddUrlDataSource = useCallback(
@@ -489,20 +513,36 @@ export function useKnowledgeBase({
         setIsSubmittingDataSource(false);
       }
     },
-    [bot, fetchData, setTotalCredits, supabase, toast, totalCredits, userId]
+    [bot, fetchData, setTotalCredits, supabase, toast, totalCredits, userId, setAddDataSourceOpen]
   );
 
   const handleOpenEditKnowledge = useCallback(
-    (page: PageType) => {
+    async (page: PageListItem) => {
       if (planCode === ESubscriptionPlan.Free) {
         onRequireUpgrade();
         return;
       }
-
-      setEditingPage(page);
+      setEditingPage(null);
+      setIsLoadingPageDetail(true);
       setEditKnowledgeOpen(true);
+
+      try {
+        const fullPage = await getKnowledge(supabase, page.id);
+        setEditingPage(fullPage);
+      } catch (error) {
+        console.error("Failed to load page detail:", error);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải nội dung trang. Vui lòng thử lại.",
+          variant: "destructive",
+        });
+        setEditKnowledgeOpen(false);
+        setEditingPage(null);
+      } finally {
+        setIsLoadingPageDetail(false);
+      }
     },
-    [onRequireUpgrade, planCode]
+    [onRequireUpgrade, planCode, supabase, toast, setEditKnowledgeOpen]
   );
 
   const handleSaveEditKnowledge = useCallback(
@@ -563,13 +603,16 @@ export function useKnowledgeBase({
         setIsSavingKnowledge(false);
       }
     },
-    [editingPage, fetchData, supabase, toast]
+    [editingPage, fetchData, supabase, toast, setEditKnowledgeOpen]
   );
 
-  const handleOpenDeleteKnowledge = useCallback((page: PageType) => {
-    setDeletingPage(page);
-    setDeleteKnowledgeOpen(true);
-  }, []);
+  const handleOpenDeleteKnowledge = useCallback(
+    (page: PageListItem) => {
+      setDeletingPage(page);
+      setDeleteKnowledgeOpen(true);
+    },
+    [setDeleteKnowledgeOpen]
+  );
 
   const clearEditingPage = useCallback(() => {
     setEditingPage(null);
@@ -601,7 +644,7 @@ export function useKnowledgeBase({
     } finally {
       setIsDeletingKnowledge(false);
     }
-  }, [deletingPage, fetchData, supabase, toast]);
+  }, [deletingPage, fetchData, supabase, toast, setDeleteKnowledgeOpen]);
 
   return {
     isReindexing,
@@ -615,6 +658,7 @@ export function useKnowledgeBase({
     editKnowledgeOpen,
     editingPage,
     isSavingKnowledge,
+    isLoadingPageDetail,
     deleteKnowledgeOpen,
     deletingPage,
     isDeletingKnowledge,
@@ -629,11 +673,6 @@ export function useKnowledgeBase({
     reindexCrawledCount,
     reindexScope,
     hasStartedReindexDiscover,
-    setReindexModalOpen,
-    setReindexScope,
-    setAddDataSourceOpen,
-    setEditKnowledgeOpen,
-    setDeleteKnowledgeOpen,
     handleReindex,
     handleStartReindexDiscover,
     handleUpdateSelected,

@@ -93,7 +93,7 @@ export const WIDGET_MESSAGES = {
   TECHNICAL_ERROR:
     "Xin lỗi, tôi đang gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc sử dụng widget thật.",
   API_ERROR: "Xin lỗi, tôi không nhận được phản hồi.",
-  MAX_LENGTH_WARNING: (max: number) =>
+  getMaxLengthWarning: (max: number) =>
     `Tin nhắn quá dài (tối đa ${max} ký tự). Vui lòng rút gọn nội dung.`,
 };
 
@@ -103,3 +103,5 @@ export const QR_CODE_SIZE = 220;
 export const AVATAR_SIZE = 32;
 export const TRANSPARENT_AVATAR_SRC =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+export const INIT_CACHE_TTL = 5_000;

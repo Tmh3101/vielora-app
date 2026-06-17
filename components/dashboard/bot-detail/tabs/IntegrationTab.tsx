@@ -187,6 +187,33 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                       Copy
                     </Button>
                   </div>
+                  <div className="space-y-3 pt-2">
+                    <h4 className="text-sm font-medium">Vị trí đặt code phổ biến:</h4>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">Next.js (App Router)</p>
+                        <code className="text-xs text-muted-foreground">
+                          app/layout.tsx (trước {"</body>"})
+                        </code>
+                      </div>
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">Next.js (Pages Router)</p>
+                        <code className="text-xs text-muted-foreground">pages/_document.tsx</code>
+                      </div>
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">React (Vite / CRA)</p>
+                        <code className="text-xs text-muted-foreground">
+                          index.html (trước {"</body>"})
+                        </code>
+                      </div>
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">HTML thuần</p>
+                        <code className="text-xs text-muted-foreground">
+                          index.html (trước {"</body>"})
+                        </code>
+                      </div>
+                    </div>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="vue" className="space-y-3">
@@ -206,6 +233,31 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                       <Copy className="mr-1 h-4 w-4" />
                       Copy
                     </Button>
+                  </div>
+                  <div className="space-y-3 pt-2">
+                    <h4 className="text-sm font-medium">Vị trí đặt code phổ biến:</h4>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">Vue 3 (Vite)</p>
+                        <code className="text-xs text-muted-foreground">
+                          index.html (trước {"</body>"})
+                        </code>
+                      </div>
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">Nuxt 3</p>
+                        <code className="text-xs text-muted-foreground">app.vue</code>
+                      </div>
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">Vue 2 (CLI)</p>
+                        <code className="text-xs text-muted-foreground">public/index.html</code>
+                      </div>
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">Vue + Quasar</p>
+                        <code className="text-xs text-muted-foreground">
+                          src/App.vue hoặc src/layouts/MainLayout.vue
+                        </code>
+                      </div>
+                    </div>
                   </div>
                 </TabsContent>
 

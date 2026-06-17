@@ -1,5 +1,6 @@
 import type { ServiceClient } from "@/lib/services/types";
 import type { Tables } from "@/lib/supabase/types";
+import { EMessageRole } from "@/types/enums";
 
 export type ConversationRow = Tables<"conversations">;
 export type MessageRow = Tables<"messages">;
@@ -50,7 +51,7 @@ export async function getRecentUserMessagesByBotId(
     `
     )
     .eq("conversations.bot_id", botId)
-    .eq("role", "user")
+    .eq("role", EMessageRole.User)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -83,7 +84,7 @@ export async function getQuestionDetails(
     )
     .eq("conversations.bot_id", botId)
     .ilike("content", `%${questionContent}%`)
-    .eq("role", "user")
+    .eq("role", EMessageRole.User)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -95,7 +96,7 @@ export async function getQuestionDetails(
         .from("messages")
         .select("content")
         .eq("conversation_id", userMsg.conversation_id)
-        .eq("role", "assistant")
+        .eq("role", EMessageRole.Assistant)
         .gt("created_at", userMsg.created_at)
         .order("created_at", { ascending: true })
         .limit(1)
@@ -138,7 +139,7 @@ export async function createConversation(
 export async function saveMessage(
   client: ServiceClient,
   conversationId: string,
-  role: string,
+  role: EMessageRole,
   content: string,
   noAnswer?: boolean
 ): Promise<void> {

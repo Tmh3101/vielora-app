@@ -60,6 +60,18 @@ CREATE EVENT TRIGGER ensure_rls
   WHEN TAG IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
   EXECUTE FUNCTION public.rls_auto_enable();
 
+CREATE OR REPLACE FUNCTION public.get_user_id_by_email(p_email text)
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $$
+  SELECT id 
+  FROM auth.users 
+  WHERE LOWER(email) = LOWER(p_email)
+  LIMIT 1;
+$$;
+
 CREATE OR REPLACE FUNCTION public.handle_new_user_billing()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -243,6 +255,7 @@ create trigger update_bots_updated_at before
 update
     on
     public.bots for each row execute function update_updated_at_column();
+
 
 
 -- public.conversations definition
@@ -542,6 +555,18 @@ CREATE TABLE public.support_tickets (
 	CONSTRAINT support_tickets_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL
 );
 
+-- Table Triggers
+create trigger send_ticket_notification after
+insert
+    on
+    public.support_tickets for each row execute function supabase_functions.http_request(
+      'https://vielora-admin.vercel.app/api/webhooks/support-ticket',
+      'POST',
+      '{"Authorization":"Bearer vielora_YQi8HhaUScBUMIYjMgUnFDk9qypchqiu"}',
+      '{}',
+      '5000'
+    );
+
 -- public.discounts definition
 
 CREATE TABLE public.discounts (
@@ -691,6 +716,15 @@ CREATE POLICY "plans_select_all" ON public.plans FOR SELECT USING (true);
 -- 2. DỮ LIỆU CÁ NHÂN (Profiles, Bots)
 CREATE POLICY "bots_all_own" ON public.bots FOR ALL USING (auth.uid() = user_id);
 
+-- Public PWA branding: anonymous users can read public bot branding metadata
+CREATE POLICY "bots_select_public_pwa_branding"
+  ON public.bots FOR SELECT
+  TO anon
+  USING (is_public = true AND slug IS NOT NULL);
+
+REVOKE SELECT ON TABLE public.bots FROM anon;
+GRANT SELECT (slug, name, widget_settings, avatar_url) ON TABLE public.bots TO anon;
+
 -- 3. DỮ LIỆU TÀI CHÍNH (Chỉ Read-only từ Client, Update qua Backend Service Role)
 CREATE POLICY "subscriptions_select_own" ON public.subscriptions FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "wallets_select_own" ON public.wallets FOR SELECT USING (auth.uid() = user_id);
@@ -752,10 +786,14 @@ CREATE POLICY "Allow service role all operations" ON public.discounts
 CREATE POLICY "Allow service role all operations" ON public.banned_users
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- 8. BLOG TABLES
-CREATE POLICY "categories_select_all" ON public.categories FOR SELECT USING (true);
+-- 8. BLOG TABLES (Public Read + Service Role)
+CREATE POLICY "Allow public read categories" ON public.categories FOR SELECT TO public USING (true);
+CREATE POLICY "Allow service role all operations on categories" ON public.categories FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-CREATE POLICY "posts_select_published" ON public.posts
-  FOR SELECT USING (status = 'published'::text);
+CREATE POLICY "Allow public read published posts" ON public.posts
+  FOR SELECT TO public USING (status = 'published'::text);
+CREATE POLICY "Allow service role all operations on posts" ON public.posts
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-CREATE POLICY "post_categories_select_all" ON public.post_categories FOR SELECT USING (true);
+CREATE POLICY "Allow public read post_categories" ON public.post_categories FOR SELECT TO public USING (true);
+CREATE POLICY "Allow service role all operations on post_categories" ON public.post_categories FOR ALL TO service_role USING (true) WITH CHECK (true);

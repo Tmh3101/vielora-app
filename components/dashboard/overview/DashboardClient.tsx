@@ -5,6 +5,8 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { useAuthStore } from "@/store/useAuthStore";
+import { useDashboardUIStore } from "@/store/useDashboardUIStore";
 import { useAuth } from "@/hooks/useAuth";
 import { CreditCard, HelpCircle, Home } from "lucide-react";
 import { toast } from "sonner";
@@ -38,7 +40,9 @@ export interface DashboardClientProps {
 
 export function DashboardClient({ initialData }: DashboardClientProps) {
   const router = useRouter();
-  const { user, isLoading: authLoading, signOut } = useAuth();
+  const user = useAuthStore((s) => s.user);
+  const authLoading = useAuthStore((s) => s.isLoading);
+  const { signOut } = useAuth();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   const {
@@ -62,12 +66,11 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
   });
 
   const botsLimit = plan?.bots_limit ?? 1;
+  const limitDialogOpen = useDashboardUIStore((s) => s.limitDialogOpen);
+  const setLimitDialogOpen = useDashboardUIStore((s) => s.setLimitDialogOpen);
+  const botSelectorOpen = useDashboardUIStore((s) => s.botSelectorOpen);
 
   const {
-    limitDialogOpen,
-    setLimitDialogOpen,
-    botSelectorOpen,
-    setBotSelectorOpen,
     selectedBotIds,
     handleToggleBotSelection,
     handleConfirmBotSelection,
@@ -217,7 +220,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 
       <BotSelectorDialog
         open={botSelectorOpen}
-        onOpenChange={setBotSelectorOpen}
+        onOpenChange={useDashboardUIStore.getState().setBotSelectorOpen}
         bots={bots}
         selectedBotIds={selectedBotIds}
         botsLimit={botsLimit}
@@ -226,7 +229,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
         onToggleBotSelection={handleToggleBotSelection}
         onUpgrade={() => {
           router.push("/dashboard/upgrade");
-          setBotSelectorOpen(false);
+          useDashboardUIStore.getState().setBotSelectorOpen(false);
         }}
         onConfirm={handleConfirmBotSelection}
       />

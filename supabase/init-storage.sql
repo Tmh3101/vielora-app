@@ -189,3 +189,17 @@ CREATE POLICY "Authenticated users can delete knowledge files"
     bucket_id = 'knowledge_files' AND 
     split_part(name, '/', 1) IN (SELECT id::text FROM public.bots WHERE user_id = auth.uid())
   );
+
+-- Create public storage bucket for thumbnails (e.g., blog post thumbnails)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('thumbnails', 'thumbnails', true, NULL, NULL)
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+-- Allow public read access for thumbnails
+CREATE POLICY "Public Access"
+  ON storage.objects FOR SELECT
+  TO public
+  USING (bucket_id = 'thumbnails');

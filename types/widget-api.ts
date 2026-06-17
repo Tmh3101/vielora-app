@@ -68,3 +68,27 @@ export type ChatData = {
 };
 
 export type ChatResponse = ApiResponse<ChatData>;
+
+export interface APIMessage {
+  role: EMessageRole;
+  content: string;
+}
+
+export interface BotInfo {
+  botName: string;
+  avatarUrl: string | null;
+  settings: WidgetSettings;
+  isReady: boolean;
+  previousMessages?: APIMessage[];
+  conversationId?: string;
+  rateLimitExceeded?: boolean;
+  rateLimitMessage?: string | null;
+  insufficientCredits?: boolean;
+  insufficientCreditsMessage?: string | null;
+}
+
+export interface ChatMessage {
+  role: EMessageRole;
+  content: string;
+  isHistory?: boolean;
+}

@@ -1,10 +1,13 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { useAuthStore } from "@/store/useAuthStore";
 import { useAuth } from "@/hooks/useAuth";
+import { useBotDetailUIStore } from "@/store/useBotDetailUIStore";
+import { useAppearanceStore } from "@/store/useAppearanceStore";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
@@ -27,6 +30,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BotPlayground } from "@/components/dashboard/bots/BotPlayground";
 import { LogoLoader } from "@/components/ui/logo-loader";
 import { EBotStatus, EPageStatus } from "@/types";
+import { BotDetailDashboardTabs } from "@/lib/constants";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { useBotData } from "@/hooks/dashboard/bot-detail/useBotData";
 import { useBotSettings } from "@/hooks/dashboard/bot-detail/useBotSettings";
@@ -58,15 +62,6 @@ const KnowledgeBaseTab = lazy(() =>
   }))
 );
 
-type TabType =
-  | "overview"
-  | "playground"
-  | "analytics"
-  | "knowledge"
-  | "appearance"
-  | "settings"
-  | "install";
-
 export interface BotDetailClientProps {
   initialBot: BotType;
   initialUserId: string;
@@ -81,11 +76,26 @@ export function BotDetailClient({
   const botId = initialBot.id;
   const router = useRouter();
   const { toast } = useToast();
-  const { user, isLoading: authLoading } = useAuth();
+  const user = useAuthStore((s) => s.user);
+  const authLoading = useAuthStore((s) => s.isLoading);
+  useAuth();
   const effectiveUser = user ?? { id: initialUserId };
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
-  const [activeTab, setActiveTab] = useState<TabType>("overview");
+  const setReindexModalOpen = useBotDetailUIStore((s) => s.setReindexModalOpen);
+  const setReindexScope = useBotDetailUIStore((s) => s.setReindexScope);
+  const setAddDataSourceOpen = useBotDetailUIStore((s) => s.setAddDataSourceOpen);
+  const setEditKnowledgeOpen = useBotDetailUIStore((s) => s.setEditKnowledgeOpen);
+  const setDeleteKnowledgeOpen = useBotDetailUIStore((s) => s.setDeleteKnowledgeOpen);
+  const activeTab = useBotDetailUIStore((s) => s.activeTab);
+  const setActiveTab = useBotDetailUIStore((s) => s.setActiveTab);
+  const stopModalOpen = useBotDetailUIStore((s) => s.stopModalOpen);
+  const setStopModalOpen = useBotDetailUIStore((s) => s.setStopModalOpen);
+  const upgradeModalOpen = useBotDetailUIStore((s) => s.upgradeModalOpen);
+  const setUpgradeModalOpen = useBotDetailUIStore((s) => s.setUpgradeModalOpen);
+  const upgradeModalMessage = useBotDetailUIStore((s) => s.upgradeModalMessage);
+  const position = useAppearanceStore((s) => s.position);
+  const isStoppingBot = useAppearanceStore((s) => s.isStoppingBot);
 
   const {
     bot,
@@ -112,62 +122,7 @@ export function BotDetailClient({
   });
 
   const {
-    primaryColor,
-    textColor,
-    position,
-    welcomeMessage,
-    suggestedQuestions,
-    chatBackgroundType,
-    chatBackgroundValue,
-    chatBackgroundOpacity,
-    chatIconType,
-    chatIconPreset,
-    chatIconUrl,
-    chatIconColor,
-    chatIconBgColor,
-    editBotName,
-    avatarUrl,
-    rateLimitPerDay,
-    rateLimitPerIp,
-    slug,
-    isPublic,
-    isSaving,
-    isSavingRateLimit,
-    isSavingSlugSettings,
-    isSavingAllowedDomains,
-    stopModalOpen,
-    isStoppingBot,
-    upgradeModalOpen,
-    upgradeModalMessage,
-    rateLimitPerDayError,
-    rateLimitPerIpError,
-    allowedDomains,
-    allowedDomainsError,
-    isRateLimitFormValid,
-    isAllowedDomainsFormValid,
-    setPrimaryColor,
-    setPosition,
-    setWelcomeMessage,
-    setSuggestedQuestions,
-    setEditBotName,
-    setAvatarUrl,
-    setChatBackgroundType,
-    setChatBackgroundValue,
-    setChatBackgroundOpacity,
-    setChatIconType,
-    setChatIconPreset,
-    setChatIconUrl,
-    setChatIconColor,
-    setChatIconBgColor,
-    setRateLimitPerDay,
-    setRateLimitPerIp,
-    setAllowedDomains,
-    setSlug,
-    setIsPublic,
-    setStopModalOpen,
-    setUpgradeModalOpen,
     openUpgradeModal,
-    initializeFromBot,
     handleSaveAppearance,
     handleSaveRateLimit,
     handleSaveAllowedDomains,
@@ -185,9 +140,9 @@ export function BotDetailClient({
 
   useEffect(() => {
     if (bot && botLoadVersion > 0) {
-      initializeFromBot(bot);
+      useAppearanceStore.getState().initializeFromBot(bot);
     }
-  }, [bot, botLoadVersion, initializeFromBot]);
+  }, [bot, botLoadVersion]);
 
   const {
     isReindexing,
@@ -201,6 +156,7 @@ export function BotDetailClient({
     editKnowledgeOpen,
     editingPage,
     isSavingKnowledge,
+    isLoadingPageDetail,
     deleteKnowledgeOpen,
     isDeletingKnowledge,
     selectedPendingCount,
@@ -213,11 +169,6 @@ export function BotDetailClient({
     reindexCrawledCount,
     reindexScope,
     hasStartedReindexDiscover,
-    setReindexModalOpen,
-    setReindexScope,
-    setAddDataSourceOpen,
-    setEditKnowledgeOpen,
-    setDeleteKnowledgeOpen,
     handleReindex,
     handleStartReindexDiscover,
     handleUpdateSelected,
@@ -250,12 +201,12 @@ export function BotDetailClient({
     (typeof window !== "undefined" ? window.location.origin : "");
 
   const sidebarItems = [
-    { id: "overview" as TabType, label: "Tổng quan", icon: BarChart3 },
-    { id: "playground" as TabType, label: "Playground", icon: MessageSquare },
-    { id: "knowledge" as TabType, label: "Kiến thức", icon: FileText },
-    { id: "appearance" as TabType, label: "Giao diện", icon: Palette },
-    { id: "install" as TabType, label: "Cài đặt Widget", icon: Code },
-    { id: "settings" as TabType, label: "Cài đặt", icon: Settings },
+    { id: BotDetailDashboardTabs.OVERVIEW, label: "Tổng quan", icon: BarChart3 },
+    { id: BotDetailDashboardTabs.PLAYGROUND, label: "Playground", icon: MessageSquare },
+    { id: BotDetailDashboardTabs.KNOWLEDGE, label: "Kiến thức", icon: FileText },
+    { id: BotDetailDashboardTabs.APPEARANCE, label: "Giao diện", icon: Palette },
+    { id: BotDetailDashboardTabs.INSTALL, label: "Cài đặt Widget", icon: Code },
+    { id: BotDetailDashboardTabs.SETTINGS, label: "Cài đặt", icon: Settings },
   ];
 
   const getStatusBadge = (status: EPageStatus) => {
@@ -436,17 +387,19 @@ export function BotDetailClient({
           </div>
 
           {/* Overview Tab */}
-          {activeTab === "overview" && (
+          {activeTab === BotDetailDashboardTabs.OVERVIEW && (
             <Suspense fallback={<OverviewLoadingState />}>
               <OverviewTab bot={bot} pagesCount={pagesCount} />
             </Suspense>
           )}
 
           {/* Playground Tab */}
-          {activeTab === "playground" && <BotPlayground botId={bot.id} position={position} />}
+          {activeTab === BotDetailDashboardTabs.PLAYGROUND && (
+            <BotPlayground botId={bot.id} position={position} />
+          )}
 
           {/* Knowledge Tab */}
-          {activeTab === "knowledge" && (
+          {activeTab === BotDetailDashboardTabs.KNOWLEDGE && (
             <Suspense fallback={<KnowledgeBaseLoadingState />}>
               <KnowledgeBaseTab
                 pages={pages}
@@ -460,46 +413,16 @@ export function BotDetailClient({
           )}
 
           {/* Appearance Tab */}
-          {activeTab === "appearance" && (
+          {activeTab === BotDetailDashboardTabs.APPEARANCE && (
             <AppearanceTab
               botId={botId}
-              editBotName={editBotName}
-              avatarUrl={avatarUrl}
-              primaryColor={primaryColor}
-              textColor={textColor}
-              position={position}
-              welcomeMessage={welcomeMessage}
-              suggestedQuestions={suggestedQuestions}
-              chatBackgroundType={chatBackgroundType}
-              chatBackgroundValue={chatBackgroundValue}
-              chatBackgroundOpacity={chatBackgroundOpacity}
-              chatIconType={chatIconType}
-              chatIconPreset={chatIconPreset}
-              chatIconUrl={chatIconUrl}
-              chatIconColor={chatIconColor}
-              chatIconBgColor={chatIconBgColor}
-              isSaving={isSaving}
               currentPlan={planCode}
-              setEditBotName={setEditBotName}
-              setAvatarUrl={setAvatarUrl}
-              setPrimaryColor={setPrimaryColor}
-              setPosition={setPosition}
-              setWelcomeMessage={setWelcomeMessage}
-              setSuggestedQuestions={setSuggestedQuestions}
-              setChatBackgroundType={setChatBackgroundType}
-              setChatBackgroundValue={setChatBackgroundValue}
-              setChatBackgroundOpacity={setChatBackgroundOpacity}
-              setChatIconType={setChatIconType}
-              setChatIconPreset={setChatIconPreset}
-              setChatIconUrl={setChatIconUrl}
-              setChatIconColor={setChatIconColor}
-              setChatIconBgColor={setChatIconBgColor}
               onSaveAppearance={handleSaveAppearance}
             />
           )}
 
           {/* Install Tab */}
-          {activeTab === "install" && (
+          {activeTab === BotDetailDashboardTabs.INSTALL && (
             <IntegrationTab
               botId={bot.id}
               appUrl={appUrl}
@@ -515,35 +438,13 @@ export function BotDetailClient({
           )}
 
           {/* Settings Tab */}
-          {activeTab === "settings" && (
+          {activeTab === BotDetailDashboardTabs.SETTINGS && (
             <SettingsTab
               bot={bot}
-              isSaving={isSaving}
-              isSavingRateLimit={isSavingRateLimit}
-              isSavingSlugSettings={isSavingSlugSettings}
-              isSavingAllowedDomains={isSavingAllowedDomains}
-              isStoppingBot={isStoppingBot}
-              rateLimitPerDay={rateLimitPerDay}
-              rateLimitPerIp={rateLimitPerIp}
-              rateLimitPerDayError={rateLimitPerDayError}
-              rateLimitPerIpError={rateLimitPerIpError}
-              allowedDomains={allowedDomains}
-              allowedDomainsError={allowedDomainsError}
-              isRateLimitFormValid={isRateLimitFormValid}
-              isAllowedDomainsFormValid={isAllowedDomainsFormValid}
-              slug={slug}
-              isPublic={isPublic}
-              setRateLimitPerDay={setRateLimitPerDay}
-              setRateLimitPerIp={setRateLimitPerIp}
-              setAllowedDomains={setAllowedDomains}
-              setSlug={setSlug}
-              setIsPublic={setIsPublic}
-              setStopModalOpen={setStopModalOpen}
               onStartBot={handleStartBot}
               onSaveRateLimit={handleSaveRateLimit}
               onSaveAllowedDomains={handleSaveAllowedDomains}
               onSaveSlugSettings={handleSaveSlugSettings}
-              onVerified={fetchData}
             />
           )}
         </div>
@@ -599,6 +500,7 @@ export function BotDetailClient({
         onOpenChange={setEditKnowledgeOpen}
         page={editingPage}
         isSaving={isSavingKnowledge}
+        isLoadingContent={isLoadingPageDetail}
         totalCredits={totalCredits}
         onConfirm={handleSaveEditKnowledge}
         onResetPage={clearEditingPage}

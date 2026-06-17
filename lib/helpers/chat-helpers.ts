@@ -1,5 +1,5 @@
-import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
-import type { BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
+import { BOT_RATE_LIMIT_ERROR_CODES, type BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
+import { INSUFFICIENT_CREDITS_MESSAGE } from "@/lib/constants/chat";
 import { EWidgetBackgroundType } from "@/types";
 
 /**
@@ -91,23 +91,29 @@ export const getBackgroundStyle = (
   bgOpacity: number
 ) => {
   if (bgType === EWidgetBackgroundType.Solid) {
-    try {
-      const hex = bgValue;
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${bgOpacity})` };
-    } catch {
+    let hex = bgValue && bgValue.startsWith("#") ? bgValue : "#ffffff";
+    if (hex.length === 4) {
+      hex = "#" + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+    }
+    const rgb = parseInt(hex.slice(1), 16);
+    if (isNaN(rgb)) {
       return { backgroundColor: `rgba(255, 255, 255, ${bgOpacity})` };
     }
-  } else if (bgType === EWidgetBackgroundType.Gradient) {
+    const r = (rgb >> 16) & 255;
+    const g = (rgb >> 8) & 255;
+    const b = rgb & 255;
+    return { backgroundColor: "rgba(" + r + ", " + g + ", " + b + ", " + bgOpacity + ")" };
+  }
+
+  if (bgType === EWidgetBackgroundType.Gradient) {
     return {
       background: bgValue,
       backgroundColor: `rgba(255, 255, 255, ${1 - bgOpacity})`,
       backgroundBlendMode: "lighten" as const,
-      backgroundSize: "cover",
     };
-  } else if (bgType === EWidgetBackgroundType.Image && bgValue?.startsWith("http")) {
+  }
+
+  if (bgType === EWidgetBackgroundType.Image) {
     return {
       backgroundImage: `url("${bgValue}")`,
       backgroundColor: `rgba(255, 255, 255, ${1 - bgOpacity})`,
@@ -117,7 +123,8 @@ export const getBackgroundStyle = (
       backgroundRepeat: "no-repeat",
     };
   }
-  return { backgroundColor: `rgba(255, 255, 255, ${bgOpacity})` };
+
+  return {};
 };
 
 export const getRateLimitMessage = (
@@ -133,4 +140,20 @@ export const getRateLimitMessage = (
     default:
       return fallback || `Đã đạt giới hạn tin nhắn trong ngày.`;
   }
+};
+
+export const getChatBlockedData = (
+  insufficientCredits: boolean,
+  rateLimitExceeded: boolean,
+  insufficientCreditsMessage: string | null,
+  rateLimitMessage: string | null,
+  botName: string
+) => {
+  const blockedChatMessage = insufficientCredits
+    ? insufficientCreditsMessage || INSUFFICIENT_CREDITS_MESSAGE
+    : rateLimitExceeded
+      ? rateLimitMessage || `${botName} đã đạt giới hạn tin nhắn trong ngày.`
+      : null;
+  const isChatBlocked = insufficientCredits || rateLimitExceeded;
+  return { blockedChatMessage, isChatBlocked };
 };

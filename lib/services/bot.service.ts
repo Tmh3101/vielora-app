@@ -121,17 +121,7 @@ export interface DeleteKnowledgeResponse {
 export interface GetKnowledgeResponse {
   success: boolean;
   message?: string;
-  data?: {
-    id: string;
-    bot_id: string;
-    url: string;
-    title: string | null;
-    content: string | null;
-    raw_content: string | null;
-    source_type: string;
-    status: string;
-    crawled_at: string;
-  };
+  data?: Tables<"pages"> | null;
 }
 
 const POLL_INTERVAL_MS = 1000;

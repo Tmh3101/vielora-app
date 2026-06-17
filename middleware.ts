@@ -75,12 +75,15 @@ export function middleware(request: NextRequest) {
   const mainDomain = getMainDomain();
   const requestHeaders = buildRequestHeaders(request);
 
-  if (host === mainDomain && pathname.startsWith("/chat/")) {
+  if (
+    process.env.NODE_ENV === "production" &&
+    host === mainDomain &&
+    pathname.startsWith("/chat/")
+  ) {
     const slug = pathname.split("/")[2];
 
     if (slug) {
-      const protocol = process.env.NODE_ENV === "production" ? "https://" : "http://";
-      const redirectUrl = new URL(`${protocol}${slug}.${mainDomain}/`, request.url);
+      const redirectUrl = new URL(`https://${slug}.${mainDomain}/`, request.url);
       redirectUrl.search = request.nextUrl.search;
       return withShopifyCsp(NextResponse.redirect(redirectUrl, 301));
     }

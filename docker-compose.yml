@@ -68,6 +68,8 @@ services:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
         NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
         NEXT_PUBLIC_DEMO_BOT_ID: "${NEXT_PUBLIC_DEMO_BOT_ID}"
+        NEXT_PUBLIC_SHOPIFY_CLIENT_ID: "${NEXT_PUBLIC_SHOPIFY_CLIENT_ID}"
+        SHOPIFY_CLIENT_SECRET: "${SHOPIFY_CLIENT_SECRET}"
     container_name: vielora-worker
     restart: unless-stopped
     command: >
@@ -92,6 +94,8 @@ services:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
         NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
         NEXT_PUBLIC_DEMO_BOT_ID: "${NEXT_PUBLIC_DEMO_BOT_ID}"
+        NEXT_PUBLIC_SHOPIFY_CLIENT_ID: "${NEXT_PUBLIC_SHOPIFY_CLIENT_ID}"
+        SHOPIFY_CLIENT_SECRET: "${SHOPIFY_CLIENT_SECRET}"
     container_name: vielora-cron
     restart: unless-stopped
     command: ["npm", "run", "cron"]
@@ -115,6 +119,8 @@ services:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
         NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL}"
         NEXT_PUBLIC_DEMO_BOT_ID: "${NEXT_PUBLIC_DEMO_BOT_ID}"
+        NEXT_PUBLIC_SHOPIFY_CLIENT_ID: "${NEXT_PUBLIC_SHOPIFY_CLIENT_ID}"
+        SHOPIFY_CLIENT_SECRET: "${SHOPIFY_CLIENT_SECRET}"
     container_name: vielora-web
     restart: unless-stopped
     ports:

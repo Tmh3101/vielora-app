@@ -47,6 +47,12 @@ const shopify = shopifyApi({
   hostName: new URL(process.env.NEXT_PUBLIC_APP_URL).host,
   apiVersion: "2026-04" as ApiVersion, // Match shopify.app.toml
   isEmbeddedApp: true,
+  logger: {
+    log: (severity, msg) => {
+      if (severity > 1) return; // Suppress INFO (2) and DEBUG (3)
+      console[severity === 0 ? "error" : "warn"](msg);
+    },
+  },
 });
 
 function decodeShopifyHost(host: string): string {

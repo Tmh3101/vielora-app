@@ -2,56 +2,43 @@ import type { WheelEvent } from "react";
 import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getIconSVG } from "@/lib/icons";
+import { useAppearanceStore } from "@/store/useAppearanceStore";
+import {
+  getIconSVG,
+  getBackgroundStyle,
+  getUserMessageTextColor as getTextColor,
+} from "@/lib/helpers";
 import { Bot, MinusCircle } from "lucide-react";
-import { BackgroundType, type ChatBackgroundType } from "@/lib/constants/widget-appearance";
 import { EWidgetIconType } from "@/types";
 
 interface WidgetPreviewCardProps {
-  editBotName: string;
-  avatarUrl: string | null;
-  primaryColor: string;
-  textColor: string;
-  welcomeMessage: string;
-  suggestedQuestions: string[];
-  chatBackgroundType: ChatBackgroundType;
-  chatBackgroundValue: string;
-  chatBackgroundOpacity: number;
-  chatIconType: EWidgetIconType;
-  chatIconPreset: string;
-  chatIconUrl: string | null;
-  chatIconColor: string;
-  chatIconBgColor: string;
-  solidColor: string;
-  getUserMessageTextColor: () => string;
   previewMessagesRef: React.RefObject<HTMLDivElement | null>;
   handleSuggestedQuestionsWheel: (e: WheelEvent<HTMLDivElement>) => void;
 }
 
 export function WidgetPreviewCard({
-  editBotName,
-  avatarUrl,
-  primaryColor,
-  textColor,
-  welcomeMessage,
-  suggestedQuestions,
-  chatBackgroundType,
-  chatBackgroundValue,
-  chatBackgroundOpacity,
-  chatIconType,
-  chatIconPreset,
-  chatIconUrl,
-  chatIconColor,
-  chatIconBgColor,
-  solidColor,
-  getUserMessageTextColor,
   previewMessagesRef,
   handleSuggestedQuestionsWheel,
 }: WidgetPreviewCardProps) {
+  const editBotName = useAppearanceStore((s) => s.editBotName);
+  const avatarUrl = useAppearanceStore((s) => s.avatarUrl);
+  const primaryColor = useAppearanceStore((s) => s.primaryColor);
+  const textColor = useAppearanceStore((s) => s.textColor);
+  const welcomeMessage = useAppearanceStore((s) => s.welcomeMessage);
+  const suggestedQuestions = useAppearanceStore((s) => s.suggestedQuestions);
+  const chatBackgroundType = useAppearanceStore((s) => s.chatBackgroundType);
+  const chatBackgroundValue = useAppearanceStore((s) => s.chatBackgroundValue);
+  const chatBackgroundOpacity = useAppearanceStore((s) => s.chatBackgroundOpacity);
+  const chatIconType = useAppearanceStore((s) => s.chatIconType);
+  const chatIconPreset = useAppearanceStore((s) => s.chatIconPreset);
+  const chatIconUrl = useAppearanceStore((s) => s.chatIconUrl);
+  const chatIconColor = useAppearanceStore((s) => s.chatIconColor);
+  const chatIconBgColor = useAppearanceStore((s) => s.chatIconBgColor);
+
   const previewSuggestedQuestions = suggestedQuestions.filter((q) => q.trim());
   const showSuggestedOverlay = previewSuggestedQuestions.length > 0;
-  const isValidImageBackgroundValue =
-    typeof chatBackgroundValue === "string" && /^https?:\/\//.test(chatBackgroundValue);
+  const previewPrimaryTextColor = getTextColor(primaryColor);
+  const getUserMessageTextColor = () => previewPrimaryTextColor;
 
   return (
     <Card className="glass flex h-full flex-col">
@@ -101,30 +88,11 @@ export function WidgetPreviewCard({
               <div
                 ref={previewMessagesRef}
                 className={`max-h-[300px] min-h-[300px] space-y-4 overflow-y-auto p-4 ${showSuggestedOverlay ? "pb-14" : ""}`}
-                style={{
-                  ...(chatBackgroundType === BackgroundType.SOLID
-                    ? {
-                        background: `rgba(${parseInt(solidColor.slice(1, 3), 16)}, ${parseInt(solidColor.slice(3, 5), 16)}, ${parseInt(solidColor.slice(5, 7), 16)}, ${chatBackgroundOpacity / 100})`,
-                      }
-                    : chatBackgroundType === BackgroundType.GRADIENT
-                      ? {
-                          background: chatBackgroundValue,
-                          backgroundColor: `rgba(255, 255, 255, ${1 - chatBackgroundOpacity / 100})`,
-                          backgroundBlendMode: "lighten",
-                        }
-                      : chatBackgroundType === BackgroundType.IMAGE && isValidImageBackgroundValue
-                        ? {
-                            backgroundImage: `url("${chatBackgroundValue}")`,
-                            backgroundColor: `rgba(255, 255, 255, ${1 - chatBackgroundOpacity / 100})`,
-                            backgroundBlendMode: "lighten",
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                            backgroundRepeat: "no-repeat",
-                          }
-                        : {
-                            background: `rgba(255, 255, 255, ${chatBackgroundOpacity / 100})`,
-                          }),
-                }}
+                style={getBackgroundStyle(
+                  chatBackgroundType,
+                  chatBackgroundValue || "#ffffff",
+                  chatBackgroundOpacity / 100
+                )}
               >
                 <div className="my-4 text-center text-xs text-muted-foreground">Hôm nay</div>
                 <div

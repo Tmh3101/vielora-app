@@ -7,50 +7,53 @@
  * - Must be used in Client Components only
  */
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { User, Session } from "@supabase/supabase-js";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export const useAuth = () => {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const user = useAuthStore((s) => s.user);
+  const session = useAuthStore((s) => s.session);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const setSession = useAuthStore((s) => s.setSession);
+  const setLoading = useAuthStore((s) => s.setLoading);
+  const storeSignOut = useAuthStore((s) => s.signOut);
   const router = useRouter();
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
+      setLoading(false);
     });
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [supabase, setSession, setLoading]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    storeSignOut();
     router.push("/");
-  };
+  }, [supabase, storeSignOut, router]);
 
-  const requireAuth = (callback: () => void) => {
-    if (!user) {
-      router.push("/auth");
-      return;
-    }
-    callback();
-  };
+  const requireAuth = useCallback(
+    (callback: () => void) => {
+      if (!user) {
+        router.push("/auth");
+        return;
+      }
+      callback();
+    },
+    [user, router]
+  );
 
   return {
     user,

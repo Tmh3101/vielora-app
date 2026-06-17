@@ -1,5 +1,6 @@
 import type { ServiceClient } from "@/lib/services/types";
 import { DAY_MS } from "@/lib/constants/analytics";
+import { EMessageRole } from "@/types/enums";
 
 export interface AnalyticsRange {
   from: string;
@@ -106,7 +107,7 @@ export function calculateAnalyticsKpis(
   conversationsCount: number,
   creditsUsed: number
 ): AnalyticsKpis {
-  const userMessages = messages.filter((message) => message.role === "user");
+  const userMessages = messages.filter((message) => message.role === EMessageRole.User);
   const fallbackCount = userMessages.filter((message) => message.no_answer === true).length;
   const totalMessages = userMessages.length;
 
@@ -153,7 +154,7 @@ export function buildTrendSeries(
 ): AnalyticsTrendPoint[] {
   const points: AnalyticsTrendPoint[] = [];
   const userMessageTimestamps = messages
-    .filter((message) => message.role === "user")
+    .filter((message) => message.role === EMessageRole.User)
     .map((message) => new Date(message.created_at).getTime());
   const conversationTimestamps = conversations.map((conversation) =>
     new Date(conversation.started_at).getTime()
@@ -201,7 +202,7 @@ export function buildHeatmapSeries(
   const toTime = to.getTime();
 
   messages.forEach((message) => {
-    if (message.role !== "user") return;
+    if (message.role !== EMessageRole.User) return;
 
     const messageDate = new Date(message.created_at);
     const timestamp = messageDate.getTime();
@@ -240,7 +241,7 @@ export function buildRecentQuestions(
   const sortedMessages = messages
     .slice()
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .filter((message) => message.role === "user")
+    .filter((message) => message.role === EMessageRole.User)
     .slice(0, limit);
 
   return sortedMessages.map((message) => {
@@ -248,7 +249,7 @@ export function buildRecentQuestions(
     const nearestAssistantReply = messages
       .filter(
         (item) =>
-          item.role === "assistant" &&
+          item.role === EMessageRole.Assistant &&
           item.conversation_id === message.conversation_id &&
           new Date(item.created_at).getTime() >= questionTime
       )

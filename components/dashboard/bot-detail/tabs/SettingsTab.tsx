@@ -1,6 +1,5 @@
 "use client";
 
-// import DomainVerification from "@/components/bot/DomainVerification";
 import React from "react";
 import { StandaloneChatSharePanel } from "@/components/dashboard/StandaloneChatSharePanel";
 import { Button } from "@/components/ui/button";
@@ -11,69 +10,65 @@ import { Loader2, RefreshCw, Square, Copy, Plus, Trash2 } from "lucide-react";
 import { MAX_ALLOWED_DOMAINS } from "@/lib/security/allowed-domains";
 import type { Tables } from "@/lib/supabase/types";
 import { useToast } from "@/hooks/use-toast";
+import { useAppearanceStore } from "@/store/useAppearanceStore";
+import { useBotDetailUIStore } from "@/store/useBotDetailUIStore";
+import { parseRateLimitInput } from "@/lib/bot-rate-limit";
+import { validateAllowedDomains } from "@/lib/security/allowed-domains";
 
 type BotType = Tables<"bots">;
 
 export interface SettingsTabProps {
   bot: BotType;
-  isSaving: boolean;
-  isSavingRateLimit: boolean;
-  isSavingSlugSettings: boolean;
-  isSavingAllowedDomains: boolean;
-  isStoppingBot: boolean;
-  rateLimitPerDay: string;
-  rateLimitPerIp: string;
-  rateLimitPerDayError: string;
-  rateLimitPerIpError: string;
-  allowedDomains: string[];
-  allowedDomainsError: string;
-  isRateLimitFormValid: boolean;
-  isAllowedDomainsFormValid: boolean;
-  slug: string;
-  isPublic: boolean;
-  setRateLimitPerDay: (value: string) => void;
-  setRateLimitPerIp: (value: string) => void;
-  setAllowedDomains: (value: string[]) => void;
-  setSlug: (value: string) => void;
-  setIsPublic: (value: boolean) => void;
-  setStopModalOpen: (open: boolean) => void;
   onStartBot: () => Promise<void>;
   onSaveRateLimit: () => Promise<void>;
   onSaveAllowedDomains: () => Promise<void>;
   onSaveSlugSettings: () => Promise<void>;
-  onVerified: () => Promise<void>;
 }
 
 export function SettingsTab({
   bot,
-  isSaving,
-  isSavingRateLimit,
-  isSavingSlugSettings,
-  isSavingAllowedDomains,
-  isStoppingBot,
-  rateLimitPerDay,
-  rateLimitPerIp,
-  rateLimitPerDayError,
-  rateLimitPerIpError,
-  allowedDomains,
-  allowedDomainsError,
-  isRateLimitFormValid,
-  isAllowedDomainsFormValid,
-  slug,
-  isPublic,
-  setRateLimitPerDay,
-  setRateLimitPerIp,
-  setAllowedDomains,
-  setSlug,
-  setIsPublic,
-  setStopModalOpen,
   onStartBot,
   onSaveRateLimit,
   onSaveAllowedDomains,
   onSaveSlugSettings,
-  // onVerified,
 }: SettingsTabProps) {
   const { toast } = useToast();
+
+  const isSaving = useAppearanceStore((s) => s.isSaving);
+  const isSavingRateLimit = useAppearanceStore((s) => s.isSavingRateLimit);
+  const isSavingSlugSettings = useAppearanceStore((s) => s.isSavingSlugSettings);
+  const isSavingAllowedDomains = useAppearanceStore((s) => s.isSavingAllowedDomains);
+  const isStoppingBot = useAppearanceStore((s) => s.isStoppingBot);
+
+  const rateLimitPerDay = useAppearanceStore((s) => s.rateLimitPerDay);
+  const setRateLimitPerDay = useAppearanceStore((s) => s.setRateLimitPerDay);
+  const rateLimitPerIp = useAppearanceStore((s) => s.rateLimitPerIp);
+  const setRateLimitPerIp = useAppearanceStore((s) => s.setRateLimitPerIp);
+
+  const allowedDomains = useAppearanceStore((s) => s.allowedDomains);
+  const setAllowedDomains = useAppearanceStore((s) => s.setAllowedDomains);
+
+  const slug = useAppearanceStore((s) => s.slug);
+  const setSlug = useAppearanceStore((s) => s.setSlug);
+  const isPublic = useAppearanceStore((s) => s.isPublic);
+  const setIsPublic = useAppearanceStore((s) => s.setIsPublic);
+
+  const setStopModalOpen = useBotDetailUIStore((s) => s.setStopModalOpen);
+
+  const rateLimitPerDayError = parseRateLimitInput(
+    rateLimitPerDay,
+    "Giới hạn tin nhắn / ngày"
+  ).error;
+  const rateLimitPerIpError = parseRateLimitInput(
+    rateLimitPerIp,
+    "Giới hạn tin nhắn / IP / ngày"
+  ).error;
+  const allowedDomainsValidation = validateAllowedDomains(
+    allowedDomains.map((d) => d.trim()).filter(Boolean)
+  );
+  const allowedDomainsError = allowedDomainsValidation.error;
+  const isRateLimitFormValid = !rateLimitPerDayError && !rateLimitPerIpError;
+  const isAllowedDomainsFormValid = !allowedDomainsError;
 
   const handleRateLimitInputChange = (nextValue: string, setValue: (value: string) => void) => {
     if (nextValue === "") {
@@ -316,8 +311,6 @@ export function SettingsTab({
           </div>
         </CardContent>
       </Card>
-
-      {/* <DomainVerification botId={bot.id} verifiedAt={bot.verified_at} onVerified={onVerified} /> */}
     </div>
   );
 }

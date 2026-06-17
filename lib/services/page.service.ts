@@ -19,17 +19,26 @@ export type PagePreview = Pick<
 >;
 
 /**
+ * Lightweight page row used for list rendering — excludes heavy content columns.
+ */
+export type PageListItem = Pick<
+  PageRow,
+  "id" | "title" | "url" | "source_type" | "status" | "crawled_at" | "error_message" | "error_type"
+>;
+
+/**
  * Lấy danh sách tất cả pages của một bot, sắp xếp theo crawled_at giảm dần.
  * Có thể lọc theo một hoặc nhiều trạng thái.
+ * Chỉ trả về metadata — KHÔNG bao gồm content/raw_content.
  */
 export async function getPagesByBotId(
   client: ServiceClient,
   botId: string,
   statuses?: EPageStatus[]
-): Promise<PageRow[]> {
+): Promise<PageListItem[]> {
   let query = client
     .from("pages")
-    .select("*")
+    .select("id, title, url, source_type, status, crawled_at, error_message, error_type")
     .eq("bot_id", botId)
     .order("crawled_at", { ascending: false });
 

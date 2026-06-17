@@ -8,27 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { WIDGET_LIMITS } from "@/config";
-import { getIconSVG } from "@/lib/icons";
 import { Crown, Image as ImageIcon, Loader2, MapPin, Plus, Upload, X } from "lucide-react";
-import { BackgroundType, type ChatBackgroundType } from "@/lib/constants/widget-appearance";
-import { ESubscriptionPlan, EWidgetIconType } from "@/types";
-import { isHexColor } from "@/lib/helpers";
+import { BackgroundType } from "@/lib/constants/widget-appearance";
+import { ESubscriptionPlan, EWidgetBackgroundType, EWidgetIconType } from "@/types";
+import { isHexColor, getIconSVG } from "@/lib/helpers";
+import { useAppearanceStore } from "@/store/useAppearanceStore";
 
 interface AppearanceSettingsCardProps {
   botId: string;
-  editBotName: string;
-  avatarUrl: string | null;
-  primaryColor: string;
-  position: string;
-  welcomeMessage: string;
-  suggestedQuestions: string[];
-  chatBackgroundType: ChatBackgroundType;
-  chatBackgroundValue: string;
-  chatBackgroundOpacity: number;
-  chatIconType: EWidgetIconType;
-  chatIconPreset: string;
-  chatIconUrl: string | null;
-  isSaving: boolean;
   currentPlan?: ESubscriptionPlan;
   isUploadingBg: boolean;
   bgPreviewFile: File | null;
@@ -40,23 +27,14 @@ interface AppearanceSettingsCardProps {
   gradientColor2: string;
   gradientAngle: number;
   bgFileInputRef: RefObject<HTMLInputElement | null>;
-  setEditBotName: (value: string) => void;
-  setAvatarUrl: (value: string | null) => void;
   setPrimaryColor: (value: string) => void;
-  setWelcomeMessage: (value: string) => void;
-  setSuggestedQuestions: (value: string[]) => void;
-  setChatBackgroundType: (value: ChatBackgroundType) => void;
-  setChatBackgroundOpacity: (value: number) => void;
-  setChatIconType: (value: EWidgetIconType) => void;
   openPositionModal: () => void;
   handleSolidColorChange: (color: string) => void;
   handleGradientChange: (c1?: string, c2?: string, angle?: number) => void;
   generateGradientCSS: (color1: string, color2: string, angle: number) => string;
   handleBgFileSelect: (file: File) => Promise<void>;
   handleDeleteBackground: () => Promise<void>;
-  setChatIconPreset: (value: string) => void;
   setChatIconBgColor: (value: string) => void;
-  setChatIconColor: (value: string) => void;
   handleIconInputChange: (e: ChangeEvent<HTMLInputElement>) => void;
   handleIconFileSelect: (file: File) => Promise<void>;
   handleDeleteIcon: () => Promise<void>;
@@ -71,18 +49,6 @@ interface AppearanceSettingsCardProps {
 
 export function AppearanceSettingsCard({
   botId,
-  editBotName,
-  avatarUrl,
-  primaryColor,
-  welcomeMessage,
-  suggestedQuestions,
-  chatBackgroundType,
-  chatBackgroundValue,
-  chatBackgroundOpacity,
-  chatIconType,
-  chatIconPreset,
-  chatIconUrl,
-  isSaving,
   currentPlan,
   isUploadingBg,
   bgPreviewFile,
@@ -90,32 +56,45 @@ export function AppearanceSettingsCard({
   isUploadingIcon,
   iconUploadError,
   solidColor,
-  gradientColor1,
-  gradientColor2,
-  gradientAngle,
+  // gradientColor1,
+  // gradientColor2,
+  // gradientAngle,
   bgFileInputRef,
-  setEditBotName,
-  setAvatarUrl,
   setPrimaryColor,
-  setWelcomeMessage,
-  setSuggestedQuestions,
-  setChatBackgroundType,
-  setChatBackgroundOpacity,
-  setChatIconType,
   openPositionModal,
   handleSolidColorChange,
-  handleGradientChange,
-  generateGradientCSS,
+  // handleGradientChange,
+  // generateGradientCSS,
   handleBgFileSelect,
   handleDeleteBackground,
-  setChatIconPreset,
   setChatIconBgColor,
-  setChatIconColor,
   handleIconInputChange,
   handleIconFileSelect,
   handleDeleteIcon,
   onSaveAppearance,
 }: AppearanceSettingsCardProps) {
+  const editBotName = useAppearanceStore((s) => s.editBotName);
+  const avatarUrl = useAppearanceStore((s) => s.avatarUrl);
+  const primaryColor = useAppearanceStore((s) => s.primaryColor);
+  const welcomeMessage = useAppearanceStore((s) => s.welcomeMessage);
+  const suggestedQuestions = useAppearanceStore((s) => s.suggestedQuestions);
+  const chatBackgroundType = useAppearanceStore((s) => s.chatBackgroundType);
+  const chatBackgroundValue = useAppearanceStore((s) => s.chatBackgroundValue);
+  const chatBackgroundOpacity = useAppearanceStore((s) => s.chatBackgroundOpacity);
+  const chatIconType = useAppearanceStore((s) => s.chatIconType);
+  const chatIconPreset = useAppearanceStore((s) => s.chatIconPreset);
+  const chatIconUrl = useAppearanceStore((s) => s.chatIconUrl);
+  const isSaving = useAppearanceStore((s) => s.isSaving);
+  const setEditBotName = useAppearanceStore((s) => s.setEditBotName);
+  const setAvatarUrl = useAppearanceStore((s) => s.setAvatarUrl);
+  const setWelcomeMessage = useAppearanceStore((s) => s.setWelcomeMessage);
+  const setSuggestedQuestions = useAppearanceStore((s) => s.setSuggestedQuestions);
+  const setChatBackgroundType = useAppearanceStore((s) => s.setChatBackgroundType);
+  const setChatBackgroundOpacity = useAppearanceStore((s) => s.setChatBackgroundOpacity);
+  const setChatIconType = useAppearanceStore((s) => s.setChatIconType);
+  const setChatIconPreset = useAppearanceStore((s) => s.setChatIconPreset);
+  const setChatIconColor = useAppearanceStore((s) => s.setChatIconColor);
+
   const canUseSuggestedQuestions =
     !!currentPlan && [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro].includes(currentPlan);
   const botNameError = editBotName.trim().length === 0 ? "Tên Bot không được để trống." : null;
@@ -223,19 +202,13 @@ export function AppearanceSettingsCard({
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setChatBackgroundType(BackgroundType.SOLID)}
+                    onClick={() => setChatBackgroundType(EWidgetBackgroundType.Solid)}
                     className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${chatBackgroundType === BackgroundType.SOLID ? "border-primary bg-primary/10 text-primary" : "border-input text-muted-foreground hover:border-primary hover:text-primary"}`}
                   >
                     Màu sắc
                   </button>
-                  {/* <button
-                    onClick={() => setChatBackgroundType(BackgroundType.GRADIENT)}
-                    className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${chatBackgroundType === BackgroundType.GRADIENT ? "border-primary bg-primary/10 text-primary" : "border-input text-muted-foreground hover:border-primary hover:text-primary"}`}
-                  >
-                    Gradient
-                  </button> */}
                   <button
-                    onClick={() => setChatBackgroundType(BackgroundType.IMAGE)}
+                    onClick={() => setChatBackgroundType(EWidgetBackgroundType.Image)}
                     className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${chatBackgroundType === BackgroundType.IMAGE ? "border-primary bg-primary/10 text-primary" : "border-input text-muted-foreground hover:border-primary hover:text-primary"}`}
                   >
                     Hình ảnh
@@ -269,88 +242,6 @@ export function AppearanceSettingsCard({
                     {solidColorError && (
                       <p className="text-xs text-destructive">{solidColorError}</p>
                     )}
-                  </div>
-                )}
-
-                {chatBackgroundType === BackgroundType.GRADIENT && (
-                  <div className="space-y-4">
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <Label className="text-xs">Màu bắt đầu</Label>
-                          <div className="flex gap-2">
-                            <div className="relative h-10 w-12 overflow-hidden rounded-md border border-input">
-                              <Input
-                                type="color"
-                                value={gradientColor1}
-                                onChange={(e) => handleGradientChange(e.target.value)}
-                                className="absolute inset-0 -left-[25%] -top-[25%] h-[150%] w-[150%] cursor-pointer border-0 p-0"
-                              />
-                            </div>
-                            <Input
-                              type="text"
-                              value={gradientColor1}
-                              onChange={(e) => handleGradientChange(e.target.value)}
-                              className="flex-1 font-mono text-sm"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-xs">Màu kết thúc</Label>
-                          <div className="flex gap-2">
-                            <div className="relative h-10 w-12 overflow-hidden rounded-md border border-input">
-                              <Input
-                                type="color"
-                                value={gradientColor2}
-                                onChange={(e) => handleGradientChange(undefined, e.target.value)}
-                                className="absolute inset-0 -left-[25%] -top-[25%] h-[150%] w-[150%] cursor-pointer border-0 p-0"
-                              />
-                            </div>
-                            <Input
-                              type="text"
-                              value={gradientColor2}
-                              onChange={(e) => handleGradientChange(undefined, e.target.value)}
-                              className="flex-1 font-mono text-sm"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="gradientAngle" className="text-xs">
-                          Hướng gradient: {gradientAngle}°
-                        </Label>
-                        <input
-                          id="gradientAngle"
-                          type="range"
-                          min="0"
-                          max="360"
-                          value={gradientAngle}
-                          onChange={(e) =>
-                            handleGradientChange(undefined, undefined, parseInt(e.target.value))
-                          }
-                          className="h-2 w-full cursor-pointer rounded-lg bg-muted"
-                        />
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>0° (Trên)</span>
-                          <span>90° (Phải)</span>
-                          <span>180° (Dưới)</span>
-                          <span>270° (Trái)</span>
-                        </div>
-                      </div>
-
-                      <div
-                        className="h-20 w-full rounded-md border border-input"
-                        style={{
-                          background: generateGradientCSS(
-                            gradientColor1,
-                            gradientColor2,
-                            gradientAngle
-                          ),
-                        }}
-                      />
-                    </div>
                   </div>
                 )}
 

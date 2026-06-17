@@ -24,6 +24,7 @@ export interface EditKnowledgeModalProps {
   onOpenChange: (open: boolean) => void;
   page: PageType | null;
   isSaving: boolean;
+  isLoadingContent: boolean;
   totalCredits: number;
   onConfirm: (title: string, content: string) => Promise<void>;
   onResetPage: () => void;
@@ -34,6 +35,7 @@ export function EditKnowledgeModal({
   onOpenChange,
   page,
   isSaving,
+  isLoadingContent,
   totalCredits,
   onConfirm,
   onResetPage,
@@ -100,28 +102,39 @@ export function EditKnowledgeModal({
 
           <div className="-mx-1 flex-1 space-y-2 overflow-hidden px-1">
             <Label htmlFor="edit-content">Nội dung *</Label>
-            <Textarea
-              id="edit-content"
-              placeholder="Nhập nội dung văn bản hoặc markdown..."
-              value={content}
-              onChange={(e) => {
-                if (e.target.value.length <= MAX_MANUAL_CONTENT_LENGTH) {
-                  setContent(e.target.value);
-                }
-              }}
-              disabled={isSaving}
-              rows={12}
-              maxLength={MAX_MANUAL_CONTENT_LENGTH}
-              className="resize-none text-sm"
-            />
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">Hỗ trợ định dạng Markdown.</p>
-              <p
-                className={`text-xs ${content.length >= MAX_MANUAL_CONTENT_LENGTH ? "text-destructive" : "text-muted-foreground"}`}
-              >
-                {content.length}/{MAX_MANUAL_CONTENT_LENGTH}
-              </p>
-            </div>
+            {isLoadingContent ? (
+              <div className="flex h-[300px] items-center justify-center rounded-lg border bg-muted/30">
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <p className="text-sm">Đang tải nội dung...</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Textarea
+                  id="edit-content"
+                  placeholder="Nhập nội dung văn bản hoặc markdown..."
+                  value={content}
+                  onChange={(e) => {
+                    if (e.target.value.length <= MAX_MANUAL_CONTENT_LENGTH) {
+                      setContent(e.target.value);
+                    }
+                  }}
+                  disabled={isSaving}
+                  rows={12}
+                  maxLength={MAX_MANUAL_CONTENT_LENGTH}
+                  className="resize-none text-sm"
+                />
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Hỗ trợ định dạng Markdown.</p>
+                  <p
+                    className={`text-xs ${content.length >= MAX_MANUAL_CONTENT_LENGTH ? "text-destructive" : "text-muted-foreground"}`}
+                  >
+                    {content.length}/{MAX_MANUAL_CONTENT_LENGTH}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -157,7 +170,11 @@ export function EditKnowledgeModal({
             <Button
               onClick={() => void onConfirm(title, content)}
               disabled={
-                isSaving || !title.trim() || !content.trim() || totalCredits < CREDIT_PER_PAGE
+                isSaving ||
+                isLoadingContent ||
+                !title.trim() ||
+                !content.trim() ||
+                totalCredits < CREDIT_PER_PAGE
               }
             >
               {isSaving ? (

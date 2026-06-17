@@ -32,7 +32,7 @@ step()    { echo -e "\n${BOLD}▸ $*${NC}"; }
 banner()  {
   echo ""
   echo -e "${CYAN}${BOLD}╔═══════════════════════════════════════════════╗${NC}"
-  echo -e "${CYAN}${BOLD}║           VIELORA — Deploy Manager             ║${NC}"
+  echo -e "${CYAN}${BOLD}║           VIELORA — Deploy Manager            ║${NC}"
   echo -e "${CYAN}${BOLD}╚═══════════════════════════════════════════════╝${NC}"
   echo ""
 }

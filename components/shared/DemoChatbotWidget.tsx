@@ -6,201 +6,26 @@ import { Bot, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MAX_CHAT_INPUT } from "@/config/rag";
-import type { InitResponse, WidgetSettings } from "@/types";
 import {
   getIconColorBasedOnBg,
-  parsePosition,
+  computeClampedPosition,
+  getChatWidgetPositionStyle,
+  getBackgroundStyle,
   parseMarkdown,
   getUserMessageTextColor,
+  getIconSVGWithSize,
+  getChatBlockedData,
 } from "@/lib/helpers";
-import { getIconSVGWithSize } from "@/lib/icons";
-import { WIDGET_CONFIG, WIDGET_FALLBACK, WIDGET_MESSAGES, WIDGET_POSITION } from "@/config/widget";
-import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
-import {
-  INSUFFICIENT_CREDITS_ERROR_CODE,
-  INSUFFICIENT_CREDITS_MESSAGE,
-} from "@/lib/constants/chat";
-import { EMessageRole, EWidgetBackgroundType, EWidgetIconType } from "@/types/enums";
-
-// API message format (matching widget.js)
-interface APIMessage {
-  role: EMessageRole;
-  content: string;
-}
-
-interface BotInfo {
-  botName: string;
-  avatarUrl: string | null;
-  settings: WidgetSettings;
-  isReady: boolean;
-  previousMessages?: APIMessage[];
-  conversationId?: string;
-  rateLimitExceeded?: boolean;
-  rateLimitMessage?: string | null;
-  insufficientCredits?: boolean;
-  insufficientCreditsMessage?: string | null;
-}
+import { WIDGET_CONFIG, WIDGET_FALLBACK, WIDGET_MESSAGES, MAX_CHAT_INPUT } from "@/config";
+import { INSUFFICIENT_CREDITS_MESSAGE } from "@/lib/constants/chat";
+import { type BotInfo, type APIMessage, EMessageRole, EWidgetIconType } from "@/types";
+import { callChatAPI, initDemoBot, getFallbackBotInfo } from "@/lib/services/widget.service";
 
 interface Message {
   id: number;
   role: EMessageRole;
   content: string;
 }
-
-const generateVisitorId = (): string => {
-  const stored = localStorage.getItem(WIDGET_CONFIG.VISITOR_ID_KEY);
-  if (stored) return stored;
-
-  const id =
-    WIDGET_CONFIG.VISITOR_ID_PREFIX + Math.random().toString(36).substr(2, 9) + "_" + Date.now();
-  localStorage.setItem(WIDGET_CONFIG.VISITOR_ID_KEY, id);
-  return id;
-};
-
-const getFallbackSetting = (): WidgetSettings => ({
-  primaryColor: WIDGET_FALLBACK.PRIMARY_COLOR,
-  textColor: WIDGET_FALLBACK.TEXT_COLOR,
-  position: WIDGET_FALLBACK.POSITION,
-  welcomeMessage: WIDGET_FALLBACK.WELCOME_MESSAGE,
-});
-
-const getFallbackBotInfo = (): BotInfo => ({
-  botName: WIDGET_FALLBACK.BOT_NAME,
-  avatarUrl: null,
-  settings: getFallbackSetting(),
-  isReady: true,
-  previousMessages: [],
-  conversationId: undefined,
-  rateLimitExceeded: false,
-  rateLimitMessage: null,
-  insufficientCredits: false,
-  insufficientCreditsMessage: null,
-});
-
-// Function to initialize demo bot (matching widget.js init)
-const initDemoBot = async (botId: string): Promise<BotInfo> => {
-  const visitorId = generateVisitorId();
-
-  try {
-    const response = await fetch(`${WIDGET_CONFIG.BASE_URL}/api/widget/init`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-bot-id": botId,
-        "x-visitor-id": visitorId,
-      },
-      body: JSON.stringify({
-        botId: botId,
-        visitorId: visitorId,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Init API call failed");
-    }
-
-    const data: InitResponse = await response.json();
-
-    if (data.success && data.data) {
-      return {
-        botName: data.data.name || WIDGET_FALLBACK.BOT_NAME,
-        avatarUrl: data.data.avatarUrl || null,
-        settings: data.data.settings || getFallbackSetting(),
-        isReady: data.data.status === "ready",
-        previousMessages: data.data.messages || [],
-        conversationId: data.data.conversationId || undefined,
-        rateLimitExceeded: Boolean(data.data.rateLimitExceeded),
-        rateLimitMessage: data.data.rateLimitMessage || null,
-        insufficientCredits: false,
-        insufficientCreditsMessage: null,
-      };
-    }
-
-    throw new Error("Invalid init response format");
-  } catch (error) {
-    console.error("Error initializing demo bot:", error);
-    return getFallbackBotInfo();
-  }
-};
-
-const callChatAPI = async (
-  botId: string,
-  message: string,
-  conversationId?: string
-): Promise<{
-  message: string;
-  conversationId: string;
-  rateLimitExceeded?: boolean;
-  rateLimitMessage?: string | null;
-  insufficientCredits?: boolean;
-  insufficientCreditsMessage?: string | null;
-}> => {
-  const visitorId = generateVisitorId();
-
-  try {
-    const response = await fetch(`${WIDGET_CONFIG.BASE_URL}/api/widget/chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-bot-id": botId,
-        "x-visitor-id": visitorId,
-      },
-      body: JSON.stringify({
-        botId: botId,
-        message: message,
-        conversationId: conversationId,
-        visitorId: visitorId,
-      }),
-    });
-
-    if (response.status === 429) {
-      const data: InitResponse = await response.json();
-      return {
-        message: data.message || WIDGET_MESSAGES.API_ERROR,
-        conversationId: conversationId || "",
-        rateLimitExceeded: data.code !== BOT_RATE_LIMIT_ERROR_CODES.ApiExceeded,
-        rateLimitMessage: data.message || null,
-      };
-    }
-
-    if (response.status === 403) {
-      throw new Error("Domain not allowed");
-    }
-
-    if (response.status === 402) {
-      const data = await response.json();
-      return {
-        message: data.message || INSUFFICIENT_CREDITS_MESSAGE,
-        conversationId: conversationId || "",
-        insufficientCredits: data.code === INSUFFICIENT_CREDITS_ERROR_CODE,
-        insufficientCreditsMessage: data.message || INSUFFICIENT_CREDITS_MESSAGE,
-      };
-    }
-
-    if (!response.ok) {
-      throw new Error("API call failed");
-    }
-
-    const data = await response.json();
-
-    if (data.success && data.data) {
-      return {
-        message: data.data.message || WIDGET_MESSAGES.API_ERROR,
-        conversationId: data.data.conversationId || conversationId || "",
-      };
-    }
-
-    throw new Error("Invalid response format");
-  } catch (error) {
-    console.error("Error calling Vielora API:", error);
-    return {
-      message: WIDGET_MESSAGES.API_ERROR,
-      conversationId: conversationId || WIDGET_MESSAGES.OFFLINE_PREFIX + Date.now(),
-    };
-  }
-};
-
 interface DemoChatbotWidgetProps {
   botId?: string;
   position?: string;
@@ -208,15 +33,15 @@ interface DemoChatbotWidgetProps {
 
 export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, position }) => {
   const activeBotId = botId || WIDGET_CONFIG.DEMO_BOT_ID || "";
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const websiteRef = useRef<HTMLDivElement>(null);
   const [showDemoChat, setShowDemoChat] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState<string>("");
   const [suggestedQuestionsShown, setSuggestedQuestionsShown] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const websiteRef = useRef<HTMLDivElement>(null);
   const [botInfo, setBotInfo] = useState<BotInfo>(getFallbackBotInfo());
   const [rateLimitExceeded, setRateLimitExceeded] = useState(false);
   const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
@@ -224,48 +49,18 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
   const [insufficientCreditsMessage, setInsufficientCreditsMessage] = useState<string | null>(null);
   const [containerDimensions, setContainerDimensions] = useState({ width: 340, height: 400 });
 
-  const finalPosition = position || botInfo.settings.position;
-  const blockedChatMessage = insufficientCredits
-    ? insufficientCreditsMessage || INSUFFICIENT_CREDITS_MESSAGE
-    : rateLimitExceeded
-      ? rateLimitMessage || `${botInfo.botName} đã đạt giới hạn tin nhắn trong ngày.`
-      : null;
-  const isChatBlocked = insufficientCredits || rateLimitExceeded;
-  const parsedPosition = parsePosition(finalPosition);
-
-  const BASE_MIN_X = WIDGET_POSITION.PADDING;
-  const BASE_MAX_X =
-    WIDGET_POSITION.FRAME_WIDTH - WIDGET_POSITION.PADDING - WIDGET_POSITION.ICON_SIZE;
-  const BASE_MIN_Y = WIDGET_POSITION.PADDING;
-  const BASE_MAX_Y =
-    WIDGET_POSITION.FRAME_HEIGHT - WIDGET_POSITION.PADDING - WIDGET_POSITION.ICON_SIZE;
-  const BASE_RANGE_X = BASE_MAX_X - BASE_MIN_X;
-  const BASE_RANGE_Y = BASE_MAX_Y - BASE_MIN_Y;
-  const clampedBaseX = Math.max(BASE_MIN_X, Math.min(parsedPosition.x, BASE_MAX_X));
-  const clampedBaseY = Math.max(BASE_MIN_Y, Math.min(parsedPosition.y, BASE_MAX_Y));
-  const normalizedX = BASE_RANGE_X > 0 ? (clampedBaseX - BASE_MIN_X) / BASE_RANGE_X : 0;
-  const normalizedY = BASE_RANGE_Y > 0 ? (clampedBaseY - BASE_MIN_Y) / BASE_RANGE_Y : 0;
-
-  const viewportRangeX = Math.max(
-    0,
-    containerDimensions.width - WIDGET_POSITION.ICON_SIZE - WIDGET_CONFIG.PREVIEW_EDGE_OFFSET * 2
-  );
-  const viewportRangeY = Math.max(
-    0,
-    containerDimensions.height - WIDGET_POSITION.ICON_SIZE - WIDGET_CONFIG.PREVIEW_EDGE_OFFSET * 2
+  const { blockedChatMessage, isChatBlocked } = getChatBlockedData(
+    insufficientCredits,
+    rateLimitExceeded,
+    insufficientCreditsMessage,
+    rateLimitMessage,
+    botInfo.botName
   );
 
-  const clampedPosition = {
-    x: WIDGET_CONFIG.PREVIEW_EDGE_OFFSET + normalizedX * viewportRangeX,
-    y: WIDGET_CONFIG.PREVIEW_EDGE_OFFSET + normalizedY * viewportRangeY,
-  };
-
-  const spaceAbove = clampedPosition.y;
-  const spaceBelow = containerDimensions.height - clampedPosition.y - WIDGET_POSITION.ICON_SIZE;
-
-  const positionChatBelow = spaceBelow > spaceAbove && spaceBelow > 250;
-
-  const horizontalMidpoint = containerDimensions.width / 2;
+  const { clampedPosition, positionChatBelow, horizontalMidpoint } = computeClampedPosition(
+    position || botInfo.settings.position,
+    containerDimensions
+  );
 
   // Handler functions to replace inline ones
   const toggleDemoChat = () => setShowDemoChat((prev) => !prev);
@@ -299,41 +94,19 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
   };
 
   // Memoized styles
-  const chatBackgroundStyle = useMemo(() => {
-    const bgType = botInfo.settings.chatBackgroundType || EWidgetBackgroundType.Solid;
-    const bgValue = botInfo.settings.chatBackgroundValue || "#ffffff";
-    const bgOpacity = (botInfo.settings.chatBackgroundOpacity || 100) / 100;
-
-    if (bgType === EWidgetBackgroundType.Solid) {
-      const rgb = parseInt(bgValue.slice(1), 16);
-      const r = (rgb >> 16) & 255;
-      const g = (rgb >> 8) & 255;
-      const b = rgb & 255;
-      return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${bgOpacity})` };
-    } else if (bgType === EWidgetBackgroundType.Gradient) {
-      const overlayOpacity = 1 - bgOpacity;
-      return {
-        background: bgValue,
-        backgroundColor: `rgba(255, 255, 255, ${overlayOpacity})`,
-        backgroundBlendMode: "lighten" as const,
-      };
-    } else if (bgType === EWidgetBackgroundType.Image) {
-      const overlayOpacity = 1 - bgOpacity;
-      return {
-        backgroundImage: `url("${bgValue}")`,
-        backgroundColor: `rgba(255, 255, 255, ${overlayOpacity})`,
-        backgroundBlendMode: "lighten" as const,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-      };
-    }
-    return {};
-  }, [
-    botInfo.settings.chatBackgroundType,
-    botInfo.settings.chatBackgroundValue,
-    botInfo.settings.chatBackgroundOpacity,
-  ]);
+  const chatBackgroundStyle = useMemo(
+    () =>
+      getBackgroundStyle(
+        botInfo.settings.chatBackgroundType,
+        botInfo.settings.chatBackgroundValue || "#ffffff",
+        (botInfo.settings.chatBackgroundOpacity || 100) / 100
+      ),
+    [
+      botInfo.settings.chatBackgroundType,
+      botInfo.settings.chatBackgroundValue,
+      botInfo.settings.chatBackgroundOpacity,
+    ]
+  );
 
   useEffect(() => {
     const measureContainer = () => {
@@ -355,22 +128,17 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     };
   }, []);
 
-  // Function to load previous messages (matching widget.js)
   const loadPreviousMessages = (
     previousMessages: APIMessage[],
     welcomeMessage: string
   ): Message[] => {
     const loadedMessages: Message[] = [];
-
-    // Add separator message if there are previous messages
     if (previousMessages && previousMessages.length > 0) {
       loadedMessages.push({
         id: 0,
         role: EMessageRole.Bot,
         content: WIDGET_MESSAGES.HISTORY_SEPARATOR,
       });
-
-      // Add previous messages with proper role conversion
       previousMessages.forEach((msg, index) => {
         const role = msg.role === EMessageRole.Assistant ? EMessageRole.Bot : msg.role;
         loadedMessages.push({
@@ -380,7 +148,6 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
         });
       });
     } else {
-      // Add welcome message if no previous messages
       loadedMessages.push({
         id: 1,
         role: EMessageRole.Bot,
@@ -391,7 +158,6 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     return loadedMessages;
   };
 
-  // Auto scroll to bottom when messages change
   const scrollToBottom = () => {
     if (messagesContainerRef.current) {
       setTimeout(() => {
@@ -400,14 +166,12 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     }
   };
 
-  // Scroll to bottom when messages change or when chat is opened
   useEffect(() => {
     if (showDemoChat && messages.length > 0) {
       scrollToBottom();
     }
   }, [messages, showDemoChat]);
 
-  // Scroll to bottom when chat is first opened (immediate scroll for initial load)
   useEffect(() => {
     if (showDemoChat) {
       setTimeout(() => {
@@ -418,12 +182,14 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     }
   }, [showDemoChat]);
 
-  // Initialize bot settings and message history
   useEffect(() => {
+    const abortController = new AbortController();
+    let cancelled = false;
+
     const initBot = async () => {
       const info = await initDemoBot(activeBotId);
 
-      // Override position if provided via props
+      if (cancelled || abortController.signal.aborted) return;
       if (position) {
         info.settings.position = position;
       }
@@ -437,12 +203,10 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
         setSuggestedQuestionsShown(true);
       }
 
-      // Set conversation ID if available
       if (info.conversationId) {
         setConversationId(info.conversationId);
       }
 
-      // Load previous messages or welcome message
       const initialMessages = loadPreviousMessages(
         info.previousMessages || [],
         info.rateLimitExceeded && info.rateLimitMessage
@@ -452,6 +216,11 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
       setMessages(initialMessages);
     };
     initBot();
+
+    return () => {
+      cancelled = true;
+      abortController.abort();
+    };
   }, [activeBotId, position]);
 
   const appendBotMessage = (content: string) => {
@@ -483,7 +252,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     }
 
     if (trimmed.length > MAX_CHAT_INPUT) {
-      appendBotMessage(WIDGET_MESSAGES.MAX_LENGTH_WARNING(MAX_CHAT_INPUT));
+      appendBotMessage(WIDGET_MESSAGES.getMaxLengthWarning(MAX_CHAT_INPUT));
       return;
     }
 
@@ -591,9 +360,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
         className="relative min-h-[500px] bg-gradient-to-br from-background/80 to-muted/20 shadow-xl shadow-gray-900/10"
         id="demo-website"
       >
-        {/* Simple mock website content */}
         <div className="space-y-6 p-8">
-          {/* Content placeholders */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div className="space-y-8">
               <div className="h-4 w-3/4 rounded bg-muted" />
@@ -610,7 +377,6 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
             </div>
           </div>
 
-          {/* More placeholders */}
           <div className="space-y-8">
             <div className="h-6 w-1/2 rounded bg-muted/80" />
             <div className="h-3 w-full rounded bg-muted/60" />
@@ -710,30 +476,15 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
               exit={{ opacity: 0, scale: 0.8, y: 20 }}
               transition={{ duration: 0.3 }}
               className="absolute z-50 w-80"
-              style={{
-                // Position chat window smartly based on icon position (left/right)
-                // Use container midpoint for responsive threshold
-                ...(clampedPosition.x < horizontalMidpoint
-                  ? { left: `${Math.max(0, clampedPosition.x - 20)}px`, right: "auto" }
-                  : {
-                      left: "auto",
-                      right: `${Math.max(0, containerDimensions.width - clampedPosition.x - 64)}px`,
-                    }),
-                // Position chat window smartly based on vertical space (top/bottom)
-                ...(positionChatBelow
-                  ? {
-                      top: `${Math.max(0, clampedPosition.y + WIDGET_POSITION.ICON_SIZE + 10)}px`,
-                      bottom: "auto",
-                    }
-                  : {
-                      top: "auto",
-                      bottom: `${Math.max(containerDimensions.height - clampedPosition.y + 10, 20)}px`,
-                    }),
-              }}
+              style={getChatWidgetPositionStyle(
+                clampedPosition,
+                containerDimensions,
+                horizontalMidpoint,
+                positionChatBelow
+              )}
             >
               {/* Chat widget */}
               <div className="glass-lg overflow-hidden rounded-2xl border border-border/20 shadow-2xl">
-                {/* Chat header */}
                 <div
                   className="flex items-center justify-between rounded-t-2xl p-4"
                   style={{ backgroundColor: botInfo.settings.primaryColor }}
@@ -766,7 +517,6 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                   </Button>
                 </div>
 
-                {/* Messages */}
                 <div
                   ref={messagesContainerRef}
                   className={`h-64 space-y-3 overflow-y-auto p-4 shadow-inner ${
@@ -806,60 +556,63 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                       font-size: 11px;
                     }
                   `}</style>
-                  {messages.map((message, index) => (
-                    <motion.div
-                      key={message.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        duration: 0.3,
-                        delay: index === messages.length - 1 ? 0.1 : 0,
-                      }}
-                      className={`${
-                        message.content.startsWith("--- Lịch sử")
-                          ? "my-2 text-center"
-                          : `flex ${message.role === "user" ? "justify-end" : "justify-start"}`
-                      }`}
-                    >
-                      {message.content.startsWith("--- Lịch sử") ? (
-                        <div className="text-xs font-medium text-muted-foreground opacity-75">
-                          {message.content}
-                        </div>
-                      ) : (
-                        <>
-                          <div
-                            className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs shadow-sm ${
-                              message.role === "user"
-                                ? "rounded-br-sm text-white"
-                                : "rounded-bl-sm bg-muted"
-                            }`}
-                            style={
-                              message.role === "user"
-                                ? {
-                                    backgroundColor: botInfo.settings.primaryColor,
-                                    color: getUserMessageTextColor(botInfo.settings.primaryColor),
-                                  }
-                                : { color: botInfo.settings.textColor }
-                            }
-                          >
-                            {message.role === "bot" ? (
-                              <div
-                                className="chatbot-message-content whitespace-pre-line"
-                                dangerouslySetInnerHTML={{
-                                  __html: parseMarkdown(
-                                    message.content,
-                                    botInfo.settings.primaryColor
-                                  ),
-                                }}
-                              />
-                            ) : (
-                              <p className="whitespace-pre-line">{message.content}</p>
-                            )}
+                  {messages.map((message, index) => {
+                    const isHistory = message.content.startsWith(WIDGET_MESSAGES.HISTORY_SEPARATOR);
+                    return (
+                      <motion.div
+                        key={message.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                          duration: 0.3,
+                          delay: index === messages.length - 1 ? 0.1 : 0,
+                        }}
+                        className={`${
+                          isHistory
+                            ? "my-2 text-center"
+                            : `flex ${message.role === EMessageRole.User ? "justify-end" : "justify-start"}`
+                        }`}
+                      >
+                        {isHistory ? (
+                          <div className="text-xs font-medium text-muted-foreground opacity-75">
+                            {message.content}
                           </div>
-                        </>
-                      )}
-                    </motion.div>
-                  ))}
+                        ) : (
+                          <>
+                            <div
+                              className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs shadow-sm ${
+                                message.role === EMessageRole.User
+                                  ? "rounded-br-sm text-white"
+                                  : "rounded-bl-sm bg-muted"
+                              }`}
+                              style={
+                                message.role === EMessageRole.User
+                                  ? {
+                                      backgroundColor: botInfo.settings.primaryColor,
+                                      color: getUserMessageTextColor(botInfo.settings.primaryColor),
+                                    }
+                                  : { color: botInfo.settings.textColor }
+                              }
+                            >
+                              {message.role === EMessageRole.Bot ? (
+                                <div
+                                  className="chatbot-message-content whitespace-pre-line"
+                                  dangerouslySetInnerHTML={{
+                                    __html: parseMarkdown(
+                                      message.content,
+                                      botInfo.settings.primaryColor
+                                    ),
+                                  }}
+                                />
+                              ) : (
+                                <p className="whitespace-pre-line">{message.content}</p>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </motion.div>
+                    );
+                  })}
                   {isTyping && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
@@ -884,13 +637,11 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                       </div>
                     </motion.div>
                   )}
-                  {/* Invisible div to scroll to */}
                   <div ref={messagesEndRef} />
                 </div>
 
                 {/* Suggested Questions + Input Area */}
                 <div className="relative border-t border-border bg-transparent">
-                  {/* Suggested Questions Bar */}
                   {showSuggestedOverlay && (
                     <>
                       <style jsx>{`
@@ -933,7 +684,6 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                     </>
                   )}
 
-                  {/* Input */}
                   <div className="rounded-b-2xl p-3 shadow-lg">
                     {blockedChatMessage && (rateLimitExceeded || insufficientCredits) && (
                       <div className="pointer-events-none absolute inset-x-0 bottom-14 z-10 px-3">
@@ -977,7 +727,6 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
         </AnimatePresence>
       </div>
 
-      {/* Instructions */}
       <div className="glass border-t border-border/40 p-4">
         <div className="space-y-2 text-center text-sm text-muted-foreground">
           <p className="text-xs opacity-75">
@@ -990,5 +739,3 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     </motion.div>
   );
 };
-
-export default DemoChatbotWidget;

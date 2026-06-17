@@ -12,9 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { MapPin } from "lucide-react";
-import { parsePosition, type DragPosition } from "@/lib/helpers";
+import { parsePosition, getIconSVG, type DragPosition } from "@/lib/helpers";
 import { WIDGET_POSITION } from "@/config/widget";
-import { getIconSVG } from "@/lib/icons";
 import { EWidgetIconType } from "@/types";
 
 interface PositionModalProps {
