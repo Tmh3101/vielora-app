@@ -18,25 +18,38 @@ CREATE OR REPLACE FUNCTION public.hybrid_search(
 ) LANGUAGE plpgsql
 AS $function$
 declare
-  rrf_k constant integer := 60;
+  rrf_k constant integer := 20;
+  fts_query tsquery;
 begin
+  begin
+    fts_query := replace(
+      websearch_to_tsquery('simple', query_text)::text,
+      ' & ',
+      ' | '
+    )::tsquery;
+  exception when others then
+    fts_query := null;
+  end;
+
   return query
   with full_text_results as (
     select
       d.id,
-      row_number() over (order by ts_rank_cd(d.fts, plainto_tsquery('simple', query_text)) desc) as rank_ix
+      row_number() over (order by ts_rank_cd(d.fts, fts_query) desc) as rank_ix
     from public.documents d
-    where 
+    where
       (p_bot_id is null or d.bot_id = p_bot_id)
-      and d.fts @@ plainto_tsquery('simple', query_text)
+      and fts_query is not null
+      and d.fts @@ fts_query
     limit 20
   ),
   semantic_results as (
     select
       d.id,
+      1 - (d.embedding <=> query_embedding) as semantic_similarity,
       row_number() over (order by d.embedding <=> query_embedding) as rank_ix
     from public.documents d
-    where 
+    where
       (p_bot_id is null or d.bot_id = p_bot_id)
       and d.embedding is not null
     limit 20
@@ -44,6 +57,7 @@ begin
   rrf_results as (
     select
       coalesce(ft.id, sem.id) as id,
+      sem.semantic_similarity,
       (
         coalesce(full_text_weight * (1.0 / (rrf_k + ft.rank_ix)), 0.0) +
         coalesce(semantic_weight * (1.0 / (rrf_k + sem.rank_ix)), 0.0)
@@ -54,19 +68,19 @@ begin
   top_matches as (
     select
       rrf.id,
+      rrf.semantic_similarity,
       rrf.rrf_score
     from rrf_results rrf
     order by rrf.rrf_score desc
     limit match_count
   )
-  -- Lệnh SELECT cuối cùng thực hiện JOIN tối ưu để lấy thông tin nguồn trang/file
   select
     d.id,
     d.bot_id,
     d.content,
     d.metadata,
-    tm.rrf_score as similarity,
-    coalesce(p.source_type, 'website') as source_type, -- Fallback mặc định là website nếu không tìm thấy liên kết trang
+    coalesce(tm.semantic_similarity, 0.0) as similarity,
+    coalesce(p.source_type, 'website') as source_type,
     p.url as resolved_url
   from top_matches tm
   join public.documents d on d.id = tm.id

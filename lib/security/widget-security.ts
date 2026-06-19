@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { getBotForWidgetServer } from "@/lib/services/bot.service";
+import { getBotForWidgetServerCached } from "@/lib/services/server/bot-cache.service";
 import { checkRateLimit, RateLimitResult } from "./rate-limiter";
 import { corsHeaders } from "@/lib/constants";
 import { isOriginAllowedForWidget } from "./allowed-domains";
@@ -97,7 +97,7 @@ export async function verifyWidgetRequest(
 
     // Get bot from database
     const supabase = createAdminClient();
-    const bot = await getBotForWidgetServer(supabase, botId);
+    const bot = await getBotForWidgetServerCached(supabase, botId);
 
     if (!bot) {
       return {

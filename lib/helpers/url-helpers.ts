@@ -190,3 +190,15 @@ export function isBotRootUrl(url: string, bot: Tables<"bots">): boolean {
     return false;
   }
 }
+
+/**
+ * Parse a date string into a Date object, or indicate absence when the input is missing or invalid.
+ *
+ * @param value - The date string to parse; may be `null` or an empty string.
+ * @returns The `Date` represented by `value`, or `null` if `value` is falsy or not a valid date.
+ */
+export function parseDateParam(value: string | null): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}

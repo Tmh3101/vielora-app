@@ -18,7 +18,7 @@ import { getWalletByUserId, getMonthlyBotMessageCount } from "@/lib/services/wal
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
 import { getBotStatusInfo, isMissingBotError } from "@/lib/helpers";
 import { CONVERSATION_MAX_AGE, WIDGET_FALLBACK } from "@/config/widget";
-import { getBotById } from "@/lib/services/bot.service";
+import { getBotByIdCached } from "@/lib/services/server/bot-cache.service";
 import { CHATBOT_UNAVAILABLE_MESSAGE } from "@/lib/constants/chat";
 
 export async function OPTIONS() {
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
     }
 
     const supabase = createAdminClient();
-    const botData = await getBotById(supabase, botId).catch((error) => {
+    const botData = await getBotByIdCached(supabase, botId).catch((error) => {
       if (isMissingBotError(error)) return null;
       throw error;
     });

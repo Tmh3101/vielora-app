@@ -242,6 +242,7 @@ CREATE TABLE public.bots (
 	is_public boolean NOT NULL DEFAULT false, -- Whether the bot is accessible via public standalone link
 	is_banned boolean NOT NULL DEFAULT false,
 	allowed_domains text[] NOT NULL DEFAULT '{}'::text[], -- Domains allowed to embed this bot widget. Maximum 5 normalized hostnames.
+	personality_id uuid NULL, -- FK to ai_personalities, controls bot personality
 	CONSTRAINT bots_pkey PRIMARY KEY (id),
 	CONSTRAINT bots_slug_key UNIQUE (slug),
 	CONSTRAINT bots_allowed_domains_max_5 CHECK (cardinality(allowed_domains) <= 5)
@@ -257,6 +258,41 @@ update
     public.bots for each row execute function update_updated_at_column();
 
 
+
+-- public.ai_personalities definition
+
+CREATE TABLE public.ai_personalities (
+	id uuid DEFAULT gen_random_uuid() NOT NULL,
+	name varchar NOT NULL,
+	prompt_injection text NOT NULL,
+	is_active boolean NOT NULL DEFAULT true,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT ai_personalities_pkey PRIMARY KEY (id),
+	CONSTRAINT ai_personalities_name_key UNIQUE (name)
+);
+
+-- public.ai_skills definition
+
+CREATE TABLE public.ai_skills (
+	id uuid DEFAULT gen_random_uuid() NOT NULL,
+	name varchar NOT NULL,
+	prompt_injection text NOT NULL,
+	is_active boolean NOT NULL DEFAULT true,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT ai_skills_pkey PRIMARY KEY (id),
+	CONSTRAINT ai_skills_name_key UNIQUE (name)
+);
+
+-- public.bot_skills definition
+
+CREATE TABLE public.bot_skills (
+	bot_id uuid NOT NULL,
+	skill_id uuid NOT NULL,
+	CONSTRAINT bot_skills_pkey PRIMARY KEY (bot_id, skill_id),
+	CONSTRAINT bot_skills_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.bots(id) ON DELETE CASCADE,
+	CONSTRAINT bot_skills_skill_id_fkey FOREIGN KEY (skill_id) REFERENCES public.ai_skills(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_bot_skills_skill_id ON public.bot_skills (skill_id);
 
 -- public.conversations definition
 
@@ -560,9 +596,9 @@ create trigger send_ticket_notification after
 insert
     on
     public.support_tickets for each row execute function supabase_functions.http_request(
-      'https://vielora-admin.vercel.app/api/webhooks/support-ticket',
+      'https://admin-portal.vielora.vn/api/webhooks/support-ticket',
       'POST',
-      '{"Authorization":"Bearer vielora_YQi8HhaUScBUMIYjMgUnFDk9qypchqiu"}',
+      '{"Authorization":"Bearer <your_webhook_secret>"}',
       '{}',
       '5000'
     );
@@ -668,6 +704,7 @@ CREATE TABLE public.shopify_sessions (
 -- public.bots foreign keys
 
 ALTER TABLE public.bots ADD CONSTRAINT bots_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+ALTER TABLE public.bots ADD CONSTRAINT bots_personality_id_fkey FOREIGN KEY (personality_id) REFERENCES public.ai_personalities(id) ON DELETE SET NULL;
 
 
 -- public.subscriptions foreign keys
@@ -709,6 +746,9 @@ ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.post_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shopify_sessions_migrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shopify_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_personalities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_skills ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bot_skills ENABLE ROW LEVEL SECURITY;
 
 -- 1. PLANS (Public Read-only)
 CREATE POLICY "plans_select_all" ON public.plans FOR SELECT USING (true);
@@ -797,3 +837,18 @@ CREATE POLICY "Allow service role all operations on posts" ON public.posts
 
 CREATE POLICY "Allow public read post_categories" ON public.post_categories FOR SELECT TO public USING (true);
 CREATE POLICY "Allow service role all operations on post_categories" ON public.post_categories FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- 9. AI CUSTOMIZATION TABLES
+
+-- Catalog: authenticated users can read personalities
+CREATE POLICY "ai_personalities_select_authenticated" ON public.ai_personalities
+  FOR SELECT TO authenticated USING (true);
+
+-- Catalog: authenticated users can read skills
+CREATE POLICY "ai_skills_select_authenticated" ON public.ai_skills
+  FOR SELECT TO authenticated USING (true);
+
+-- Junction: bot owners manage their own skill mappings
+CREATE POLICY "bot_skills_all_own" ON public.bot_skills FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.bots WHERE bots.id = bot_skills.bot_id AND bots.user_id = auth.uid())
+);

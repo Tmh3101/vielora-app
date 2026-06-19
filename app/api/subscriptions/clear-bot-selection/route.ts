@@ -1,22 +1,15 @@
-import { NextResponse } from "next/server";
-import { createServerClient, createAdminClient } from "@/lib/supabase/server";
+import { NextResponse, NextRequest } from "next/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { clearBotSelectionFlagServer } from "@/lib/services/subscription.service";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const supabaseUserClient = await createServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseUserClient.auth.getUser();
+    const authResult = await authenticateRequest(request);
+    if (isAuthError(authResult)) return authResult;
+    const { user } = authResult;
 
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { subscriptionId } = body;
-
+    const { subscriptionId } = await request.json();
     if (!subscriptionId) {
       return NextResponse.json({ error: "Missing subscriptionId" }, { status: 400 });
     }

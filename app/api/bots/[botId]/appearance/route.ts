@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsHeaders } from "@/lib/constants";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
-import { ESubscriptionPlan, EWidgetBackgroundType, EWidgetIconType } from "@/types";
+import { ESubscriptionPlan, AppearanceUpdateResponse, AppearanceUpdateRequest } from "@/types";
+import { clearBotCache } from "@/lib/services/server/bot-cache.service";
 import {
   getBotByIdServer,
   updateBotAppearance,
@@ -13,37 +14,6 @@ import { SUGGESTED_QUESTIONS_ALLOWED_PLANS } from "@/config";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
-}
-
-interface AppearanceUpdateRequest {
-  name?: string;
-  avatarUrl?: string | null;
-  widgetSettings?: {
-    primaryColor?: string;
-    textColor?: string;
-    position?: string;
-    welcomeMessage?: string;
-    suggestedQuestions?: string[] | null;
-    chatBackgroundType?: EWidgetBackgroundType;
-    chatBackgroundValue?: string;
-    chatBackgroundOpacity?: number;
-    chatIconType?: EWidgetIconType;
-    chatIconPreset?: string;
-    chatIconUrl?: string | null;
-    chatIconColor?: string;
-    chatIconBgColor?: string;
-  };
-}
-
-interface AppearanceUpdateResponse {
-  success: boolean;
-  message?: string;
-  data?: {
-    id: string;
-    name: string;
-    avatar_url: string | null;
-    widget_settings: Record<string, unknown>;
-  };
 }
 
 export async function POST(
@@ -207,6 +177,9 @@ export async function POST(
       avatarUrl,
       widgetSettings: updatedWidgetSettings,
     });
+
+    // Clear cached widget data
+    clearBotCache(botId).catch(console.error);
 
     // Fetch updated bot
     const { data: updatedBot, error } = await supabase

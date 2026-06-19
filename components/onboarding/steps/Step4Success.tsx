@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Bot, CheckCircle, ChevronDown, Link2 } from "lucide-react";
+import { ArrowRight, Bot, CheckCircle, ChevronDown, Link2, Sparkles } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { StandaloneChatSharePanel } from "@/components/dashboard/StandaloneChatSharePanel";
+import { AIConfigurator } from "@/components/shared/AIConfigurator";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,8 @@ import { useOnboardingStore } from "@/store/useOnboardingStore";
 import {
   ONBOARDING_SUCCESS_BOT_KEY,
   ONBOARDING_SUCCESS_INDEXED_COUNT_KEY,
+  ONBOARDING_SUCCESS_PLAN_KEY,
+  ONBOARDING_SUCCESS_AI_CONFIG_KEY,
 } from "@/lib/constants/react-query-key";
 
 export interface Step4SuccessProps {
@@ -36,6 +39,7 @@ export function Step4Success({ botId }: Step4SuccessProps) {
   const { toast } = useToast();
   const reset = useOnboardingStore((state) => state.reset);
   const [isStandalonePanelOpen, setIsStandalonePanelOpen] = useState(false);
+  const [isAIConfigOpen, setIsAIConfigOpen] = useState(false);
   const [standaloneSlug, setStandaloneSlug] = useState("");
   const [standaloneIsPublic, setStandaloneIsPublic] = useState(false);
   const [isSavingStandalone, setIsSavingStandalone] = useState(false);
@@ -72,10 +76,58 @@ export function Step4Success({ botId }: Step4SuccessProps) {
     retry: 1,
   });
 
+  const planQuery = useQuery({
+    queryKey: [ONBOARDING_SUCCESS_PLAN_KEY, botId],
+    queryFn: async (): Promise<string> => {
+      const authResult = await supabase.auth.getUser();
+      const user = authResult.data?.user;
+      if (!user) return "free";
+
+      const subResult = (await supabase
+        .from("subscriptions")
+        .select("plans!inner(code)")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .maybeSingle()) as unknown as { data: { plans: { code: string } } | null };
+
+      const planCode = subResult.data?.plans?.code;
+      return planCode ?? "free";
+    },
+    enabled: !!botId,
+    retry: 1,
+  });
+
+  const aiConfigQuery = useQuery({
+    queryKey: [ONBOARDING_SUCCESS_AI_CONFIG_KEY, botId],
+    queryFn: async (): Promise<{
+      personalityId: string | null;
+      skillIds: string[];
+    }> => {
+      const botResult = (await supabase
+        .from("bots")
+        .select("personality_id")
+        .eq("id", botId)
+        .maybeSingle()) as unknown as { data: { personality_id: string | null } | null };
+
+      const { data: skills } = (await supabase
+        .from("bot_skills")
+        .select("skill_id")
+        .eq("bot_id", botId)) as unknown as { data: { skill_id: string }[] | null };
+
+      return {
+        personalityId: botResult.data?.personality_id ?? null,
+        skillIds: skills?.map((s) => s.skill_id) ?? [],
+      };
+    },
+    enabled: !!botId,
+    retry: 1,
+  });
+
   const botName = botQuery.data?.name ?? "Chatbot";
   const botAvatarUrl = botQuery.data?.avatar_url ?? null;
   const savedStandaloneSlug = botQuery.data?.slug ?? null;
   const pagesIndexed = indexedCountQuery.data ?? 0;
+  const currentPlan = planQuery.data ?? "free";
 
   useEffect(() => {
     if (!botQuery.data) return;
@@ -185,6 +237,35 @@ export function Step4Success({ botId }: Step4SuccessProps) {
             Cài đặt Widget
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
+        </div>
+
+        <div className="space-y-3">
+          <Button
+            type="button"
+            variant="outline"
+            aria-expanded={isAIConfigOpen}
+            className="w-full justify-between hover:border-primary hover:bg-white hover:text-primary"
+            onClick={() => setIsAIConfigOpen((current) => !current)}
+          >
+            <span className="flex items-center">
+              <Sparkles className="mr-2 h-4 w-4" />
+              Tuỳ chỉnh tính cách và kỹ năng
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${isAIConfigOpen ? "rotate-180" : ""}`}
+            />
+          </Button>
+
+          {isAIConfigOpen && (
+            <div className="rounded-xl border bg-muted/20 p-4 shadow-sm">
+              <AIConfigurator
+                botId={botId}
+                currentPlan={currentPlan}
+                initialPersonalityId={aiConfigQuery.data?.personalityId ?? null}
+                initialSkillIds={aiConfigQuery.data?.skillIds ?? []}
+              />
+            </div>
+          )}
         </div>
 
         <div className="space-y-3">

@@ -10,8 +10,10 @@ import { useBotDetailUIStore } from "@/store/useBotDetailUIStore";
 import { useAppearanceStore } from "@/store/useAppearanceStore";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
+import type { ReactNode } from "react";
 import {
   ArrowLeft,
   MessageSquare,
@@ -20,6 +22,7 @@ import {
   FileText,
   Globe,
   Palette,
+  Sparkles,
   Settings,
   Plus,
   MinusCircle,
@@ -45,10 +48,33 @@ import { KnowledgeBaseLoadingState } from "@/components/dashboard/bot-detail/tab
 import { AppearanceTab } from "@/components/dashboard/bot-detail/tabs/AppearanceTab";
 import { IntegrationTab } from "@/components/dashboard/bot-detail/tabs/IntegrationTab";
 import { SettingsTab } from "@/components/dashboard/bot-detail/tabs/SettingsTab";
+import { AIConfigTab } from "@/components/dashboard/bot-detail/tabs/AIConfigTab";
 import { getEmbededScript } from "@/lib/helpers";
 import type { Tables } from "@/lib/supabase/types";
 
 type BotType = Tables<"bots">;
+
+function BotSkillIdsFetcher({
+  botId,
+  children,
+}: {
+  botId: string;
+  children: (skillIds: string[]) => ReactNode;
+}) {
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const { data: skillIds = [] } = useQuery({
+    queryKey: ["bot-skills", botId],
+    queryFn: async () => {
+      const { data } = (await supabase
+        .from("bot_skills")
+        .select("skill_id")
+        .eq("bot_id", botId)) as unknown as { data: { skill_id: string }[] | null };
+      return data?.map((r) => r.skill_id) ?? [];
+    },
+    enabled: !!botId,
+  });
+  return <>{children(skillIds)}</>;
+}
 
 const OverviewTab = lazy(() =>
   import("@/components/dashboard/bot-detail/tabs/OverviewTab").then((module) => ({
@@ -205,6 +231,7 @@ export function BotDetailClient({
     { id: BotDetailDashboardTabs.PLAYGROUND, label: "Playground", icon: MessageSquare },
     { id: BotDetailDashboardTabs.KNOWLEDGE, label: "Kiến thức", icon: FileText },
     { id: BotDetailDashboardTabs.APPEARANCE, label: "Giao diện", icon: Palette },
+    { id: BotDetailDashboardTabs.AI, label: "Tùy chỉnh", icon: Sparkles },
     { id: BotDetailDashboardTabs.INSTALL, label: "Cài đặt Widget", icon: Code },
     { id: BotDetailDashboardTabs.SETTINGS, label: "Cài đặt", icon: Settings },
   ];
@@ -435,6 +462,20 @@ export function BotDetailClient({
                 });
               }}
             />
+          )}
+
+          {/* AI Config Tab */}
+          {activeTab === BotDetailDashboardTabs.AI && (
+            <BotSkillIdsFetcher botId={bot.id}>
+              {(skillIds) => (
+                <AIConfigTab
+                  botId={bot.id}
+                  currentPlan={planCode}
+                  initialPersonalityId={bot.personality_id}
+                  initialSkillIds={skillIds}
+                />
+              )}
+            </BotSkillIdsFetcher>
           )}
 
           {/* Settings Tab */}

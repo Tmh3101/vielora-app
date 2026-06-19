@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { clearBotCache } from "@/lib/services/server/bot-cache.service";
 import { getBotByOwner, updateBotAllowedDomains } from "@/lib/services/bot.service";
-
-interface AllowedDomainsRequest {
-  allowedDomains?: unknown;
-}
+import type { AllowedDomainsRequest } from "@/types";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ botId: string }> }) {
   try {
@@ -37,6 +35,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
     const allowedDomains = await updateBotAllowedDomains(supabase, botId, {
       allowedDomains: body.allowedDomains,
     });
+
+    clearBotCache(botId).catch(console.error);
 
     return NextResponse.json({
       success: true,

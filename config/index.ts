@@ -6,3 +6,5 @@ export * from "./storage";
 export * from "./widget";
 export * from "./environment";
 export * from "./reserved-subdomains";
+export * from "./payment";
+export * from "./pricing";

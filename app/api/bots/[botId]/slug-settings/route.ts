@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { clearBotCache } from "@/lib/services/server/bot-cache.service";
 import { updateBotSlugSettings, getBotByOwner } from "@/lib/services/bot.service";
 import { RESERVED_SUBDOMAINS } from "@/config";
 
@@ -40,6 +41,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
     }
 
     await updateBotSlugSettings(supabase, botId, { slug, isPublic });
+
+    clearBotCache(botId).catch(console.error);
 
     return NextResponse.json({ success: true });
   } catch (error) {

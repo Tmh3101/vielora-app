@@ -4,49 +4,15 @@ import { corsHeaders } from "@/lib/constants";
 import { getJobDetailById, getAllJobStats } from "@/lib/services/job.service";
 import { getBotByIdServer } from "@/lib/services/bot.service";
 import { getPagesByBotIdServer } from "@/lib/services/page.service";
+import { JobStatusResponse, BotPipelineStatusResponse, QueueAllStatusResponse } from "@/types";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
 }
 
-interface JobStatusResponse {
-  success: boolean;
-  message?: string;
-  data?: {
-    jobId: string;
-    botId: string | null;
-    name: string;
-    status: string;
-    progress: number;
-    errorMessage: string | null;
-    createdAt: string;
-    startedAt: string | null;
-    finishedAt: string | null;
-  };
-}
-
-interface QueueStatusResponse {
-  success: boolean;
-  data: {
-    discover: { pending: number; active: number; completed: number; failed: number };
-    pageCrawler: { pending: number; active: number; completed: number; failed: number };
-    indexer: { pending: number; active: number; completed: number; failed: number };
-  };
-}
-
-interface BotPipelineStatusResponse {
-  success: boolean;
-  message?: string;
-  data?: {
-    botId: string;
-    botStatus: string;
-    counts: Record<string, number>;
-  };
-}
-
 export async function GET(
   req: NextRequest
-): Promise<NextResponse<JobStatusResponse | QueueStatusResponse | BotPipelineStatusResponse>> {
+): Promise<NextResponse<JobStatusResponse | QueueAllStatusResponse | BotPipelineStatusResponse>> {
   try {
     const { searchParams } = new URL(req.url);
     const jobId = searchParams.get("jobId");
@@ -74,7 +40,11 @@ export async function GET(
       }, {});
 
       return NextResponse.json(
-        { success: true, data: { botId: bot.id, botStatus: bot.status, counts } },
+        {
+          success: true,
+          message: "Success",
+          data: { botId: bot.id, botStatus: bot.status, counts },
+        },
         { headers: corsHeaders }
       );
     }
@@ -93,6 +63,7 @@ export async function GET(
       return NextResponse.json(
         {
           success: true,
+          message: "Success",
           data: {
             jobId: job.id,
             botId: job.bot_id,
@@ -130,7 +101,10 @@ export async function GET(
       if (s in queue) queue[s] += 1;
     }
 
-    return NextResponse.json({ success: true, data: queueStatus }, { headers: corsHeaders });
+    return NextResponse.json(
+      { success: true, message: "Success", data: queueStatus },
+      { headers: corsHeaders }
+    );
   } catch (error) {
     console.error("[API] Error in crawl-status:", error);
     return NextResponse.json(

@@ -33,7 +33,7 @@ import {
   saveMessage,
   getMessagesForContext,
 } from "@/lib/services/conversations.service";
-import { getBotById } from "@/lib/services/bot.service";
+import { getBotWithAIConfigCached } from "@/lib/services/server/bot-cache.service";
 import { insertUsageLog } from "@/lib/services/wallet.service";
 import { isMissingBotError } from "@/lib/helpers";
 import {
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
     }
 
     // Fetch bot data once
-    const botData = await getBotById(supabase, botId).catch((error) => {
+    const botData = await getBotWithAIConfigCached(supabase, botId).catch((error) => {
       if (isMissingBotError(error)) return null;
       throw error;
     });
@@ -261,8 +261,17 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       // Save user message
       await saveMessage(supabase, currentConversationId, EMessageRole.User, message);
 
-      // Build optimized system prompt
-      const systemPrompt = getSystemPrompt(bot, context);
+      // Only inject personality/skills if bot owner is on a paid plan
+      const isPaidOwner = botData.owner_plan_code && botData.owner_plan_code !== "free";
+      const personalityPrompt = isPaidOwner
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ((bot as any).personality_prompt ?? undefined)
+        : undefined;
+      const skillsPrompt = isPaidOwner
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ((bot as any).skills_prompt ?? undefined)
+        : undefined;
+      const systemPrompt = getSystemPrompt(bot, context, personalityPrompt, skillsPrompt);
 
       // Get previous messages for context (convert to Gemini format)
       const prevMessages = await getMessagesForContext(

@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -14,7 +15,7 @@ type ShopifyAuthFailure = {
 
 type ShopifyAuthResult = ShopifyAuthSuccess | ShopifyAuthFailure;
 
-function normalizeShopDomain(dest: string) {
+export function normalizeShopDomain(dest: string) {
   const parsed = new URL(dest);
 
   if (parsed.protocol !== "https:" || !parsed.hostname.endsWith(".myshopify.com")) {
@@ -24,7 +25,7 @@ function normalizeShopDomain(dest: string) {
   return parsed.hostname.toLowerCase();
 }
 
-function toShopifyEmail(shopDomain: string) {
+export function toShopifyEmail(shopDomain: string) {
   const localPart = shopDomain.replace(/[^a-z0-9.-]/gi, "-");
   return `shopify+${localPart}@vielora.local`;
 }
@@ -85,4 +86,32 @@ export async function authenticateShopifyRequest(request: NextRequest): Promise<
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Authentication failed" };
   }
+}
+
+export function manualReauthHtml(url: string): string {
+  const safeUrl = JSON.stringify(url);
+  return `<!doctype html><html><head><meta charset="utf-8"/><title>Reconnect Shopify</title></head><body style="font-family:system-ui,-apple-system,sans-serif;padding:24px"><h1 style="margin:0 0 8px;font-size:20px">Reconnect Shopify</h1><p style="margin:0 0 16px;color:#475569">Your session needs to be re-authorized. Continue in top-level Shopify context.</p><button id="continue" style="background:#111827;color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer">Continue</button><script>(function(){var u=${safeUrl};var b=document.getElementById("continue");if(b){b.addEventListener("click",function(){try{window.top.location.href=u}catch(e){window.location.href=u}})}})();</script></body></html>`;
+}
+
+export function getCallbackErrorDetails(error: unknown) {
+  if (!(error instanceof Error)) {
+    return {
+      code: "UnknownError",
+      message: "Unknown Shopify callback error",
+    };
+  }
+
+  return {
+    code: error.name || error.constructor.name || "CallbackError",
+    message: error.message.slice(0, 240),
+  };
+}
+
+export function buildManagedPassword(shopDomain: string) {
+  const secret = process.env.SHOPIFY_SSO_SECRET || process.env.SHOPIFY_CLIENT_SECRET;
+  if (!secret) {
+    throw new Error("Missing SHOPIFY_SSO_SECRET or SHOPIFY_CLIENT_SECRET");
+  }
+  const digest = createHmac("sha256", secret).update(shopDomain).digest("hex");
+  return `Vielora_${digest.slice(0, 56)}`;
 }

@@ -46,6 +46,7 @@ export type Database = {
           is_banned: boolean | null;
           last_crawl_at: string | null;
           name: string;
+          personality_id: string | null;
           rate_limit_per_day: number | null;
           rate_limit_per_ip: number | null;
           slug: string | null;
@@ -68,6 +69,7 @@ export type Database = {
           is_banned?: boolean | null;
           last_crawl_at?: string | null;
           name: string;
+          personality_id?: string | null;
           rate_limit_per_day?: number | null;
           rate_limit_per_ip?: number | null;
           slug?: string | null;
@@ -90,6 +92,7 @@ export type Database = {
           is_banned?: boolean | null;
           last_crawl_at?: string | null;
           name?: string;
+          personality_id?: string | null;
           rate_limit_per_day?: number | null;
           rate_limit_per_ip?: number | null;
           slug?: string | null;
@@ -791,6 +794,84 @@ export type Database = {
           user_id?: string | null;
         };
         Relationships: [];
+      };
+      ai_personalities: {
+        Row: {
+          created_at: string;
+          id: string;
+          is_active: boolean;
+          name: string;
+          prompt_injection: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          is_active?: boolean;
+          name: string;
+          prompt_injection: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          is_active?: boolean;
+          name?: string;
+          prompt_injection?: string;
+        };
+        Relationships: [];
+      };
+      ai_skills: {
+        Row: {
+          created_at: string;
+          id: string;
+          is_active: boolean;
+          name: string;
+          prompt_injection: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          is_active?: boolean;
+          name: string;
+          prompt_injection: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          is_active?: boolean;
+          name?: string;
+          prompt_injection?: string;
+        };
+        Relationships: [];
+      };
+      bot_skills: {
+        Row: {
+          bot_id: string;
+          skill_id: string;
+        };
+        Insert: {
+          bot_id: string;
+          skill_id: string;
+        };
+        Update: {
+          bot_id?: string;
+          skill_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bot_skills_bot_id_fkey";
+            columns: ["bot_id"];
+            isOneToOne: false;
+            referencedRelation: "bots";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bot_skills_skill_id_fkey";
+            columns: ["skill_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_skills";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
     Views: {

@@ -1,36 +1,14 @@
-import { createHmac } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { shopify } from "@/lib/shopify";
 import { createAdminClient, createServerClient } from "@/lib/supabase/server";
-import { findShopifyUserIdByEmail } from "@/lib/helpers/shopify-auth";
+import {
+  findShopifyUserIdByEmail,
+  normalizeShopDomain,
+  toShopifyEmail,
+  buildManagedPassword,
+} from "@/lib/helpers/shopify-auth";
 
 export const dynamic = "force-dynamic";
-
-function getAppUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-}
-
-function normalizeShopDomain(dest: string) {
-  const parsed = new URL(dest);
-  if (parsed.protocol !== "https:" || !parsed.hostname.endsWith(".myshopify.com")) {
-    throw new Error("Invalid Shopify destination");
-  }
-  return parsed.hostname.toLowerCase();
-}
-
-function toShopifyEmail(shopDomain: string) {
-  const localPart = shopDomain.replace(/[^a-z0-9.-]/gi, "-");
-  return `shopify+${localPart}@vielora.local`;
-}
-
-function buildManagedPassword(shopDomain: string) {
-  const secret = process.env.SHOPIFY_SSO_SECRET || process.env.SHOPIFY_CLIENT_SECRET;
-  if (!secret) {
-    throw new Error("Missing SHOPIFY_SSO_SECRET or SHOPIFY_CLIENT_SECRET");
-  }
-  const digest = createHmac("sha256", secret).update(shopDomain).digest("hex");
-  return `Vielora_${digest.slice(0, 56)}`;
-}
 
 function getSafeReturnPath(request: NextRequest) {
   const returnTo = request.nextUrl.searchParams.get("return_to");
@@ -44,7 +22,7 @@ function getSafeReturnPath(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const appUrl = getAppUrl();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const failRedirect = new URL("/auth?error=sso_failed", appUrl);
 
   function redirectFailed(reason: string) {
