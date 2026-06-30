@@ -264,6 +264,7 @@ update
 CREATE TABLE public.ai_personalities (
 	id uuid DEFAULT gen_random_uuid() NOT NULL,
 	name varchar NOT NULL,
+	description text NULL,
 	prompt_injection text NOT NULL,
 	is_active boolean NOT NULL DEFAULT true,
 	created_at timestamptz DEFAULT now() NOT NULL,
@@ -276,6 +277,7 @@ CREATE TABLE public.ai_personalities (
 CREATE TABLE public.ai_skills (
 	id uuid DEFAULT gen_random_uuid() NOT NULL,
 	name varchar NOT NULL,
+	description text NULL,
 	prompt_injection text NOT NULL,
 	is_active boolean NOT NULL DEFAULT true,
 	created_at timestamptz DEFAULT now() NOT NULL,
@@ -288,6 +290,7 @@ CREATE TABLE public.ai_skills (
 CREATE TABLE public.bot_skills (
 	bot_id uuid NOT NULL,
 	skill_id uuid NOT NULL,
+	sort_order smallint DEFAULT 0 NOT NULL,
 	CONSTRAINT bot_skills_pkey PRIMARY KEY (bot_id, skill_id),
 	CONSTRAINT bot_skills_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.bots(id) ON DELETE CASCADE,
 	CONSTRAINT bot_skills_skill_id_fkey FOREIGN KEY (skill_id) REFERENCES public.ai_skills(id) ON DELETE CASCADE

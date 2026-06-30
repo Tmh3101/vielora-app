@@ -438,7 +438,7 @@
   /* Premium feature card */
   .card-feature {
     @apply relative overflow-hidden rounded-2xl border border-border/60 bg-card p-8;
-    @apply transition-all duration-300;
+    @apply transition-transform duration-300;
   }
 
   .card-feature:hover {
@@ -566,4 +566,16 @@
     @apply font-bold tracking-tight;
     text-shadow: 0 0 40px hsla(217, 91%, 60%, 0.1);
   }
+}
+
+html.lenis {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
 }

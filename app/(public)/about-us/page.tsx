@@ -6,6 +6,7 @@ import AboutProduct from "@/components/about-us/AboutProduct";
 import OurMission from "@/components/about-us/OurMission";
 import AboutTeam from "@/components/about-us/AboutTeam";
 import CTASection from "@/components/landing/CTASection";
+import ScrollToTop from "@/components/shared/ScrollToTop";
 
 export const metadata: Metadata = {
   title: "Về chúng tôi | Vielora",
@@ -55,6 +56,7 @@ export default function AboutPage() {
         <CTASection />
       </main>
       <Footer />
+      <ScrollToTop />
     </div>
   );
 }

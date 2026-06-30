@@ -19,7 +19,8 @@ import {
   EMessageRole,
 } from "@/types";
 import { API_RATE_LIMITS, corsHeaders, MessageRole } from "@/lib/constants";
-import { hybridRetrival } from "@/lib/rag/retrieval";
+import { hybridRetrival, shouldShowLeadForm } from "@/lib/rag/retrieval";
+import { classifyIntent, Intent } from "@/lib/rag/intent-classifier";
 import {
   CREDIT_PER_MESSAGE,
   MAX_HISTORY_MESSAGES,
@@ -33,13 +34,19 @@ import {
   saveMessage,
   getMessagesForContext,
 } from "@/lib/services/conversations.service";
-import { getBotWithAIConfigCached } from "@/lib/services/server/bot-cache.service";
+import {
+  getBotWithAIConfigCached,
+  type BotAIConfig,
+} from "@/lib/services/server/bot-cache.service";
 import { insertUsageLog } from "@/lib/services/wallet.service";
 import { isMissingBotError } from "@/lib/helpers";
+import { isUserBanned } from "@/lib/services/banned.service";
 import {
   CHATBOT_UNAVAILABLE_MESSAGE,
   INSUFFICIENT_CREDITS_ERROR_CODE,
   INSUFFICIENT_CREDITS_MESSAGE,
+  LEAD_FORM_MESSAGE,
+  ChatResponseType,
 } from "@/lib/constants/chat";
 
 export async function OPTIONS() {
@@ -62,7 +69,6 @@ function createBusinessRateLimitResponse(rateLimitResult: RateLimitResult) {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>> {
-  // Check API rate limit first (DDoS/spam protection)
   const rateLimitResponse = apiRateLimitMiddleware(req, API_RATE_LIMITS.widgetChat);
 
   if (rateLimitResponse) {
@@ -106,7 +112,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       );
     }
 
-    // Fetch bot data once
     const botData = await getBotWithAIConfigCached(supabase, botId).catch((error) => {
       if (isMissingBotError(error)) return null;
       throw error;
@@ -126,11 +131,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       );
     }
 
-    const { data: bannedUser } = await supabase
-      .from("banned_users")
-      .select("user_id")
-      .eq("user_id", botData.user_id)
-      .maybeSingle();
+    const bannedUser = await isUserBanned(supabase, botData.user_id);
 
     if (bannedUser) {
       return NextResponse.json(
@@ -146,14 +147,10 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       );
     }
 
-    // Check if this is a standalone chat request
-    const isStandaloneRequest = req.headers.get("x-standalone-chat") === "true";
-
     let bot;
     let clientIp: string;
 
-    if (isStandaloneRequest) {
-      // Standalone chat: verify bot is public
+    if (req.headers.get("x-standalone-chat") === "true") {
       if (!botData.is_public) {
         return NextResponse.json(
           { success: false, message: "This bot is not publicly accessible" },
@@ -161,9 +158,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
         );
       }
 
-      // Extract client IP for usage logging
       clientIp = getClientIpFromRequest(req);
-
       bot = botData;
 
       if (bot.rate_limit_per_day != null || bot.rate_limit_per_ip != null) {
@@ -179,7 +174,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
         }
       }
     } else {
-      // Widget request: use security middleware
       const securityResult = await verifyWidgetRequest(req, {
         checkRateLimits: true,
         requireVisitorId: true,
@@ -210,10 +204,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       throw new Error("GOOGLE_API_KEY is not configured");
     }
 
-    let deductedFromSubscription = 0;
-    let deductedFromPayg = 0;
-
-    // Check bot status
     if (bot.status !== EBotStatus.Ready) {
       return NextResponse.json(
         {
@@ -225,6 +215,157 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       );
     }
 
+    // Intent classification
+    const intent = classifyIntent(message);
+
+    // Get or create conversation early (needed for both flows)
+    let currentConversationId = conversationId;
+    if (!currentConversationId) {
+      const newConversation = await createConversation(supabase, botId, visitorId);
+      currentConversationId = newConversation.id;
+    }
+
+    // Save user message
+    await saveMessage(supabase, currentConversationId, EMessageRole.User, message);
+
+    // Social messages: skip RAG, go straight to LLM with friendly response
+    if (intent === Intent.Social) {
+      const deductionResult = await deductCredits(supabase, {
+        userId: bot.user_id,
+        creditAmount: CREDIT_PER_MESSAGE,
+        transactionType: ETransactionType.ChatMessage,
+        transactionDescription: `Deducted ${CREDIT_PER_MESSAGE} credit for chat message on bot ${botId}`,
+      });
+
+      if (!deductionResult.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: INSUFFICIENT_CREDITS_MESSAGE,
+            code: INSUFFICIENT_CREDITS_ERROR_CODE,
+            error: deductionResult.message || "Insufficient credits to send chat messages.",
+          },
+          { status: 402, headers: corsHeaders }
+        );
+      }
+
+      let deductedFromSubscription = deductionResult.deductedFromSubscription || 0;
+      let deductedFromPayg = deductionResult.deductedFromPayg || 0;
+
+      try {
+        const prevMessages = await getMessagesForContext(
+          supabase,
+          currentConversationId,
+          MAX_HISTORY_MESSAGES
+        );
+
+        const conversationHistory = prevMessages
+          .filter((m) => m.role !== EMessageRole.System)
+          .slice(0, -1)
+          .map((m) => ({
+            role: m.role === EMessageRole.Assistant ? MessageRole.MODEL : MessageRole.USER,
+            content: m.content,
+          }));
+
+        const assistantMessage = await generateChatResponse(
+          getSystemPrompt(bot, "", undefined, undefined),
+          message,
+          conversationHistory
+        ).catch(async (error) => {
+          console.error("Gemini API error (social):", error);
+          if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
+            await refundCredits(supabase, {
+              userId: bot.user_id,
+              deductedFromSubscription,
+              deductedFromPayg,
+              transactionType: ETransactionType.ChatMessageRefund,
+              transactionDescription: `Refunded ${CREDIT_PER_MESSAGE} credit due to chat processing failure on bot ${botId}`,
+            });
+            deductedFromSubscription = 0;
+            deductedFromPayg = 0;
+          }
+          return ERROR_RESPONSE;
+        });
+
+        await saveMessage(
+          supabase,
+          currentConversationId,
+          EMessageRole.Assistant,
+          assistantMessage
+        );
+
+        await insertUsageLog(supabase, {
+          bot_id: botId,
+          action: EUsageAction.ChatMessage,
+          visitor_id: visitorId,
+          client_ip: clientIp,
+          count: 1,
+        });
+
+        return NextResponse.json(
+          {
+            success: true,
+            message: "Message processed successfully",
+            data: {
+              conversationId: currentConversationId,
+              message: assistantMessage,
+              noAnswer: false,
+              type: ChatResponseType.MESSAGE,
+            },
+          },
+          { headers: corsHeaders }
+        );
+      } catch (processingError) {
+        if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
+          await refundCredits(supabase, {
+            userId: bot.user_id,
+            deductedFromSubscription,
+            deductedFromPayg,
+            transactionType: ETransactionType.ChatMessageRefund,
+            transactionDescription: `Refunded ${CREDIT_PER_MESSAGE} credit due to chat processing failure on bot ${botId}`,
+          });
+        }
+        throw processingError;
+      }
+    }
+
+    // Knowledge messages: use RAG
+    const retrieval = await hybridRetrival(message, botId);
+
+    if (shouldShowLeadForm(retrieval)) {
+      await saveMessage(
+        supabase,
+        currentConversationId,
+        EMessageRole.Assistant,
+        LEAD_FORM_MESSAGE,
+        true
+      );
+
+      await insertUsageLog(supabase, {
+        bot_id: botId,
+        action: EUsageAction.ChatMessage,
+        visitor_id: visitorId,
+        client_ip: clientIp,
+        count: 1,
+      });
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Message requires lead generation",
+          data: {
+            conversationId: currentConversationId,
+            message: LEAD_FORM_MESSAGE,
+            noAnswer: true,
+            type: ChatResponseType.SHOW_LEAD_FORM,
+            originalQuestion: message,
+          },
+        },
+        { headers: corsHeaders }
+      );
+    }
+
+    // Normal RAG flow: deduct credits and generate AI response
     const deductionResult = await deductCredits(supabase, {
       userId: bot.user_id,
       creditAmount: CREDIT_PER_MESSAGE,
@@ -244,46 +385,28 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       );
     }
 
-    deductedFromSubscription = deductionResult.deductedFromSubscription || 0;
-    deductedFromPayg = deductionResult.deductedFromPayg || 0;
+    let deductedFromSubscription = deductionResult.deductedFromSubscription || 0;
+    let deductedFromPayg = deductionResult.deductedFromPayg || 0;
 
     try {
-      // Generate embedding for the user's message to search for relevant context
-      const context = await hybridRetrival(message, botId);
-
-      // Get or create conversation
-      let currentConversationId = conversationId;
-      if (!currentConversationId) {
-        const newConversation = await createConversation(supabase, botId, visitorId);
-        currentConversationId = newConversation.id;
-      }
-
-      // Save user message
-      await saveMessage(supabase, currentConversationId, EMessageRole.User, message);
-
-      // Only inject personality/skills if bot owner is on a paid plan
       const isPaidOwner = botData.owner_plan_code && botData.owner_plan_code !== "free";
       const personalityPrompt = isPaidOwner
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ((bot as any).personality_prompt ?? undefined)
+        ? ((bot as BotAIConfig).personality_prompt ?? undefined)
         : undefined;
       const skillsPrompt = isPaidOwner
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ((bot as any).skills_prompt ?? undefined)
+        ? ((bot as BotAIConfig).skills_prompt ?? undefined)
         : undefined;
-      const systemPrompt = getSystemPrompt(bot, context, personalityPrompt, skillsPrompt);
+      const systemPrompt = getSystemPrompt(bot, retrieval.context, personalityPrompt, skillsPrompt);
 
-      // Get previous messages for context (convert to Gemini format)
       const prevMessages = await getMessagesForContext(
         supabase,
         currentConversationId,
         MAX_HISTORY_MESSAGES
       );
 
-      // Build conversation history for Gemini (excluding the current user message)
       const conversationHistory = prevMessages
         .filter((m) => m.role !== EMessageRole.System)
-        .slice(0, -1) // Exclude the current user message we just saved
+        .slice(0, -1)
         .map((m) => ({
           role: m.role === EMessageRole.Assistant ? MessageRole.MODEL : MessageRole.USER,
           content: m.content,
@@ -291,14 +414,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
 
       console.log("conversationHistory:", conversationHistory);
 
-      // Call generative API
       const assistantMessage = await generateChatResponse(
         systemPrompt,
         message,
         conversationHistory
       ).catch(async (error) => {
         console.error("Gemini API error:", error);
-        // Refund credits if message processing fails
         if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
           await refundCredits(supabase, {
             userId: bot.user_id,
@@ -309,16 +430,16 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
           }).catch((refundError) => {
             console.error("Failed to refund credits after chat processing error:", refundError);
           });
+          deductedFromSubscription = 0;
+          deductedFromPayg = 0;
         }
         return ERROR_RESPONSE;
       });
 
-      // Check if it's a "no answer" case
       const noAnswer = NO_ANSWER_PHRASES.some((phrase) =>
         assistantMessage.toLowerCase().includes(phrase)
       );
 
-      // Save assistant message
       await saveMessage(
         supabase,
         currentConversationId,
@@ -343,6 +464,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
             conversationId: currentConversationId,
             message: assistantMessage,
             noAnswer,
+            type: ChatResponseType.MESSAGE,
           },
         },
         { headers: corsHeaders }

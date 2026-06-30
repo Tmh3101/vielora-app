@@ -15,11 +15,12 @@ import {
   getUserMessageTextColor,
   getIconSVGWithSize,
   getChatBlockedData,
+  getFallbackBotInfo,
 } from "@/lib/helpers";
 import { WIDGET_CONFIG, WIDGET_FALLBACK, WIDGET_MESSAGES, MAX_CHAT_INPUT } from "@/config";
 import { INSUFFICIENT_CREDITS_MESSAGE } from "@/lib/constants/chat";
 import { type BotInfo, type APIMessage, EMessageRole, EWidgetIconType } from "@/types";
-import { callChatAPI, initDemoBot, getFallbackBotInfo } from "@/lib/services/widget.service";
+import { callChatAPI, initDemoBot } from "@/lib/services/widget.service";
 
 interface Message {
   id: number;

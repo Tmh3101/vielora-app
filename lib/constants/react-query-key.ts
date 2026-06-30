@@ -6,3 +6,4 @@ export const ONBOARDING_DISCOVERED_PAGES_KEY = "onboarding-discovered-pages";
 export const ONBOARDING_RESTORE_KEY = "onboarding-restore";
 export const ONBOARDING_SUCCESS_PLAN_KEY = "onboarding-success-plan";
 export const ONBOARDING_SUCCESS_AI_CONFIG_KEY = "onboarding-success-ai-config";
+export const BOT_SKILLS_KEY = "bot-skills";

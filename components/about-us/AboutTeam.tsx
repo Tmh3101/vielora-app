@@ -60,7 +60,7 @@ const AboutTeam = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="glass group relative overflow-hidden rounded-3xl p-8 transition-all hover:border-primary/50"
+              className="glass group relative overflow-hidden rounded-3xl p-8"
             >
               <div className="glass-primary mb-6 flex h-14 w-14 items-center justify-center rounded-2xl transition-transform group-hover:scale-110">
                 <item.icon className="h-7 w-7 text-primary" />

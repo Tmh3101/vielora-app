@@ -263,6 +263,7 @@ export function Step4Success({ botId }: Step4SuccessProps) {
                 currentPlan={currentPlan}
                 initialPersonalityId={aiConfigQuery.data?.personalityId ?? null}
                 initialSkillIds={aiConfigQuery.data?.skillIds ?? []}
+                onSaved={() => aiConfigQuery.refetch()}
               />
             </div>
           )}

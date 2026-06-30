@@ -7,6 +7,7 @@ interface AIConfigTabProps {
   currentPlan: string;
   initialPersonalityId: string | null;
   initialSkillIds: string[];
+  onSaved?: () => void;
 }
 
 export function AIConfigTab(props: AIConfigTabProps) {

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { endOfDay, startOfDay, subDays } from "date-fns";
-import { AlertCircle, Bot, Coins, MessageCircle, MessagesSquare, TimerReset } from "lucide-react";
+import { Bot, Coins, MessageCircle, MessagesSquare, TimerReset, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader } from "@/components/ui/card";
 import type { Tables } from "@/lib/supabase/types";
@@ -102,12 +102,11 @@ export function OverviewTab({ bot, pagesCount }: OverviewTabProps) {
           deltaPercent={comparison.messages.deltaPercent}
         />
         <AnalyticsCard
-          title="Fallback rate"
-          value={`${kpis.fallbackRate.toLocaleString("vi-VN")}%`}
-          description={`câu hỏi không thể trả lời`}
-          icon={AlertCircle}
-          deltaPercent={comparison.fallbacks.deltaPercent}
-          tone="danger"
+          title="Liên hệ"
+          value={kpis.leadCount.toLocaleString("vi-VN")}
+          description="lượt khách hàng gửi feedback"
+          icon={UserPlus}
+          deltaPercent={comparison.leads.deltaPercent}
         />
         <AnalyticsCard
           title="Credits đã dùng"

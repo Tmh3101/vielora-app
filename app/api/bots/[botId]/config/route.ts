@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { corsHeaders, PLAN_RANK } from "@/lib/constants";
+import { corsHeaders } from "@/lib/constants";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
+import { isPlanSufficient } from "@/lib/helpers/plan-helpers";
 import { getBotByIdServer } from "@/lib/services/bot.service";
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
 import { getPersonalityById } from "@/lib/services/ai-personality.service";
@@ -48,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
 
     const planCode = await getUserActivePlanCodeServer(supabase, user.id);
 
-    if (!planCode || (PLAN_RANK[planCode] ?? -1) < (PLAN_RANK[AI_CONFIG_REQUIRED_PLAN] ?? 0)) {
+    if (!planCode || !isPlanSufficient(planCode, AI_CONFIG_REQUIRED_PLAN)) {
       return NextResponse.json(
         { success: false, message: "Vui lòng nâng cấp gói để sử dụng tính năng AI." },
         { status: 403, headers: corsHeaders }
@@ -79,10 +80,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
           { status: 400, headers: corsHeaders }
         );
       }
-      if (skillIds.length > 0) {
-        const skills = await getSkillsByIds(supabase, skillIds);
+      const uniqueSkillIds = Array.from(new Set(skillIds));
+      if (uniqueSkillIds.length > 0) {
+        const skills = await getSkillsByIds(supabase, uniqueSkillIds);
 
-        if (skills.length !== skillIds.length) {
+        if (skills.length !== uniqueSkillIds.length) {
           return NextResponse.json(
             { success: false, message: "One or more skills not found" },
             { status: 404, headers: corsHeaders }
@@ -90,7 +92,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
         }
       }
 
-      await syncBotSkills(supabase, botId, skillIds);
+      await syncBotSkills(supabase, botId, uniqueSkillIds);
     }
 
     // Invalidate cache

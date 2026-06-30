@@ -28,9 +28,13 @@ export async function syncBotSkills(
   if (delError) throw new Error(delError.message);
 
   if (skillIds.length > 0) {
-    const { error: insError } = await client
-      .from("bot_skills")
-      .insert(skillIds.map((skillId) => ({ bot_id: botId, skill_id: skillId })));
+    const { error: insError } = await client.from("bot_skills").insert(
+      skillIds.map((skillId, index) => ({
+        bot_id: botId,
+        skill_id: skillId,
+        sort_order: index,
+      }))
+    );
 
     if (insError) throw new Error(insError.message);
   }

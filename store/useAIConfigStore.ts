@@ -6,12 +6,14 @@ import { MAX_SKILLS_PER_BOT } from "@/lib/config/ai-customization";
 export interface PersonalityOption {
   id: string;
   name: string;
+  description: string | null;
   prompt_injection: string;
 }
 
 export interface SkillOption {
   id: string;
   name: string;
+  description: string | null;
   prompt_injection: string;
 }
 

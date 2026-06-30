@@ -136,11 +136,16 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
     const isBotInOnboarding =
       bot.status === EBotStatus.Pending || bot.status === EBotStatus.Indexing;
 
-    if (isOnboardingContext && (!isFileMode || !isFileOnboardingBot || !isBotInOnboarding)) {
+    if (isOnboardingContext && (!isFileMode || !isFileOnboardingBot)) {
       return NextResponse.json(
         { success: false, message: "Invalid onboarding knowledge request." },
         { status: 400, headers: corsHeaders }
       );
+    }
+
+    if (isOnboardingContext && isFileMode && isFileOnboardingBot && !isBotInOnboarding) {
+      await updateBotStatusServer(supabase, botId, EBotStatus.Indexing);
+      clearBotCache(botId).catch(console.error);
     }
 
     if (!isOnboardingContext) {
@@ -283,7 +288,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
           pageId,
         });
 
-        if (bot.status !== EBotStatus.Ready) {
+        if (
+          isOnboardingContext ? bot.status !== EBotStatus.Indexing : bot.status !== EBotStatus.Ready
+        ) {
           await updateBotStatusServer(supabase, botId, EBotStatus.Indexing);
           clearBotCache(botId).catch(console.error);
         }

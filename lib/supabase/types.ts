@@ -33,6 +33,59 @@ export type Database = {
         };
         Relationships: [];
       };
+      bot_leads: {
+        Row: {
+          id: string;
+          bot_id: string;
+          visitor_session_id: string;
+          unanswered_question: string;
+          customer_name: string;
+          customer_email: string;
+          customer_phone: string | null;
+          note: string | null;
+          status: string;
+          chat_history: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          bot_id: string;
+          visitor_session_id: string;
+          unanswered_question: string;
+          customer_name: string;
+          customer_email: string;
+          customer_phone?: string | null;
+          note?: string | null;
+          status?: string;
+          chat_history?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          bot_id?: string;
+          visitor_session_id?: string;
+          unanswered_question?: string;
+          customer_name?: string;
+          customer_email?: string;
+          customer_phone?: string | null;
+          note?: string | null;
+          status?: string;
+          chat_history?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bot_leads_bot_id_fkey";
+            columns: ["bot_id"];
+            isOneToOne: false;
+            referencedRelation: "bots";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       bots: {
         Row: {
           allowed_domains: string[];
@@ -798,6 +851,7 @@ export type Database = {
       ai_personalities: {
         Row: {
           created_at: string;
+          description: string | null;
           id: string;
           is_active: boolean;
           name: string;
@@ -805,6 +859,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          description?: string | null;
           id?: string;
           is_active?: boolean;
           name: string;
@@ -812,6 +867,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          description?: string | null;
           id?: string;
           is_active?: boolean;
           name?: string;
@@ -822,6 +878,7 @@ export type Database = {
       ai_skills: {
         Row: {
           created_at: string;
+          description: string | null;
           id: string;
           is_active: boolean;
           name: string;
@@ -829,6 +886,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          description?: string | null;
           id?: string;
           is_active?: boolean;
           name: string;
@@ -836,6 +894,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          description?: string | null;
           id?: string;
           is_active?: boolean;
           name?: string;
@@ -847,14 +906,17 @@ export type Database = {
         Row: {
           bot_id: string;
           skill_id: string;
+          sort_order: number;
         };
         Insert: {
           bot_id: string;
           skill_id: string;
+          sort_order?: number;
         };
         Update: {
           bot_id?: string;
           skill_id?: string;
+          sort_order?: number;
         };
         Relationships: [
           {

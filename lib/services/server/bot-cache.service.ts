@@ -58,6 +58,14 @@ export interface BotAIConfig {
   owner_plan_code: string | null;
 }
 
+type BotQueryPersonality = {
+  ai_personalities: { prompt_injection: string } | null;
+};
+
+type BotSkillQueryRow = {
+  ai_skills: { prompt_injection: string } | null;
+};
+
 export async function getBotWithAIConfigCached(
   client: ServiceClient,
   botId: string
@@ -91,18 +99,18 @@ export async function getBotWithAIConfigCached(
 
     if (error || !bot) return null;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const personalityPrompt = (bot as any).ai_personalities?.prompt_injection ?? null;
+    const personalityPrompt =
+      (bot as unknown as BotQueryPersonality).ai_personalities?.prompt_injection ?? null;
 
     const { data: skills } = await client
       .from("bot_skills")
       .select("ai_skills!inner(prompt_injection)")
-      .eq("bot_id", botId);
+      .eq("bot_id", botId)
+      .order("sort_order");
 
     const skillsPrompt =
-      skills
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ?.map((s: any) => s.ai_skills?.prompt_injection)
+      (skills as unknown as BotSkillQueryRow[])
+        ?.map((s) => s.ai_skills?.prompt_injection)
         .filter(Boolean)
         .join("\n\n") ?? null;
 

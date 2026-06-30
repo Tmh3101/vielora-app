@@ -10,7 +10,7 @@ import { useBotDetailUIStore } from "@/store/useBotDetailUIStore";
 import { useAppearanceStore } from "@/store/useAppearanceStore";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import type { ReactNode } from "react";
@@ -28,12 +28,14 @@ import {
   MinusCircle,
   Bot,
   Home,
+  UserPlus,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BotPlayground } from "@/components/dashboard/bots/BotPlayground";
 import { LogoLoader } from "@/components/ui/logo-loader";
 import { EBotStatus, EPageStatus } from "@/types";
 import { BotDetailDashboardTabs } from "@/lib/constants";
+import { BOT_SKILLS_KEY } from "@/lib/constants/react-query-key";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { useBotData } from "@/hooks/dashboard/bot-detail/useBotData";
 import { useBotSettings } from "@/hooks/dashboard/bot-detail/useBotSettings";
@@ -49,6 +51,7 @@ import { AppearanceTab } from "@/components/dashboard/bot-detail/tabs/Appearance
 import { IntegrationTab } from "@/components/dashboard/bot-detail/tabs/IntegrationTab";
 import { SettingsTab } from "@/components/dashboard/bot-detail/tabs/SettingsTab";
 import { AIConfigTab } from "@/components/dashboard/bot-detail/tabs/AIConfigTab";
+import { LeadsTab } from "@/components/dashboard/bot-detail/tabs/LeadsTab";
 import { getEmbededScript } from "@/lib/helpers";
 import type { Tables } from "@/lib/supabase/types";
 
@@ -59,11 +62,12 @@ function BotSkillIdsFetcher({
   children,
 }: {
   botId: string;
-  children: (skillIds: string[]) => ReactNode;
+  children: (skillIds: string[], refetchSkills: () => void) => ReactNode;
 }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const queryClient = useQueryClient();
   const { data: skillIds = [] } = useQuery({
-    queryKey: ["bot-skills", botId],
+    queryKey: [BOT_SKILLS_KEY, botId],
     queryFn: async () => {
       const { data } = (await supabase
         .from("bot_skills")
@@ -73,7 +77,10 @@ function BotSkillIdsFetcher({
     },
     enabled: !!botId,
   });
-  return <>{children(skillIds)}</>;
+  const refetchSkills = () => {
+    queryClient.invalidateQueries({ queryKey: [BOT_SKILLS_KEY, botId] });
+  };
+  return <>{children(skillIds, refetchSkills)}</>;
 }
 
 const OverviewTab = lazy(() =>
@@ -232,6 +239,7 @@ export function BotDetailClient({
     { id: BotDetailDashboardTabs.KNOWLEDGE, label: "Kiến thức", icon: FileText },
     { id: BotDetailDashboardTabs.APPEARANCE, label: "Giao diện", icon: Palette },
     { id: BotDetailDashboardTabs.AI, label: "Tùy chỉnh", icon: Sparkles },
+    { id: BotDetailDashboardTabs.LEADS, label: "Liên hệ", icon: UserPlus },
     { id: BotDetailDashboardTabs.INSTALL, label: "Cài đặt Widget", icon: Code },
     { id: BotDetailDashboardTabs.SETTINGS, label: "Cài đặt", icon: Settings },
   ];
@@ -348,8 +356,8 @@ export function BotDetailClient({
                   : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
               }`}
             >
-              <item.icon className="h-5 w-5" />
-              {item.label}
+              <item.icon className="h-5 w-5 shrink-0" />
+              <span className="whitespace-nowrap text-left">{item.label}</span>
             </button>
           ))}
         </nav>
@@ -467,15 +475,26 @@ export function BotDetailClient({
           {/* AI Config Tab */}
           {activeTab === BotDetailDashboardTabs.AI && (
             <BotSkillIdsFetcher botId={bot.id}>
-              {(skillIds) => (
+              {(skillIds, refetchSkills) => (
                 <AIConfigTab
                   botId={bot.id}
                   currentPlan={planCode}
                   initialPersonalityId={bot.personality_id}
                   initialSkillIds={skillIds}
+                  onSaved={() => {
+                    fetchData();
+                    refetchSkills();
+                  }}
                 />
               )}
             </BotSkillIdsFetcher>
+          )}
+
+          {/* Leads Tab */}
+          {activeTab === BotDetailDashboardTabs.LEADS && (
+            <Suspense fallback={<OverviewLoadingState />}>
+              <LeadsTab botId={bot.id} />
+            </Suspense>
           )}
 
           {/* Settings Tab */}

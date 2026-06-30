@@ -12,3 +12,11 @@ export const BannerActionType = {
 } as const;
 
 export type BannerAction = { type: "GO_OFFLINE" } | { type: "RECOVER" } | { type: "HIDE" };
+
+export const LEAD_FORM_MESSAGE =
+  "Tôi chưa tìm thấy câu trả lời phù hợp cho câu hỏi của bạn. Vui lòng để lại thông tin, đội ngũ hỗ trợ sẽ liên hệ với bạn sớm nhất!";
+
+export const ChatResponseType = {
+  MESSAGE: "MESSAGE",
+  SHOW_LEAD_FORM: "SHOW_LEAD_FORM",
+} as const;

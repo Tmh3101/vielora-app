@@ -13,6 +13,7 @@ import TestimonialsSection from "@/components/landing/TestimonialsSection";
 import DemoSection from "@/components/landing/DemoSection";
 import CTASection from "@/components/landing/CTASection";
 import Footer from "@/components/landing/Footer";
+import ScrollToTop from "@/components/shared/ScrollToTop";
 
 const schemaJsonLd = {
   "@context": "https://schema.org",
@@ -58,6 +59,7 @@ export default function Home() {
         <CTASection />
       </main>
       <Footer />
+      <ScrollToTop />
     </div>
   );
 }

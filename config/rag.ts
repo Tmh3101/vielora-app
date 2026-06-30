@@ -17,6 +17,83 @@ export const ERROR_RESPONSE =
 
 export const NO_ANSWER_PHRASES = ["không có đủ thông tin", "không tìm thấy"];
 
+export const SIMILARITY_THRESHOLD = 0.65; // Cosine similarity threshold. RAG returns raw cosine sim (0-1); truly relevant docs score >0.7, loose matches score ~0.5-0.6
+export const LEAD_FORM_ENABLED = true; // Master toggle for lead generation form feature
+
+export const NEGATIVE_KEYWORDS = [
+  "gia",
+  "bao nhieu",
+  "o dau",
+  "nhu the nao",
+  "tinh nang",
+  "loi",
+  "mua",
+  "khong",
+  "sao",
+  "the nao",
+  "lam sao",
+  "co gi",
+  "tai sao",
+];
+
+export const SOCIAL_KEYWORDS = [
+  "xin chào",
+  "chào",
+  "hi",
+  "hello",
+  "hey",
+  "alo",
+  "chào bạn",
+  "chào bot",
+  "chào ad",
+  "chào shop",
+  "hi shop",
+  "chào buổi sáng",
+  "chào buổi chiều",
+  "chào buổi tối",
+
+  "cảm ơn",
+  "cám ơn",
+  "thanks",
+  "thank you",
+  "thankyou",
+  "tks",
+  "thank",
+  "cám ơn shop",
+  "cảm ơn shop",
+  "cảm ơn bạn",
+
+  "tạm biệt",
+  "bye",
+  "goodbye",
+  "bái bai",
+  "bye bye",
+  "hẹn gặp lại",
+
+  "bạn là ai",
+  "bot là ai",
+  "bạn tên gì",
+  "bot tên gì",
+  "ai đây",
+  "có thể giúp gì",
+  "help",
+  "hỗ trợ",
+
+  "ok",
+  "okay",
+  "oke",
+  "okee",
+  "vâng",
+  "dạ",
+  "ừ",
+  "ừm",
+  "dạ vâng",
+  "ok shop",
+  "ok bot",
+  "dạ được",
+  "ok nha",
+];
+
 export const GENERATION_CONFIG = {
   temperature: 0.15,
   topP: 0.8,

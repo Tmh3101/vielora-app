@@ -49,7 +49,7 @@ export function PricingCard({
         viewport={{ once: true }}
         transition={{ duration: 0.5, delay: animationDelay }}
         className={cn(
-          "relative flex min-h-[420px] flex-col overflow-visible rounded-3xl p-8 pt-10 transition-all duration-300",
+          "relative flex min-h-[420px] flex-col overflow-visible rounded-3xl p-8 pt-10 transition-transform duration-300",
           isPopular && !isDisabled
             ? "card-highlighted animate-pulse-glow"
             : "glass hover:-translate-y-1 hover:border-primary/40"

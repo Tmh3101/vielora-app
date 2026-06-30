@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -21,11 +21,13 @@ import {
   CHATBOT_UNAVAILABLE_MESSAGE,
   INSUFFICIENT_CREDITS_ERROR_CODE,
   INSUFFICIENT_CREDITS_MESSAGE,
+  ChatResponseType,
 } from "@/lib/constants/chat";
 import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
 import type { BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
 import { EMessageRole, EWidgetBackgroundType } from "@/types/enums";
-import type { ChatResponse, ChatMessage } from "@/types/widget-api";
+import type { ChatResponse, ChatMessage, ChatData } from "@/types/widget-api";
+import { LeadForm } from "@/components/chat/LeadForm";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { OfflineBanner } from "@/components/chat/OfflineBanner";
 
@@ -85,6 +87,8 @@ export function StandaloneChatUI({
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [suggestedQuestionsShown, setSuggestedQuestionsShown] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [showLeadForm, setShowLeadForm] = useState(false);
+  const [leadFormQuestion, setLeadFormQuestion] = useState("");
   const isOnline = useNetworkStatus();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -276,6 +280,11 @@ export function StandaloneChatUI({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleLeadFormSuccess = useCallback(() => {
+    setShowLeadForm(false);
+    setLeadFormQuestion("");
+  }, []);
+
   const appendAssistantMessage = (content: string) => {
     setMessages((prev) => {
       const lastMessage = prev[prev.length - 1];
@@ -379,14 +388,30 @@ export function StandaloneChatUI({
       }
 
       if (data.success && data.data) {
+        const chatData = data.data as ChatData;
+
+        if (chatData.type === ChatResponseType.SHOW_LEAD_FORM) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: EMessageRole.Assistant,
+              content: chatData.message || "Sorry, something went wrong.",
+            },
+          ]);
+          setLeadFormQuestion(chatData.originalQuestion || messageToSend);
+          setShowLeadForm(true);
+          if (chatData.conversationId) setConversationId(chatData.conversationId);
+          return;
+        }
+
         setMessages((prev) => [
           ...prev,
           {
             role: EMessageRole.Assistant,
-            content: data.data.message || "Sorry, something went wrong.",
+            content: chatData.message || "Sorry, something went wrong.",
           },
         ]);
-        if (data.data.conversationId) setConversationId(data.data.conversationId);
+        if (chatData.conversationId) setConversationId(chatData.conversationId);
       } else {
         const message = data.message || "Sorry, something went wrong.";
         appendAssistantMessage(message);
@@ -542,6 +567,20 @@ export function StandaloneChatUI({
             </motion.div>
           )}
 
+          {/* Lead Form */}
+          {showLeadForm && visitorId && conversationId && (
+            <LeadForm
+              botId={bot.id}
+              visitorId={visitorId}
+              conversationId={conversationId}
+              originalQuestion={leadFormQuestion}
+              primaryColor={primaryColor}
+              headerTextColor={headerTextColor}
+              onSuccess={handleLeadFormSuccess}
+              onClose={() => setShowLeadForm(false)}
+            />
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -592,7 +631,7 @@ export function StandaloneChatUI({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={insufficientCredits ? "Bot đã hết credits" : "Nhập tin nhắn..."}
-            disabled={isLoading || isChatBlocked || !isOnline}
+            disabled={isLoading || isChatBlocked || !isOnline || showLeadForm}
             maxLength={200}
             className="flex-1 rounded-2xl"
           />

@@ -138,6 +138,12 @@ export enum EIOSBrowser {
   Other = "other",
 }
 
+export enum ELeadStatus {
+  Pending = "pending",
+  Contacted = "contacted",
+  Closed = "closed",
+}
+
 export enum BannerState {
   Hidden = "hidden",
   Offline = "offline",

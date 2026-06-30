@@ -40,7 +40,11 @@ export function FailedPipelineView({
         </Alert>
 
         <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" onClick={onRetry}>
+          <Button
+            variant="outline"
+            className="hover:border-primary hover:bg-white hover:text-primary"
+            onClick={onRetry}
+          >
             Thử lại Discover
           </Button>
           <Button onClick={onBackToDashboard}>Về Dashboard</Button>

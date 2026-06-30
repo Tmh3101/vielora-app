@@ -21,14 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ONBOARDING_CREDIT_SUMMARY_KEY } from "@/lib/constants/react-query-key";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { CrawlScope } from "@/lib/constants";
@@ -216,9 +209,9 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
 
         <Separator />
 
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
+        <div className="relative max-h-[400px] w-full overflow-auto rounded-md border">
+          <table className="w-full caption-bottom text-sm">
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-[56px]">Chọn</TableHead>
                 <TableHead>Title</TableHead>
@@ -243,8 +236,12 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
               )}
 
               {curationRows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>
+                <TableRow
+                  key={row.id}
+                  className="cursor-pointer"
+                  onClick={() => toggleRowSelection(row.id)}
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={selectedPageIds.has(row.id)}
                       onCheckedChange={() => toggleRowSelection(row.id)}
@@ -257,11 +254,21 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
                     />
                   </TableCell>
                   <TableCell className="max-w-[320px] truncate font-medium">{row.title}</TableCell>
-                  <TableCell className="max-w-[560px] truncate">{row.url}</TableCell>
+                  <TableCell className="max-w-[560px] truncate">
+                    <a
+                      href={row.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-primary"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {row.url}
+                    </a>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </table>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

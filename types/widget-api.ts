@@ -61,11 +61,32 @@ export type ChatRequest = {
   visitorId: string;
 };
 
+export type ChatResponseType = "MESSAGE" | "SHOW_LEAD_FORM";
+
 export type ChatData = {
   conversationId: string;
   message: string;
   noAnswer: boolean;
+  type?: ChatResponseType;
+  originalQuestion?: string;
 };
+
+export type LeadFormRequest = {
+  botId: string;
+  visitorId: string;
+  conversationId: string;
+  question: string;
+  name: string;
+  email: string;
+  phone?: string;
+  note?: string;
+};
+
+export type LeadFormData = {
+  id: string;
+};
+
+export type LeadFormResponse = ApiResponse<LeadFormData>;
 
 export type ChatResponse = ApiResponse<ChatData>;
 

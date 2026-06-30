@@ -6,6 +6,7 @@ export type AISkillRow = Tables<"ai_skills">;
 export interface AISkillCatalog {
   id: string;
   name: string;
+  description: string | null;
   prompt_injection: string;
   is_active: boolean;
 }
@@ -13,7 +14,7 @@ export interface AISkillCatalog {
 export async function getActiveSkills(client: ServiceClient): Promise<AISkillCatalog[]> {
   const { data, error } = await client
     .from("ai_skills")
-    .select("id, name, prompt_injection, is_active")
+    .select("id, name, description, prompt_injection, is_active")
     .eq("is_active", true)
     .order("name");
 
