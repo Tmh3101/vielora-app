@@ -12,3 +12,4 @@ export * from "./knowledge";
 export * from "./onboarding";
 export * from "./bot-detail-dashboard";
 export * from "./plan";
+export * from "./landing";

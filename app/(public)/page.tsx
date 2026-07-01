@@ -7,7 +7,7 @@
 import Header from "@/components/landing/Header";
 import HeroSection from "@/components/landing/HeroSection";
 import LogoShowcase from "@/components/landing/LogoShowcase";
-import FeaturesSection from "@/components/landing/FeaturesSection";
+import ScrollDrivenFeatures from "@/components/landing/ScrollDrivenFeatures";
 import PricingSection from "@/components/landing/PricingSection";
 import TestimonialsSection from "@/components/landing/TestimonialsSection";
 import DemoSection from "@/components/landing/DemoSection";
@@ -52,7 +52,7 @@ export default function Home() {
       <main>
         <HeroSection />
         <LogoShowcase />
-        <FeaturesSection />
+        <ScrollDrivenFeatures />
         <DemoSection />
         <PricingSection />
         <TestimonialsSection />
