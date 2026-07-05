@@ -1,58 +1,65 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import payos from "@/lib/payos";
-import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
-import {
-  EPaymentStatus,
-  EPaymentType,
-  EPaymentProvider,
-  EPaymentCurrency,
-  CreditPackagePrice,
-} from "@/types";
+import { EPaymentStatus, EPaymentType, EPaymentProvider, EPaymentCurrency } from "@/types/enums";
 import {
   getPendingPayOSPaymentsByUser,
   updatePaymentStatus,
   createPaymentRecord,
 } from "@/lib/services/payment.service";
-import { getCreditPackageById } from "@/lib/services/credit.service";
-import { PAYMENT_LINK_EXPIRATION_SECONDS } from "@/config";
-import {
-  getPayOSCancelUrl,
-  getPayOSReturnUrl,
-  getPaymentAmount,
-  generateOrderCode,
-} from "@/lib/helpers/payos-helpers";
-
-export interface PaygCreateRequestBody {
-  packageId: string;
-}
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await authenticateRequest(request);
-    if (isAuthError(authResult)) return authResult;
-    const { user, supabase } = authResult;
+    // 1. Authenticate user via Authorization header
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const { packageId } = (await request.json()) as PaygCreateRequestBody;
+    const token = authHeader.replace("Bearer ", "");
+    const supabase = createAdminClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 2. Parse request body
+    const body = await request.json();
+    const { packageId } = body as { packageId: string };
+
     if (!packageId) {
       return NextResponse.json({ error: "Missing packageId" }, { status: 400 });
     }
 
-    const creditPackage = await getCreditPackageById(supabase, packageId);
-    if (!creditPackage) {
+    // 3. Fetch credit package from DB
+    const { data: creditPackage, error: packageError } = await supabase
+      .from("credit_packages")
+      .select("*")
+      .eq("id", packageId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (packageError || !creditPackage) {
       return NextResponse.json({ error: "Package not found or inactive" }, { status: 404 });
     }
 
-    const priceObj = creditPackage.price as CreditPackagePrice;
+    const priceObj = creditPackage.price as unknown as { USD?: number; VND?: number } | null;
     const amount = priceObj?.VND;
+
     if (!amount || amount <= 0) {
       return NextResponse.json({ error: "Invalid package price." }, { status: 400 });
     }
 
-    // Cancel all existing pending PayOS payments for this user
+    // 4. Cancel all existing pending PayOS payments for this user
     const pendingPayments = await getPendingPayOSPaymentsByUser(supabase, user.id);
 
     if (pendingPayments.length > 0) {
       for (const pending of pendingPayments) {
+        // Cancel on PayOS
         if (pending.provider_transaction_id) {
           try {
             await payos.paymentRequests.cancel(
@@ -69,12 +76,15 @@ export async function POST(request: NextRequest) {
             }
           }
         }
+        // Update DB
         await updatePaymentStatus(supabase, pending.id, EPaymentStatus.Failed);
       }
     }
 
-    // Create a numeric order code for PayOS
-    const orderCode = generateOrderCode();
+    // Create a numeric order code for PayOS (max 53 bytes integer)
+    const orderCode = Number(String(Date.now()).slice(-9) + Math.floor(Math.random() * 100));
+
+    // 5. Create payment record in DB
     const payment = await createPaymentRecord(supabase, {
       user_id: user.id,
       amount: amount,
@@ -90,15 +100,23 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Build PayOS payment link
-    const paymentAmount = getPaymentAmount(amount);
-    const expiredAt = Math.floor(Date.now() / 1000) + PAYMENT_LINK_EXPIRATION_SECONDS; // Payment link expires after 15 minutes
+    // 6. Build PayOS payment link
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+    const orderInfo = `Nap ${creditPackage.credits_amount} credits`;
+
+    // Override amount to 2000 VND for testing with real money
+    const paymentAmount = process.env.PAYOS_TEST_MODE === "true" ? 2000 : amount;
+
+    // Payment link expires after 15 minutes
+    const expiredAt = Math.floor(Date.now() / 1000) + 900;
+
     const requestData = {
       orderCode,
       amount: paymentAmount,
-      description: `Nap ${creditPackage.credits_amount} credits`.slice(0, 25),
-      cancelUrl: getPayOSCancelUrl(payment.id),
-      returnUrl: getPayOSReturnUrl(payment.id),
+      description: orderInfo.substring(0, 25),
+      cancelUrl: `${appUrl}/api/payment/payos-cancel?paymentId=${payment.id}`,
+      returnUrl: `${appUrl}/api/payment/payos-return?paymentId=${payment.id}`,
       expiredAt,
     };
 

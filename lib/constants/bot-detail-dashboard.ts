@@ -4,8 +4,6 @@ export const BotDetailDashboardTabs = {
   ANALYTICS: "analytics",
   KNOWLEDGE: "knowledge",
   APPEARANCE: "appearance",
-  AI: "ai",
   SETTINGS: "settings",
   INSTALL: "install",
-  LEADS: "leads",
 } as const;

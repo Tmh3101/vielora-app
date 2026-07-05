@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
+import { createServerClient } from "@/lib/supabase/server";
+import type { ServiceClient } from "@/lib/services/types";
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await authenticateRequest(request);
-    if (isAuthError(authResult)) return authResult;
-    const { user, supabase } = authResult;
+    // 1. Authenticate user
+    const supabase = await createServerClient();
+    const dbClient: ServiceClient = supabase;
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    const { subject, message } = (await request.json()) as { subject: string; message: string };
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 2. Parse request body
+    const body = await request.json();
+    const { subject, message } = body as { subject: string; message: string };
+
     if (!subject || !message) {
       return NextResponse.json({ error: "Missing subject or message" }, { status: 400 });
     }
@@ -16,7 +28,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Subject and message cannot be empty" }, { status: 400 });
     }
 
-    const { data: ticket, error: insertError } = await supabase
+    // 3. Insert ticket into DB
+    const { data: ticket, error: insertError } = await dbClient
       .from("support_tickets")
       .insert({
         user_id: user.id,

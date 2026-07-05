@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, Tag, ArrowRight, BookOpen } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import ScrollToTop from "@/components/shared/ScrollToTop";
 import {
   Pagination,
   PaginationContent,
@@ -394,7 +393,6 @@ export default async function BlogPage(props: {
 
       <CTASection />
       <Footer />
-      <ScrollToTop />
     </div>
   );
 }

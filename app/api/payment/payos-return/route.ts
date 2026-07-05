@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handlePaymentSuccess, mergePaymentMetadata } from "@/lib/services/payment.service";
 import { createAdminClient } from "@/lib/supabase/server";
-import {
-  getPaymentResultUrl,
-  getPaymentSuccessRedirectUrl,
-  getPaymentFailedRedirectUrl,
-} from "@/lib/helpers/payos-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -19,15 +14,21 @@ export async function GET(request: NextRequest) {
     const status = url.searchParams.get("status");
     const orderCode = url.searchParams.get("orderCode");
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
     if (!paymentId) {
-      return NextResponse.redirect(getPaymentFailedRedirectUrl("missing_ref"));
+      return NextResponse.redirect(
+        `${appUrl}/dashboard/payment/result?status=failed&reason=missing_ref`
+      );
     }
 
     if (cancel === "true" || code === "1") {
-      return NextResponse.redirect(getPaymentFailedRedirectUrl("24"));
+      return NextResponse.redirect(`${appUrl}/dashboard/payment/result?status=failed&reason=24`);
     }
 
     const supabase = createAdminClient();
+
+    // Merge payOS response
     await mergePaymentMetadata(supabase, paymentId, {
       payos_return: { code, id, cancel, status, orderCode },
     });
@@ -36,22 +37,25 @@ export async function GET(request: NextRequest) {
     if (code === "00") {
       try {
         await handlePaymentSuccess(supabase, paymentId);
-        return NextResponse.redirect(getPaymentSuccessRedirectUrl(paymentId));
+        return NextResponse.redirect(
+          `${appUrl}/dashboard/payment/result?status=success&paymentId=${paymentId}`
+        );
       } catch (error) {
         console.error("Error processing payment success:", error);
         return NextResponse.redirect(
-          getPaymentResultUrl({
-            status: "success",
-            paymentId,
-            warning: "processing_delayed",
-          })
+          `${appUrl}/dashboard/payment/result?status=success&paymentId=${paymentId}&warning=processing_delayed`
         );
       }
     }
 
-    return NextResponse.redirect(getPaymentFailedRedirectUrl("server_error"));
+    return NextResponse.redirect(
+      `${appUrl}/dashboard/payment/result?status=failed&reason=server_error`
+    );
   } catch (error) {
     console.error("PayOS return URL error:", error);
-    return NextResponse.redirect(getPaymentFailedRedirectUrl("server_error"));
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    return NextResponse.redirect(
+      `${appUrl}/dashboard/payment/result?status=failed&reason=server_error`
+    );
   }
 }

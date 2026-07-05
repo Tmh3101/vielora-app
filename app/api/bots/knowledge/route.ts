@@ -10,8 +10,6 @@ import {
   EPageSourceType,
   ETransactionType,
   ESubscriptionPlan,
-  KnowledgeResponse,
-  KnowledgeRequest,
 } from "@/types";
 import {
   MAX_MANUAL_CONTENT_LENGTH,
@@ -24,7 +22,6 @@ import {
 import { deductCredits, refundCredits } from "@/lib/services/credit.service";
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
 import { getBotByOwner, updateBotStatusServer } from "@/lib/services/bot.service";
-import { clearBotCache } from "@/lib/services/server/bot-cache.service";
 import {
   deletePageByIdServer,
   getPageByBotIdAndUrlServer,
@@ -32,10 +29,31 @@ import {
 } from "@/lib/services/page.service";
 import { deleteKnowledgeFile } from "@/lib/supabase/upload";
 import { extractTextFromFile } from "@/lib/scraper/extractors/files";
-import { KNOWLEDGE_REQUEST_MODE } from "@/lib/constants/knowledge";
+import { type KnowledgeRequestMode, KNOWLEDGE_REQUEST_MODE } from "@/lib/constants/knowledge";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
+}
+
+interface KnowledgeRequest {
+  botId?: string;
+  isManual?: boolean;
+  mode?: KnowledgeRequestMode;
+  context?: "onboarding";
+  title?: string;
+  content?: string;
+  url?: string;
+  filePath?: string;
+}
+
+interface KnowledgeResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    pageId: string;
+    jobId: string;
+    sourceType: EPageSourceType;
+  };
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResponse>> {
@@ -136,16 +154,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
     const isBotInOnboarding =
       bot.status === EBotStatus.Pending || bot.status === EBotStatus.Indexing;
 
-    if (isOnboardingContext && (!isFileMode || !isFileOnboardingBot)) {
+    if (isOnboardingContext && (!isFileMode || !isFileOnboardingBot || !isBotInOnboarding)) {
       return NextResponse.json(
         { success: false, message: "Invalid onboarding knowledge request." },
         { status: 400, headers: corsHeaders }
       );
-    }
-
-    if (isOnboardingContext && isFileMode && isFileOnboardingBot && !isBotInOnboarding) {
-      await updateBotStatusServer(supabase, botId, EBotStatus.Indexing);
-      clearBotCache(botId).catch(console.error);
     }
 
     if (!isOnboardingContext) {
@@ -288,11 +301,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
           pageId,
         });
 
-        if (
-          isOnboardingContext ? bot.status !== EBotStatus.Indexing : bot.status !== EBotStatus.Ready
-        ) {
+        if (bot.status !== EBotStatus.Ready) {
           await updateBotStatusServer(supabase, botId, EBotStatus.Indexing);
-          clearBotCache(botId).catch(console.error);
         }
       } catch (manualOrFileErr) {
         const manualOrFileError = manualOrFileErr as Error;
@@ -323,7 +333,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
       return NextResponse.json(
         {
           success: true,
-          message: "Knowledge added successfully",
           data: {
             pageId,
             jobId,
@@ -370,13 +379,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
 
         if (bot.status !== EBotStatus.Indexing) {
           await updateBotStatusServer(supabase, botId, EBotStatus.Indexing);
-          clearBotCache(botId).catch(console.error);
         }
 
         return NextResponse.json(
           {
             success: true,
-            message: "Knowledge added successfully",
             data: {
               pageId,
               jobId,

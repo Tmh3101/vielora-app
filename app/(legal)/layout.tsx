@@ -6,7 +6,6 @@
 
 import Header from "@/components/landing/Header";
 import Footer from "@/components/landing/Footer";
-import ScrollToTop from "@/components/shared/ScrollToTop";
 
 export default function LegalLayout({
   children,
@@ -18,7 +17,6 @@ export default function LegalLayout({
       <Header isLegalLayout={true} />
       <main className="container mx-auto max-w-6xl px-4 py-28 sm:px-6 lg:px-8">{children}</main>
       <Footer isLegalLayout={true} />
-      <ScrollToTop />
     </>
   );
 }

@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const queueStatus = await getQueueStatus();
+
     return NextResponse.json({
       status: "healthy",
       timestamp: new Date().toISOString(),

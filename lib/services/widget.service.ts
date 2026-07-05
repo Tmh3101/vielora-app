@@ -1,4 +1,4 @@
-import type { InitResponse } from "@/types";
+import type { InitResponse, WidgetSettings } from "@/types";
 import { WIDGET_CONFIG, WIDGET_MESSAGES, WIDGET_FALLBACK } from "@/config/widget";
 import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
 import {
@@ -7,11 +7,36 @@ import {
 } from "@/lib/constants/chat";
 import { INIT_CACHE_TTL } from "@/config";
 import { BotInfo } from "@/types/widget-api";
-import {
-  generateVisitorId,
-  getFallbackSetting,
-  getFallbackBotInfo,
-} from "@/lib/helpers/chat-helpers";
+
+const generateVisitorId = (): string => {
+  const stored = localStorage.getItem(WIDGET_CONFIG.VISITOR_ID_KEY);
+  if (stored) return stored;
+
+  const id =
+    WIDGET_CONFIG.VISITOR_ID_PREFIX + Math.random().toString(36).substr(2, 9) + "_" + Date.now();
+  localStorage.setItem(WIDGET_CONFIG.VISITOR_ID_KEY, id);
+  return id;
+};
+
+const getFallbackSetting = (): WidgetSettings => ({
+  primaryColor: WIDGET_FALLBACK.PRIMARY_COLOR,
+  textColor: WIDGET_FALLBACK.TEXT_COLOR,
+  position: WIDGET_FALLBACK.POSITION,
+  welcomeMessage: WIDGET_FALLBACK.WELCOME_MESSAGE,
+});
+
+export const getFallbackBotInfo = (): BotInfo => ({
+  botName: WIDGET_FALLBACK.BOT_NAME,
+  avatarUrl: null,
+  settings: getFallbackSetting(),
+  isReady: true,
+  previousMessages: [],
+  conversationId: undefined,
+  rateLimitExceeded: false,
+  rateLimitMessage: null,
+  insufficientCredits: false,
+  insufficientCreditsMessage: null,
+});
 
 export const callChatAPI = async (
   botId: string,
@@ -91,7 +116,6 @@ export const callChatAPI = async (
 };
 
 const initBotCache = new Map<string, { data: BotInfo; timestamp: number }>();
-const initBotPromiseCache = new Map<string, Promise<BotInfo>>();
 
 // Function to initialize demo bot (matching widget.js init)
 export const initDemoBot = async (botId: string): Promise<BotInfo> => {
@@ -100,20 +124,6 @@ export const initDemoBot = async (botId: string): Promise<BotInfo> => {
     return structuredClone(cached.data);
   }
 
-  const inFlight = initBotPromiseCache.get(botId);
-  if (inFlight) return inFlight;
-
-  const promise = _fetchInitBot(botId);
-  initBotPromiseCache.set(botId, promise);
-
-  try {
-    return await promise;
-  } finally {
-    initBotPromiseCache.delete(botId);
-  }
-};
-
-async function _fetchInitBot(botId: string): Promise<BotInfo> {
   const visitorId = generateVisitorId();
 
   try {
@@ -159,4 +169,4 @@ async function _fetchInitBot(botId: string): Promise<BotInfo> {
     console.error("Error initializing demo bot:", error);
     return getFallbackBotInfo();
   }
-}
+};

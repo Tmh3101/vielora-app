@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, ChevronRight, Clock, ArrowLeft, BookOpen } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import ScrollToTop from "@/components/shared/ScrollToTop";
 
 interface Category {
   id: string;
@@ -418,7 +417,6 @@ export default async function PostDetailPage(props: { params: Promise<{ slug: st
 
       <CTASection />
       <Footer />
-      <ScrollToTop />
     </div>
   );
 }

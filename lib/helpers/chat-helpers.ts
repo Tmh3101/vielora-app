@@ -1,7 +1,6 @@
 import { BOT_RATE_LIMIT_ERROR_CODES, type BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
 import { INSUFFICIENT_CREDITS_MESSAGE } from "@/lib/constants/chat";
-import { EWidgetBackgroundType, WidgetSettings, BotInfo } from "@/types";
-import { WIDGET_CONFIG, WIDGET_FALLBACK } from "@/config/widget";
+import { EWidgetBackgroundType } from "@/types";
 
 /**
  * Calculate the luminance of a hex color (0-255 scale)
@@ -158,33 +157,3 @@ export const getChatBlockedData = (
   const isChatBlocked = insufficientCredits || rateLimitExceeded;
   return { blockedChatMessage, isChatBlocked };
 };
-
-export const generateVisitorId = (): string => {
-  const stored = localStorage.getItem(WIDGET_CONFIG.VISITOR_ID_KEY);
-  if (stored) return stored;
-
-  const id =
-    WIDGET_CONFIG.VISITOR_ID_PREFIX + Math.random().toString(36).substr(2, 9) + "_" + Date.now();
-  localStorage.setItem(WIDGET_CONFIG.VISITOR_ID_KEY, id);
-  return id;
-};
-
-export const getFallbackSetting = (): WidgetSettings => ({
-  primaryColor: WIDGET_FALLBACK.PRIMARY_COLOR,
-  textColor: WIDGET_FALLBACK.TEXT_COLOR,
-  position: WIDGET_FALLBACK.POSITION,
-  welcomeMessage: WIDGET_FALLBACK.WELCOME_MESSAGE,
-});
-
-export const getFallbackBotInfo = (): BotInfo => ({
-  botName: WIDGET_FALLBACK.BOT_NAME,
-  avatarUrl: null,
-  settings: getFallbackSetting(),
-  isReady: true,
-  previousMessages: [],
-  conversationId: undefined,
-  rateLimitExceeded: false,
-  rateLimitMessage: null,
-  insufficientCredits: false,
-  insufficientCreditsMessage: null,
-});
