@@ -3,24 +3,8 @@ import { corsHeaders } from "@/lib/constants";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import { getBotAnalytics } from "@/lib/services/analytics.service";
 import { getBotByIdServer } from "@/lib/services/bot.service";
-
-interface AnalyticsRouteResponse {
-  success: boolean;
-  message?: string;
-  data?: Awaited<ReturnType<typeof getBotAnalytics>>;
-}
-
-/**
- * Parse a date string into a Date object, or indicate absence when the input is missing or invalid.
- *
- * @param value - The date string to parse; may be `null` or an empty string.
- * @returns The `Date` represented by `value`, or `null` if `value` is falsy or not a valid date.
- */
-function parseDateParam(value: string | null): Date | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
+import { parseDateParam } from "@/lib/helpers/url-helpers";
+import type { AnalyticsRouteResponse } from "@/types";
 
 /**
  * Responds to CORS preflight requests using the configured CORS headers.

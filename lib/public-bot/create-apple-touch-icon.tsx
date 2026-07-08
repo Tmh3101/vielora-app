@@ -13,20 +13,22 @@ function getBotInitial(name: string, botSlug: string): string {
   return label.charAt(0).toUpperCase();
 }
 
-export function createPublicBotAppleTouchIcon(
+function createPublicBotIcon(
   bot: PublicBotBranding | null,
-  botSlug: string
+  botSlug: string,
+  size: number
 ): ImageResponse {
   const themeColor = getPublicBotThemeColor(bot?.widget_settings ?? null);
   const name = bot?.name?.trim() || botSlug;
   const initial = getBotInitial(name, botSlug);
+  const fontSize = size <= 180 ? 72 : 196;
 
   if (bot?.avatar_url) {
     return new ImageResponse(
       <div
         style={{
-          width: APPLE_TOUCH_ICON_SIZE,
-          height: APPLE_TOUCH_ICON_SIZE,
+          width: size,
+          height: size,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -38,8 +40,8 @@ export function createPublicBotAppleTouchIcon(
         <img
           src={bot.avatar_url}
           alt=""
-          width={APPLE_TOUCH_ICON_SIZE}
-          height={APPLE_TOUCH_ICON_SIZE}
+          width={size}
+          height={size}
           style={{
             objectFit: "cover",
             width: "100%",
@@ -48,8 +50,8 @@ export function createPublicBotAppleTouchIcon(
         />
       </div>,
       {
-        width: APPLE_TOUCH_ICON_SIZE,
-        height: APPLE_TOUCH_ICON_SIZE,
+        width: size,
+        height: size,
         headers: CACHE_HEADERS,
       }
     );
@@ -58,23 +60,37 @@ export function createPublicBotAppleTouchIcon(
   return new ImageResponse(
     <div
       style={{
-        width: APPLE_TOUCH_ICON_SIZE,
-        height: APPLE_TOUCH_ICON_SIZE,
+        width: size,
+        height: size,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         background: themeColor,
         color: "#ffffff",
-        fontSize: 72,
+        fontSize,
         fontWeight: 700,
       }}
     >
       {initial}
     </div>,
     {
-      width: APPLE_TOUCH_ICON_SIZE,
-      height: APPLE_TOUCH_ICON_SIZE,
+      width: size,
+      height: size,
       headers: CACHE_HEADERS,
     }
   );
+}
+
+export function createPublicBotAppleTouchIcon(
+  bot: PublicBotBranding | null,
+  botSlug: string
+): ImageResponse {
+  return createPublicBotIcon(bot, botSlug, APPLE_TOUCH_ICON_SIZE);
+}
+
+export function createPublicBotIcon512(
+  bot: PublicBotBranding | null,
+  botSlug: string
+): ImageResponse {
+  return createPublicBotIcon(bot, botSlug, 512);
 }

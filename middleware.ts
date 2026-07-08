@@ -119,6 +119,16 @@ export function middleware(request: NextRequest) {
     );
   }
 
+  const devBotSlug = process.env.DEV_BOT_SLUG;
+
+  if (devBotSlug && pathname === "/") {
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = `/public-bot/${devBotSlug}`;
+    return withShopifyCsp(
+      NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } })
+    );
+  }
+
   return withShopifyCsp(NextResponse.next({ request: { headers: requestHeaders } }));
 }
 

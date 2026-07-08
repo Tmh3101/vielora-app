@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Bot } from "lucide-react";
+import { Send, Bot, Share2, Copy, Check, QrCode } from "lucide-react";
 import type { PublicBotData } from "@/lib/services/bot.service";
 import type { Json } from "@/lib/supabase/types";
 import {
@@ -21,13 +21,24 @@ import {
   CHATBOT_UNAVAILABLE_MESSAGE,
   INSUFFICIENT_CREDITS_ERROR_CODE,
   INSUFFICIENT_CREDITS_MESSAGE,
+  ChatResponseType,
 } from "@/lib/constants/chat";
 import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
 import type { BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
 import { EMessageRole, EWidgetBackgroundType } from "@/types/enums";
-import type { ChatResponse, ChatMessage } from "@/types/widget-api";
+import type { ChatResponse, ChatMessage, ChatData } from "@/types/widget-api";
+import { LeadForm } from "@/components/chat/LeadForm";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { OfflineBanner } from "@/components/chat/OfflineBanner";
+import { useToast } from "@/hooks/use-toast";
+import { StandaloneChatPageQRCode } from "@/components/dashboard/StandaloneChatPageQRCode";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const PWAInstallRoot = dynamic(
   () => import("./pwa-install/PWAInstallRoot").then((mod) => mod.PWAInstallRoot),
@@ -85,7 +96,56 @@ export function StandaloneChatUI({
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [suggestedQuestionsShown, setSuggestedQuestionsShown] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [showLeadForm, setShowLeadForm] = useState(false);
+  const [leadFormQuestion, setLeadFormQuestion] = useState("");
   const isOnline = useNetworkStatus();
+  const { toast } = useToast();
+
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setShareUrl(window.location.href);
+    }
+  }, []);
+
+  const handleCopy = async () => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = shareUrl;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand("copy");
+        textArea.remove();
+        if (!successful) {
+          throw new Error("execCommand copy failed");
+        }
+      }
+      setCopied(true);
+      toast({
+        title: "Đã sao chép liên kết!",
+        description: "Đường dẫn trang chat đã được lưu vào bộ nhớ tạm.",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy link:", err);
+      toast({
+        title: "Không thể sao chép!",
+        description: "Vui lòng sao chép liên kết thủ công.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const widgetSettings = (bot.widget_settings as Json as WidgetSettings | null) || {};
@@ -103,6 +163,99 @@ export function StandaloneChatUI({
   );
   const isChatBlocked = baseChatBlocked || quotaExceeded || !isAvailable;
   const headerTextColor = getUserMessageTextColor(primaryColor);
+
+  const shareDialog = (
+    <Dialog
+      open={isShareOpen}
+      onOpenChange={(open) => {
+        setIsShareOpen(open);
+        if (!open) {
+          setShowQr(false);
+        }
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 shrink-0 rounded-xl text-current transition-colors hover:bg-white/10"
+          aria-label="Chia sẻ trang chat"
+        >
+          <Share2 className="h-5 w-5" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85vh] w-[92vw] max-w-[400px] overflow-y-auto rounded-2xl border-none bg-white p-4 shadow-xl sm:p-6">
+        <DialogHeader className="space-y-1">
+          <DialogTitle className="text-lg font-bold text-slate-900 sm:text-xl">
+            Chia sẻ trang chat
+          </DialogTitle>
+          <p className="text-xs text-slate-500 sm:text-sm">
+            Chia sẻ bot {bot.name} với khách hàng của bạn
+          </p>
+        </DialogHeader>
+        <div className="space-y-3">
+          {/* Option 1: Copy Link */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">
+              Đường dẫn trang chat
+            </label>
+            <div className="flex items-center gap-2">
+              <Input
+                readOnly
+                value={shareUrl}
+                className="rounded-xl border-slate-200 bg-slate-50 text-xs text-slate-800 focus-visible:ring-1 focus-visible:ring-slate-300 sm:text-sm"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <Button
+                size="icon"
+                onClick={handleCopy}
+                variant="outline"
+                className="shrink-0 rounded-xl border-slate-200 text-slate-600 transition-colors hover:border-[var(--primary-color)] hover:bg-white hover:text-[var(--primary-color)]"
+                style={{ "--primary-color": primaryColor } as React.CSSProperties}
+              >
+                {copied ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Option 2: QR Code */}
+          {!showQr ? (
+            <div className="pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowQr(true)}
+                className="flex h-9 w-full items-center justify-center gap-2 rounded-xl border-slate-200 text-xs font-medium text-slate-700 transition-colors hover:border-[var(--primary-color)] hover:bg-white hover:text-[var(--primary-color)]"
+                style={{ "--primary-color": primaryColor } as React.CSSProperties}
+              >
+                <QrCode className="h-3 w-3" />
+                Tạo QR Code
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-col items-center border-t border-slate-100 pt-4">
+              <StandaloneChatPageQRCode
+                url={shareUrl}
+                avatarUrl={bot.avatar_url}
+                botName={bot.name}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2 text-xs text-slate-400 hover:bg-transparent hover:text-slate-600"
+                onClick={() => setShowQr(false)}
+              >
+                Ẩn QR Code
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   const headerInfo = (
     <>
@@ -276,6 +429,11 @@ export function StandaloneChatUI({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleLeadFormSuccess = useCallback(() => {
+    setShowLeadForm(false);
+    setLeadFormQuestion("");
+  }, []);
+
   const appendAssistantMessage = (content: string) => {
     setMessages((prev) => {
       const lastMessage = prev[prev.length - 1];
@@ -379,14 +537,30 @@ export function StandaloneChatUI({
       }
 
       if (data.success && data.data) {
+        const chatData = data.data as ChatData;
+
+        if (chatData.type === ChatResponseType.SHOW_LEAD_FORM) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: EMessageRole.Assistant,
+              content: chatData.message || "Sorry, something went wrong.",
+            },
+          ]);
+          setLeadFormQuestion(chatData.originalQuestion || messageToSend);
+          setShowLeadForm(true);
+          if (chatData.conversationId) setConversationId(chatData.conversationId);
+          return;
+        }
+
         setMessages((prev) => [
           ...prev,
           {
             role: EMessageRole.Assistant,
-            content: data.data.message || "Sorry, something went wrong.",
+            content: chatData.message || "Sorry, something went wrong.",
           },
         ]);
-        if (data.data.conversationId) setConversationId(data.data.conversationId);
+        if (chatData.conversationId) setConversationId(chatData.conversationId);
       } else {
         const message = data.message || "Sorry, something went wrong.";
         appendAssistantMessage(message);
@@ -446,7 +620,10 @@ export function StandaloneChatUI({
               style={{ backgroundColor: primaryColor, color: headerTextColor }}
             >
               {headerInfo}
-              <PWAInstallHeaderButton />
+              <div className="flex items-center gap-2">
+                <PWAInstallHeaderButton />
+                {shareDialog}
+              </div>
             </div>
             <PWAInstallBanner />
           </PWAInstallRoot>
@@ -456,6 +633,7 @@ export function StandaloneChatUI({
             style={{ backgroundColor: primaryColor, color: headerTextColor }}
           >
             {headerInfo}
+            <div className="flex items-center gap-2">{shareDialog}</div>
           </div>
         )}
       </div>
@@ -542,6 +720,20 @@ export function StandaloneChatUI({
             </motion.div>
           )}
 
+          {/* Lead Form */}
+          {showLeadForm && visitorId && conversationId && (
+            <LeadForm
+              botId={bot.id}
+              visitorId={visitorId}
+              conversationId={conversationId}
+              originalQuestion={leadFormQuestion}
+              primaryColor={primaryColor}
+              headerTextColor={headerTextColor}
+              onSuccess={handleLeadFormSuccess}
+              onClose={() => setShowLeadForm(false)}
+            />
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -592,7 +784,7 @@ export function StandaloneChatUI({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={insufficientCredits ? "Bot đã hết credits" : "Nhập tin nhắn..."}
-            disabled={isLoading || isChatBlocked || !isOnline}
+            disabled={isLoading || isChatBlocked || !isOnline || showLeadForm}
             maxLength={200}
             className="flex-1 rounded-2xl"
           />

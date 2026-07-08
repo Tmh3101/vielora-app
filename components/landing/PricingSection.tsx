@@ -76,7 +76,7 @@ const PricingSection = () => {
 
       <div className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section header */}
-        <div className="mx-auto mb-12 max-w-3xl text-center">
+        <div className="mx-auto mb-8 max-w-3xl text-center">
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -113,7 +113,7 @@ const PricingSection = () => {
         </motion.div>
 
         {/* Plans grid */}
-        <div className="mx-auto grid max-w-5xl gap-6 pt-5 md:grid-cols-3 lg:gap-8">
+        <div className="mx-auto grid max-w-5xl gap-6 pt-4 md:grid-cols-3 lg:gap-8">
           {isLoadingPlans
             ? Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="glass h-[420px] animate-pulse rounded-3xl p-8" />

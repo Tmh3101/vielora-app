@@ -72,11 +72,12 @@ export function StandaloneChatPageQRCode({
   return (
     <div className="rounded-xl p-4">
       <div className="flex flex-col items-center gap-4">
-        <div className="relative overflow-hidden rounded-2xl border bg-white p-3 shadow-sm">
+        <div className="relative flex aspect-square w-full max-w-[246px] items-center justify-center overflow-hidden rounded-2xl border bg-white p-3 shadow-sm">
           <QRCodeCanvas
             id={canvasId}
             value={url}
             size={QR_CODE_SIZE}
+            style={{ width: "100%", height: "auto", maxWidth: "220px", display: "block" }}
             marginSize={2}
             level="H"
             imageSettings={
@@ -101,7 +102,7 @@ export function StandaloneChatPageQRCode({
               unoptimized
               crossOrigin="anonymous"
               aria-hidden="true"
-              className="pointer-events-none absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full object-cover"
+              className="pointer-events-none absolute left-1/2 top-1/2 h-[18%] w-[18%] -translate-x-1/2 -translate-y-1/2 rounded-full object-cover"
             />
           )}
         </div>

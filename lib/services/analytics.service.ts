@@ -15,6 +15,7 @@ export interface AnalyticsKpis {
   fallbackCount: number;
   fallbackRate: number;
   creditsUsed: number;
+  leadCount: number;
 }
 
 export interface AnalyticsComparisonItem {
@@ -29,6 +30,7 @@ export interface AnalyticsComparison {
   messages: AnalyticsComparisonItem;
   fallbacks: AnalyticsComparisonItem;
   creditsUsed: AnalyticsComparisonItem;
+  leads: AnalyticsComparisonItem;
 }
 
 export interface AnalyticsTrendPoint {
@@ -118,6 +120,7 @@ export function calculateAnalyticsKpis(
     fallbackRate:
       totalMessages > 0 ? Number(((fallbackCount / totalMessages) * 100).toFixed(1)) : 0,
     creditsUsed,
+    leadCount: 0,
   };
 }
 
@@ -129,11 +132,18 @@ export function calculateAnalyticsKpis(
 export function calculateComparison(current: number, previous: number): AnalyticsComparisonItem {
   const delta = current - previous;
 
+  let deltaPercent: number | null;
+  if (previous === 0) {
+    deltaPercent = current === 0 ? null : 100;
+  } else {
+    deltaPercent = Number(((delta / previous) * 100).toFixed(1));
+  }
+
   return {
     current,
     previous,
     delta,
-    deltaPercent: previous === 0 ? null : Number(((delta / previous) * 100).toFixed(1)),
+    deltaPercent,
   };
 }
 
@@ -305,7 +315,12 @@ function mapComparisonItem(value: unknown): AnalyticsComparisonItem {
   };
 }
 
-function mapAnalyticsResponse(value: unknown, fallbackRange: AnalyticsRange): BotAnalyticsResponse {
+function mapAnalyticsResponse(
+  value: unknown,
+  fallbackRange: AnalyticsRange,
+  leadCount?: number,
+  leadsComparison?: AnalyticsComparisonItem
+): BotAnalyticsResponse {
   const root = asRecord(value);
   const kpis = asRecord(root.kpis);
   const comparison = asRecord(root.comparison);
@@ -318,12 +333,14 @@ function mapAnalyticsResponse(value: unknown, fallbackRange: AnalyticsRange): Bo
       fallbackCount: asNumber(kpis.fallbackCount),
       fallbackRate: asNumber(kpis.fallbackRate),
       creditsUsed: asNumber(kpis.creditsUsed),
+      leadCount: leadCount ?? 0,
     },
     comparison: {
       conversations: mapComparisonItem(comparison.conversations),
       messages: mapComparisonItem(comparison.messages),
       fallbacks: mapComparisonItem(comparison.fallbacks),
       creditsUsed: mapComparisonItem(comparison.creditsUsed),
+      leads: leadsComparison ?? { current: 0, previous: 0, delta: 0, deltaPercent: null },
     },
     trends: asArray(root.trends).map((point) => {
       const row = asRecord(point);
@@ -360,13 +377,13 @@ function mapAnalyticsResponse(value: unknown, fallbackRange: AnalyticsRange): Bo
 }
 
 /**
- * Assembles analytics for a bot over a specified time window.
+ * Assembles analytics for a bot over a specified time window, including feedback (lead) counts.
  *
  * @param botId - The bot's identifier.
  * @param from - Start of the current analytics window (inclusive).
  * @param to - End of the current analytics window (inclusive).
  * @returns An object containing:
- *  - `kpis`: aggregated totals for the current window (conversations, user messages, fallback count/rate, credits used),
+ *  - `kpis`: aggregated totals for the current window (conversations, user messages, fallback count/rate, credits used, lead count),
  *  - `comparison`: current vs previous window comparisons with absolute delta and percent delta,
  *  - `trends`: daily series of message and conversation counts across the current window,
  *  - `heatmap`: 7×24 day/hour activity grid for user messages,
@@ -392,5 +409,27 @@ export async function getBotAnalytics(
     throw new Error(`Failed to fetch bot analytics: ${error.message}`);
   }
 
-  return mapAnalyticsResponse(data, range);
+  const { count: currentLeadCount, error: leadError1 } = await client
+    .from("bot_leads")
+    .select("*", { count: "exact", head: true })
+    .eq("bot_id", botId)
+    .gte("created_at", range.from)
+    .lte("created_at", range.to);
+
+  const { count: previousLeadCount, error: leadError2 } = await client
+    .from("bot_leads")
+    .select("*", { count: "exact", head: true })
+    .eq("bot_id", botId)
+    .gte("created_at", range.previousFrom)
+    .lte("created_at", range.previousTo);
+
+  const leadCount = !leadError1 ? (currentLeadCount ?? 0) : 0;
+  const prevLeadCount = !leadError2 ? (previousLeadCount ?? 0) : 0;
+
+  return mapAnalyticsResponse(
+    data,
+    range,
+    leadCount,
+    calculateComparison(leadCount, prevLeadCount)
+  );
 }

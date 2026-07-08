@@ -15,11 +15,12 @@ import {
   getUserMessageTextColor,
   getIconSVGWithSize,
   getChatBlockedData,
+  getFallbackBotInfo,
 } from "@/lib/helpers";
 import { WIDGET_CONFIG, WIDGET_FALLBACK, WIDGET_MESSAGES, MAX_CHAT_INPUT } from "@/config";
 import { INSUFFICIENT_CREDITS_MESSAGE } from "@/lib/constants/chat";
 import { type BotInfo, type APIMessage, EMessageRole, EWidgetIconType } from "@/types";
-import { callChatAPI, initDemoBot, getFallbackBotInfo } from "@/lib/services/widget.service";
+import { callChatAPI, initDemoBot } from "@/lib/services/widget.service";
 
 interface Message {
   id: number;
@@ -338,7 +339,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
       className="glass-lg overflow-hidden rounded-3xl border border-border/10 shadow-2xl shadow-gray-900/20"
     >
       {/* Browser header simulation */}
-      <div className="glass-primary relative flex items-center gap-3 px-6 py-4 shadow-gray-900/5">
+      <div className="glass-primary relative flex items-center gap-3 px-6 py-3 shadow-gray-900/5">
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
         <div className="flex items-center gap-2">
           <div className="flex gap-2">
@@ -357,32 +358,34 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
       {/* Mock website content with chatbot widget area */}
       <div
         ref={websiteRef}
-        className="relative min-h-[500px] bg-gradient-to-br from-background/80 to-muted/20 shadow-xl shadow-gray-900/10"
+        className="relative min-h-[380px] bg-gradient-to-br from-background/80 to-muted/20 shadow-xl shadow-gray-900/10"
         id="demo-website"
       >
-        <div className="space-y-6 p-8">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="space-y-8">
-              <div className="h-4 w-3/4 rounded bg-muted" />
-              <div className="h-4 w-full rounded bg-muted" />
-              <div className="h-4 w-5/6 rounded bg-muted" />
-              <div className="h-4 w-2/3 rounded bg-muted" />
+        <div className="space-y-6 p-6 pb-0">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-4">
+              <div className="h-3 w-3/4 rounded bg-muted/60" />
+              <div className="h-3 w-full rounded bg-muted/60" />
+              <div className="h-9 w-5/6 rounded bg-muted/60" />
+              <div className="h-3 w-2/3 rounded bg-muted/60" />
+              <div className="h-3 w-full rounded bg-muted/60" />
             </div>
-            <div className="space-y-8">
-              <div className="h-24 rounded-lg bg-muted/50 shadow-xl" />
+            <div className="space-y-4">
+              <div className="h-32 rounded-lg bg-muted/50 shadow-md" />
               <div className="flex gap-2">
-                <div className="h-4 flex-1 rounded bg-primary/30 shadow-md" />
-                <div className="h-4 flex-1 rounded bg-primary/30 shadow-md" />
+                <div className="h-3 flex-1 rounded bg-primary/30 shadow-md" />
+                <div className="h-3 flex-1 rounded bg-primary/30 shadow-md" />
               </div>
             </div>
           </div>
 
-          <div className="space-y-8">
+          <div className="space-y-4 py-4">
             <div className="h-6 w-1/2 rounded bg-muted/80" />
             <div className="h-3 w-full rounded bg-muted/60" />
             <div className="h-3 w-4/5 rounded bg-muted/60" />
             <div className="h-3 w-full rounded bg-muted/60" />
-            <div className="h-3 w-3/4 rounded bg-muted/60" />
+            <div className="h-3 w-full rounded bg-muted/60" />
+            <div className="h-6 w-1/2 rounded bg-muted/80" />
           </div>
         </div>
 
@@ -390,13 +393,13 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
         <div
           className="absolute z-40"
           style={{
-            left: `${clampedPosition.x}px`,
-            top: `${clampedPosition.y}px`,
+            left: `${clampedPosition.x + 20}px`,
+            top: `${clampedPosition.y + 20}px`,
           }}
         >
           <button
             onClick={toggleDemoChat}
-            className="flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform duration-300 hover:scale-105"
+            className="flex h-10 w-10 items-center justify-center rounded-full shadow-lg transition-transform duration-300 hover:scale-105"
             style={{
               backgroundColor: botInfo.settings.chatIconBgColor || botInfo.settings.primaryColor,
               border: "none",
@@ -406,7 +409,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
           >
             {showDemoChat ? (
               <X
-                className="h-6 w-6"
+                className="h-5 w-5"
                 color={
                   botInfo.settings.chatIconColor ||
                   getIconColorBasedOnBg(
@@ -416,14 +419,14 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
               />
             ) : botInfo.settings.chatIconType === EWidgetIconType.Custom &&
               botInfo.settings.chatIconUrl ? (
-              <Avatar className="h-14 w-14 border-none">
+              <Avatar className="h-10 w-10 border-none">
                 <AvatarImage
                   src={botInfo.settings.chatIconUrl}
                   alt="Custom icon"
                   className="object-cover"
                 />
                 <AvatarFallback className="bg-primary/10 text-primary">
-                  <Bot className="h-6 w-6" />
+                  <Bot className="h-5 w-5" />
                 </AvatarFallback>
               </Avatar>
             ) : botInfo.settings.chatIconType === EWidgetIconType.Preset ? (
@@ -431,8 +434,8 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                 dangerouslySetInnerHTML={{
                   __html: getIconSVGWithSize(
                     botInfo.settings.chatIconPreset || "messagecircle",
-                    "28",
-                    "28"
+                    "22",
+                    "22"
                   ),
                 }}
                 style={{
@@ -448,8 +451,8 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
               />
             ) : (
               <svg
-                width="28"
-                height="28"
+                width="22"
+                height="22"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -477,7 +480,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
               transition={{ duration: 0.3 }}
               className="absolute z-50 w-80"
               style={getChatWidgetPositionStyle(
-                clampedPosition,
+                { ...clampedPosition, y: clampedPosition.y + 40 },
                 containerDimensions,
                 horizontalMidpoint,
                 positionChatBelow
@@ -727,7 +730,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
         </AnimatePresence>
       </div>
 
-      <div className="glass border-t border-border/40 p-4">
+      <div className="glass border-t border-border/40 px-4 py-3">
         <div className="space-y-2 text-center text-sm text-muted-foreground">
           <p className="text-xs opacity-75">
             {botId

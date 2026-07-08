@@ -1,7 +1,10 @@
 import type { MetadataRoute } from "next";
 import type { createServerClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
-import { getPublicBotAppleTouchIconPath } from "@/lib/public-bot/apple-touch-icon";
+import {
+  getPublicBotAppleTouchIconPath,
+  getPublicBotIcon512Path,
+} from "@/lib/public-bot/apple-touch-icon";
 
 export const PUBLIC_BOT_THEME_FALLBACK = "#0f172a";
 
@@ -65,19 +68,26 @@ export function createPublicBotManifest(
 ): MetadataRoute.Manifest {
   const name = bot?.name?.trim() || botSlug;
   const themeColor = getPublicBotThemeColor(bot?.widget_settings ?? null);
-  const iconPath = getPublicBotAppleTouchIconPath(botSlug);
+  const appleTouchIconPath = getPublicBotAppleTouchIconPath(botSlug);
+  const icon512Path = getPublicBotIcon512Path(botSlug);
   const icons: MetadataRoute.Manifest["icons"] = [
     {
-      src: iconPath,
+      src: appleTouchIconPath,
       sizes: "180x180",
       type: "image/png",
       purpose: "any",
     },
     {
-      src: iconPath,
+      src: icon512Path,
       sizes: "512x512",
       type: "image/png",
       purpose: "any",
+    },
+    {
+      src: icon512Path,
+      sizes: "512x512",
+      type: "image/png",
+      purpose: "maskable",
     },
   ];
 

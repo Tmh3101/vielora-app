@@ -1,6 +1,8 @@
 import { ApiResponse } from "./utils";
 import type { PageStatusType, RenderModeType } from "./scrape";
-import { EBotStatus } from "./enums";
+import type { KnowledgeRequestMode } from "@/lib/constants/knowledge";
+import { EBotStatus, EWidgetBackgroundType, EWidgetIconType, EPageSourceType } from "./enums";
+import { getBotAnalytics } from "@/lib/services/analytics.service";
 
 /**
  * Page content for RAG processing
@@ -142,3 +144,95 @@ export type CrawlData = {
 };
 
 export type CrawlResponse = ApiResponse<CrawlData>;
+
+export interface AnalyticsRouteResponse {
+  success: boolean;
+  message?: string;
+  data?: Awaited<ReturnType<typeof getBotAnalytics>>;
+}
+
+export interface AllowedDomainsRequest {
+  allowedDomains?: unknown;
+}
+
+export interface AppearanceUpdateRequest {
+  name?: string;
+  avatarUrl?: string | null;
+  widgetSettings?: {
+    primaryColor?: string;
+    textColor?: string;
+    position?: string;
+    welcomeMessage?: string;
+    suggestedQuestions?: string[] | null;
+    chatBackgroundType?: EWidgetBackgroundType;
+    chatBackgroundValue?: string;
+    chatBackgroundOpacity?: number;
+    chatIconType?: EWidgetIconType;
+    chatIconPreset?: string;
+    chatIconUrl?: string | null;
+    chatIconColor?: string;
+    chatIconBgColor?: string;
+  };
+}
+
+export interface AppearanceUpdateResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+    widget_settings: Record<string, unknown>;
+  };
+}
+
+export type JobStatusResponse = ApiResponse<{
+  jobId: string;
+  botId: string | null;
+  name: string;
+  status: string;
+  progress: number;
+  errorMessage: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}>;
+
+export type QueueAllStatusResponse = ApiResponse<{
+  discover: { pending: number; active: number; completed: number; failed: number };
+  pageCrawler: { pending: number; active: number; completed: number; failed: number };
+  indexer: { pending: number; active: number; completed: number; failed: number };
+}>;
+
+export type BotPipelineStatusResponse = ApiResponse<{
+  botId: string;
+  botStatus: string;
+  counts: Record<string, number>;
+}>;
+
+export interface EditKnowledgeRequest {
+  title: string;
+  content: string;
+}
+
+export type EditKnowledgeResponse = ApiResponse<{
+  pageId: string;
+  jobId?: string;
+}>;
+
+export interface KnowledgeRequest {
+  botId?: string;
+  isManual?: boolean;
+  mode?: KnowledgeRequestMode;
+  context?: "onboarding";
+  title?: string;
+  content?: string;
+  url?: string;
+  filePath?: string;
+}
+
+export type KnowledgeResponse = ApiResponse<{
+  pageId: string;
+  jobId: string;
+  sourceType: EPageSourceType;
+}>;

@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { shopify } from "@/lib/shopify";
+import { manualReauthHtml } from "@/lib/helpers/shopify-auth";
 
 export const dynamic = "force-dynamic";
-
-function manualReauthHtml(url: string): string {
-  const safeUrl = JSON.stringify(url);
-  return `<!doctype html><html><head><meta charset="utf-8"/><title>Reconnect Shopify</title></head><body style="font-family:system-ui,-apple-system,sans-serif;padding:24px"><h1 style="margin:0 0 8px;font-size:20px">Reconnect Shopify</h1><p style="margin:0 0 16px;color:#475569">Your session needs to be re-authorized. Continue in top-level Shopify context.</p><button id="continue" style="background:#111827;color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer">Continue</button><script>(function(){var u=${safeUrl};var b=document.getElementById("continue");if(b){b.addEventListener("click",function(){try{window.top.location.href=u}catch(e){window.location.href=u}})}})();</script></body></html>`;
-}
 
 function appendOAuthCookies(source: Response, target: NextResponse) {
   const headersWithGetSetCookie = source.headers as Headers & {

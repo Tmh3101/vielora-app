@@ -118,11 +118,12 @@ export function KnowledgeFileDropzone({
       {fileError ? <p className="text-xs font-medium text-destructive">{fileError}</p> : null}
 
       {files.length > 0 ? (
-        <div className="space-y-2">
+        <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
           {files.map((file, index) => (
             <div
               key={`${file.name}-${file.size}-${file.lastModified}`}
-              className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs"
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs transition-colors hover:bg-primary/10"
+              onClick={() => removeFile(index)}
             >
               <div className="min-w-0">
                 <p className="truncate font-medium text-foreground">Đã chọn tệp: {file.name}</p>
@@ -134,9 +135,12 @@ export function KnowledgeFileDropzone({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 shrink-0"
+                className="h-7 w-7 shrink-0 text-muted-foreground hover:bg-transparent hover:text-red-500"
                 disabled={disabled}
-                onClick={() => removeFile(index)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeFile(index);
+                }}
                 aria-label={`Bỏ chọn ${file.name}`}
               >
                 <X className="h-4 w-4" />

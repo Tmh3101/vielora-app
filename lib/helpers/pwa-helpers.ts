@@ -1,4 +1,4 @@
-import { EIOSBrowser } from "@/types/enums";
+import { EAndroidBrowser, EIOSBrowser } from "@/types/enums";
 
 export function isStandaloneMode(): boolean {
   return (
@@ -47,4 +47,18 @@ export function getIOSBrowser(): EIOSBrowser | null {
 export function isAndroidChromium(): boolean {
   const ua = navigator.userAgent;
   return /Android/i.test(ua) && /Chrome/i.test(ua);
+}
+
+export function getAndroidBrowser(): EAndroidBrowser | null {
+  const ua = navigator.userAgent;
+  if (!/Android/i.test(ua)) return null;
+
+  if (/coc_coc_browser/i.test(ua)) return EAndroidBrowser.CocCoc;
+  if (/OPR\//i.test(ua)) return EAndroidBrowser.Opera;
+  if (/EdgA\//i.test(ua)) return EAndroidBrowser.Edge;
+  if (/SamsungBrowser/i.test(ua)) return EAndroidBrowser.Samsung;
+  if ((navigator as { brave?: { isBrave?: boolean } }).brave?.isBrave) return EAndroidBrowser.Brave;
+  if (/Chrome\//i.test(ua)) return EAndroidBrowser.Chrome;
+
+  return EAndroidBrowser.Other;
 }

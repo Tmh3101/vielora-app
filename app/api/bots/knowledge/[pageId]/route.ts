@@ -3,7 +3,14 @@ import { addIndexerJob } from "@/lib/scraper";
 import { hashContent } from "@/lib/helpers";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import { corsHeaders } from "@/lib/constants";
-import { EPageStatus, EPageSourceType, ETransactionType, ESubscriptionPlan } from "@/types";
+import {
+  EPageStatus,
+  EPageSourceType,
+  ETransactionType,
+  ESubscriptionPlan,
+  EditKnowledgeRequest,
+  EditKnowledgeResponse,
+} from "@/types";
 import { CREDIT_PER_PAGE, EDIT_KNOWLEDGE_ALLOWED_PLANS } from "@/config";
 import { deductCredits, refundCredits } from "@/lib/services/credit.service";
 import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
@@ -38,9 +45,8 @@ export async function DELETE(req: NextRequest, { params }: RouteParams): Promise
 
     const authResult = await authenticateRequest(req);
     if (isAuthError(authResult)) return authResult;
-    const { supabase } = authResult;
 
-    // Fetch the page to get bot_id and url
+    const { supabase } = authResult;
     const page = await getPageByIdServer(supabase, pageId);
 
     if (!page) {
@@ -127,25 +133,10 @@ export async function DELETE(req: NextRequest, { params }: RouteParams): Promise
 }
 
 // PUT - Edit a knowledge source
-interface EditKnowledgeRequest {
-  title: string;
-  content: string;
-}
-
-interface EditKnowledgeResponse {
-  success: boolean;
-  message?: string;
-  changed?: boolean;
-  data?: {
-    pageId: string;
-    jobId?: string;
-  };
-}
-
 export async function PUT(
   req: NextRequest,
   { params }: RouteParams
-): Promise<NextResponse<EditKnowledgeResponse | { success: false; message: string }>> {
+): Promise<NextResponse<EditKnowledgeResponse>> {
   try {
     const authResult = await authenticateRequest(req);
     if (isAuthError(authResult)) return authResult;
@@ -181,8 +172,7 @@ export async function PUT(
       );
     }
 
-    const body: EditKnowledgeRequest = await req.json();
-    const { title, content } = body;
+    const { title, content }: EditKnowledgeRequest = await req.json();
 
     // Validate required fields
     if (!title?.trim()) {
@@ -201,7 +191,6 @@ export async function PUT(
 
     // Fetch the existing page with bot's user_id
     const page = await getPageWithOwnerById(supabase, pageId);
-
     if (!page) {
       return NextResponse.json(
         { success: false, message: "Page not found" },

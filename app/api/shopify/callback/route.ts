@@ -1,21 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { shopify, getSessionStorage, buildEmbeddedAdminAppUrl } from "@/lib/shopify";
+import { getCallbackErrorDetails } from "@/lib/helpers/shopify-auth";
 
 export const dynamic = "force-dynamic";
-
-function getCallbackErrorDetails(error: unknown) {
-  if (!(error instanceof Error)) {
-    return {
-      code: "UnknownError",
-      message: "Unknown Shopify callback error",
-    };
-  }
-
-  return {
-    code: error.name || error.constructor.name || "CallbackError",
-    message: error.message.slice(0, 240),
-  };
-}
 
 /**
  * Handles the Shopify OAuth callback.
@@ -88,8 +75,10 @@ export async function GET(request: NextRequest) {
     dashboardUrl.searchParams.set("auth_error", "callback_failed");
     dashboardUrl.searchParams.set("auth_error_code", errorDetails.code);
     dashboardUrl.searchParams.set("auth_error_message", errorDetails.message);
+
     if (shop) dashboardUrl.searchParams.set("shop", shop);
     if (host) dashboardUrl.searchParams.set("host", host);
+
     return NextResponse.redirect(dashboardUrl);
   }
 }

@@ -1,6 +1,26 @@
 import type { ServiceClient } from "@/lib/services/types";
+import type { Tables } from "@/lib/supabase/types";
 import { ETransactionType } from "@/types";
 import { sendLowCreditsWarningEmail, getUserEmailById } from "@/lib/services/email.service";
+
+export type CreditPackageRow = Tables<"credit_packages">;
+
+export interface CreditPackagePrice {
+  USD?: number;
+  VND?: number;
+}
+
+export async function getCreditPackageById(client: ServiceClient, packageId: string) {
+  const { data, error } = await client
+    .from("credit_packages")
+    .select("*")
+    .eq("id", packageId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data as CreditPackageRow | null;
+}
 
 const MAX_DEDUCTION_RETRIES = 3;
 

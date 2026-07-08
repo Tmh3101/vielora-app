@@ -3,7 +3,13 @@ import { createAdminClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { getFallbackPagesServer } from "@/lib/services/page.service";
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
-import { MAX_DOCS_RETRIEVAL, FULL_TEXT_WEIGHT, SEMANTIC_WEIGHT } from "@/config";
+import {
+  MAX_DOCS_RETRIEVAL,
+  FULL_TEXT_WEIGHT,
+  SEMANTIC_WEIGHT,
+  SIMILARITY_THRESHOLD,
+  LEAD_FORM_ENABLED,
+} from "@/config";
 import { EPageSourceType } from "@/types/enums";
 import { HYBRID_SEARCH_FUNC_NAME } from "@/lib/constants/rag";
 
@@ -78,6 +84,19 @@ export const serializeRetrievedChunk = (chunk: RetrievedChunk) => {
 export const serializeRetrievedContext = (chunks: RetrievedChunk[]) =>
   chunks.map(serializeRetrievedChunk).filter(Boolean).join("\n");
 
+export interface RetrievalResult {
+  context: string;
+  topScore: number | null;
+  hasResults: boolean;
+}
+
+export function shouldShowLeadForm(result: RetrievalResult): boolean {
+  if (!LEAD_FORM_ENABLED) return false;
+  if (!result.hasResults) return true;
+  if (result.topScore === null) return true;
+  return result.topScore < SIMILARITY_THRESHOLD;
+}
+
 // Hàm helper xử lý Fallback (Dùng khi RAG lỗi)
 const getFallbackPages = async (botId: string, supabase: SupabaseClient<Database>) => {
   console.warn(`[RAG Fallback] Falling back to basic page retrieval for botId: ${botId}`);
@@ -103,7 +122,7 @@ const getFallbackPages = async (botId: string, supabase: SupabaseClient<Database
   }
 };
 
-export async function hybridRetrival(message: string, botId: string): Promise<string> {
+export async function hybridRetrival(message: string, botId: string): Promise<RetrievalResult> {
   const supabase = createAdminClient();
 
   try {
@@ -129,27 +148,27 @@ export async function hybridRetrival(message: string, botId: string): Promise<st
 
     if (searchError) {
       console.error("[RAG Error] Error occurred while executing hybrid_search:", searchError);
-      return await getFallbackPages(botId, supabase);
+      const fallback = await getFallbackPages(botId, supabase);
+      return { context: fallback, topScore: null, hasResults: false };
     }
 
     if (relevantDocs && relevantDocs.length > 0) {
-      relevantDocs.forEach((doc, index) => {
-        console.log(
-          `[RAG Match] Top ${index + 1} (Score: ${doc.similarity.toFixed(4)}):`,
-          doc.metadata.title
-        );
-      });
-
-      return relevantDocs
+      const context = relevantDocs
         .map((doc) => serializeRetrievedChunk(doc))
         .filter(Boolean)
         .join("\n");
+
+      return {
+        context,
+        topScore: Math.max(...relevantDocs.map((d) => d.similarity)),
+        hasResults: true,
+      };
     }
 
-    // Trả về chuỗi rỗng nếu không tìm thấy bất kỳ chunk nào phù hợp
-    return "";
+    return { context: "", topScore: null, hasResults: false };
   } catch (error) {
     console.error("[RAG Error] System error during retrieval:", error);
-    return await getFallbackPages(botId, supabase);
+    const fallback = await getFallbackPages(botId, supabase);
+    return { context: fallback, topScore: null, hasResults: false };
   }
 }

@@ -1,11 +1,23 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { deleteBot } from "@/lib/services/bot.service";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Step1CreateBot } from "@/components/onboarding/steps/Step1CreateBot";
 import { Step2CuratePages } from "@/components/onboarding/steps/Step2CuratePages";
 import { Step2UploadFiles } from "@/components/onboarding/steps/Step2UploadFiles";
@@ -37,12 +49,40 @@ interface RestoredBotRow {
 export function OnboardingWizard({ userId }: OnboardingWizardProps) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const { toast } = useToast();
   const step = useOnboardingStore((state) => state.step);
   const botId = useOnboardingStore((state) => state.botId);
   const sourceMode = useOnboardingStore((state) => state.sourceMode);
   const hasHydrated = useOnboardingStore((state) => state.hasHydrated);
   const setStep = useOnboardingStore((state) => state.setStep);
   const setBotId = useOnboardingStore((state) => state.setBotId);
+  const reset = useOnboardingStore((state) => state.reset);
+  const [showExitDialog, setShowExitDialog] = useState(false);
+  const onboardingUrlRef = useRef<string>("");
+
+  useEffect(() => {
+    if (!(step > 1 && !!botId)) return;
+
+    onboardingUrlRef.current = window.location.href;
+
+    const handlePopState = () => {
+      setShowExitDialog(true);
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [step, botId]);
+
   const restoredBotQuery = useQuery({
     queryKey: [ONBOARDING_RESTORE_KEY, userId, botId],
     queryFn: async (): Promise<RestoredBotState | null> => {
@@ -101,6 +141,39 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
     setStep(4);
   };
 
+  const handleExitNavigation = () => {
+    const active = effectiveStep > 1 && !!effectiveBotId;
+    if (active) {
+      setShowExitDialog(true);
+    } else {
+      router.push("/dashboard");
+    }
+  };
+
+  const handleExitConfirm = async () => {
+    setShowExitDialog(false);
+    if (effectiveBotId) {
+      try {
+        await deleteBot(supabase, effectiveBotId);
+      } catch {
+        toast({
+          title: "Lỗi",
+          description: "Không thể xóa bot. Vui lòng thử lại.",
+          variant: "destructive",
+        });
+      }
+    }
+    queryClient.removeQueries({ queryKey: [ONBOARDING_RESTORE_KEY, userId] });
+    reset();
+    router.push("/dashboard");
+  };
+
+  const handleDialogCancel = () => {
+    if (window.location.href !== onboardingUrlRef.current) {
+      window.history.pushState(null, "", onboardingUrlRef.current);
+    }
+  };
+
   if (!hasHydrated || (!!botId && restoredBotQuery.isLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -121,14 +194,14 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
       : effectiveBotId && restoredBot
         ? getStepForBotStatus(restoredBot.status, step)
         : step;
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 px-4 py-14">
       <div className="mx-auto max-w-5xl">
         <div className="mb-12 text-center">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center transition-opacity hover:opacity-80"
+          <button
+            type="button"
+            onClick={handleExitNavigation}
+            className="inline-flex cursor-pointer items-center transition-opacity hover:opacity-80"
           >
             <Image
               src="/images/logo-full.png"
@@ -138,7 +211,7 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
               className="h-28 w-auto"
               priority
             />
-          </Link>
+          </button>
           <h1 className="mb-2 text-3xl font-bold text-foreground">
             Tạo chatbot cho website của bạn
           </h1>
@@ -188,6 +261,32 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
 
         {effectiveStep === 4 && effectiveBotId && <Step4Success botId={effectiveBotId} />}
       </div>
+
+      <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rời khỏi quá trình tạo chatbot?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tiến trình tạo bot hiện tại sẽ bị hủy và bot sẽ bị xóa. Bạn có chắc chắn muốn rời
+              khỏi?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="hover:border-primary hover:bg-white hover:text-primary"
+              onClick={handleDialogCancel}
+            >
+              Ở lại
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleExitConfirm}
+            >
+              Xóa và rời khỏi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -42,7 +42,9 @@
     rateLimitMessage: null,
     insufficientCredits: false,
     insufficientCreditsMessage: null,
-    suggestedQuestionsShown: false
+    suggestedQuestionsShown: false,
+    showLeadForm: false,
+    leadFormQuestion: null
   };
 
   var UI = {
@@ -175,6 +177,11 @@
 
       if (response.status === 403) {
         console.error('Vielora: Domain not allowed (Origin Check Failed)');
+        return;
+      }
+
+      if (response.status === 423) {
+        console.error('Vielora: ' + (data.message || 'Bot is temporarily suspended'))
         return;
       }
 
@@ -868,6 +875,15 @@
         return;
       }
 
+      if (data.success && data.data.type === 'SHOW_LEAD_FORM') {
+        state.conversationId = data.data.conversationId;
+        addMessage(data.data.message, 'bot');
+        showLeadForm(data.data.originalQuestion || message);
+        state.isLoading = false;
+        syncChatInputState();
+        return;
+      }
+
       if (data.success) {
         state.conversationId = data.data.conversationId;
         addMessage(data.data.message, 'bot');
@@ -886,6 +902,166 @@
     }
     state.isLoading = false;
     syncChatInputState();
+  }
+
+  function showLeadForm(originalQuestion) {
+    state.showLeadForm = true;
+    state.leadFormQuestion = originalQuestion;
+
+    var messages = document.getElementById('chatbotai-messages');
+    if (!messages) return;
+
+    var wrapper = document.createElement('div');
+    wrapper.id = 'chatbotai-lead-form';
+    wrapper.className = 'chatbotai-message bot';
+    wrapper.style.marginBottom = '8px';
+
+    var inner = document.createElement('div');
+    inner.style.cssText = 'background: #f1f5f9; padding: 14px; border-radius: 16px; border-bottom-left-radius: 4px; font-size: 13px; position: relative;';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    closeBtn.title = 'Đóng';
+    closeBtn.style.cssText = 'position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: transparent; color: #94a3b8; cursor: pointer; transition: background 0.2s, color 0.2s;';
+    closeBtn.onmouseover = function () { this.style.background = '#e2e8f0'; this.style.color = '#334155'; };
+    closeBtn.onmouseout = function () { this.style.background = 'transparent'; this.style.color = '#94a3b8'; };
+    closeBtn.onclick = function () {
+      wrapper.remove();
+      state.showLeadForm = false;
+      syncChatInputState();
+    };
+    inner.appendChild(closeBtn);
+
+    var label = document.createElement('p');
+    label.style.cssText = 'font-weight: 600; margin: 0 0 2px 0; font-size: 14px;';
+    label.textContent = 'Vui lòng để lại thông tin:';
+    inner.appendChild(label);
+
+    var questionP = document.createElement('p');
+    questionP.style.cssText = 'font-style: italic; color: #64748b; margin: 0 0 10px 0; font-size: 12px;';
+    questionP.textContent = '"' + (originalQuestion.length > 80 ? originalQuestion.slice(0, 80) + '...' : originalQuestion) + '"';
+    inner.appendChild(questionP);
+
+    var fields = [
+      { id: 'chatbotai-lead-name', type: 'text', placeholder: 'Họ và tên *', required: true, max: 100 },
+      { id: 'chatbotai-lead-email', type: 'email', placeholder: 'Email *', required: true, max: 200 },
+      { id: 'chatbotai-lead-phone', type: 'tel', placeholder: 'Số điện thoại', required: false, max: 15 },
+    ];
+
+    fields.forEach(function (field) {
+      var input = document.createElement('input');
+      input.id = field.id;
+      input.type = field.type;
+      input.placeholder = field.placeholder;
+      input.maxLength = field.max;
+      if (field.required) input.required = true;
+      input.style.cssText = 'display: block; width: 100%; margin-bottom: 6px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 13px; outline: none; box-sizing: border-box; transition: border-color 0.2s;';
+      input.onfocus = function () { this.style.borderColor = config.settings.primaryColor; };
+      input.onblur = function () { this.style.borderColor = '#e2e8f0'; };
+      inner.appendChild(input);
+    });
+
+    var noteTextarea = document.createElement('textarea');
+    noteTextarea.id = 'chatbotai-lead-note';
+    noteTextarea.placeholder = 'Ghi chú thêm';
+    noteTextarea.maxLength = 500;
+    noteTextarea.style.cssText = 'display: block; width: 100%; margin-bottom: 6px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 13px; outline: none; box-sizing: border-box; resize: none; transition: border-color 0.2s; font-family: inherit;';
+    noteTextarea.onfocus = function () { this.style.borderColor = config.settings.primaryColor; };
+    noteTextarea.onblur = function () { this.style.borderColor = '#e2e8f0'; };
+    noteTextarea.rows = 2;
+    inner.appendChild(noteTextarea);
+
+    var errorDiv = document.createElement('p');
+    errorDiv.id = 'chatbotai-lead-error';
+    errorDiv.style.cssText = 'color: #ef4444; font-size: 12px; margin: 4px 0; display: none;';
+    inner.appendChild(errorDiv);
+
+    var submitBtn = document.createElement('button');
+    submitBtn.id = 'chatbotai-lead-submit';
+    submitBtn.textContent = 'Gửi thông tin';
+    submitBtn.style.cssText = 'width: 100%; padding: 8px 16px; border: none; border-radius: 12px; background-color: ' + config.settings.primaryColor + '; color: ' + getUserMessageTextColor(config.settings.primaryColor) + '; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.2s; margin-top: 4px;';
+
+    submitBtn.onmouseover = function () { this.style.opacity = '0.9'; };
+    submitBtn.onmouseout = function () { this.style.opacity = '1'; };
+
+    submitBtn.onclick = function () {
+var name = document.getElementById('chatbotai-lead-name').value.trim();
+var email = document.getElementById('chatbotai-lead-email').value.trim();
+var phone = document.getElementById('chatbotai-lead-phone').value.trim();
+var note = document.getElementById('chatbotai-lead-note').value.trim();
+
+      if (!name || name.length < 2) {
+        showLeadError('Vui lòng nhập tên (ít nhất 2 ký tự)');
+        return;
+      }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showLeadError('Vui lòng nhập email hợp lệ');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Đang gửi...';
+      submitBtn.style.opacity = '0.6';
+      hideLeadError();
+
+      fetch(config.baseUrl + '/api/widget/lead', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-bot-id': config.botId,
+          'x-visitor-id': state.visitorId
+        },
+        body: JSON.stringify({
+          botId: config.botId,
+          visitorId: state.visitorId,
+          conversationId: state.conversationId,
+          question: state.leadFormQuestion,
+          name: name,
+          email: email,
+          phone: phone || undefined,
+          note: note || undefined
+        })
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (result) {
+        if (result.success) {
+          wrapper.innerHTML = '';
+          var successDiv = document.createElement('div');
+          successDiv.style.cssText = 'background: #f1f5f9; padding: 14px; border-radius: 16px; border-bottom-left-radius: 4px; font-size: 13px;';
+          successDiv.innerHTML = '<div style="display: flex; align-items: center; gap: 8px; color: #16a34a; font-weight: 600; margin-bottom: 4px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>Cảm ơn bạn!</div><p style="margin: 0; font-size: 12px; color: #64748b;">Thông tin của bạn đã được gửi thành công. Đội ngũ hỗ trợ sẽ liên hệ với bạn sớm nhất!</p>';
+          wrapper.appendChild(successDiv);
+          state.showLeadForm = false;
+          syncChatInputState();
+        } else {
+          showLeadError(result.message || 'Có lỗi xảy ra');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Gửi thông tin';
+          submitBtn.style.opacity = '1';
+        }
+      })
+      .catch(function () {
+        showLeadError('Mất kết nối mạng');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Gửi thông tin';
+        submitBtn.style.opacity = '1';
+      });
+    };
+
+    inner.appendChild(submitBtn);
+    wrapper.appendChild(inner);
+    messages.appendChild(wrapper);
+    setTimeout(function () { messages.scrollTop = messages.scrollHeight; }, 50);
+    syncChatInputState();
+  }
+
+  function showLeadError(msg) {
+    var el = document.getElementById('chatbotai-lead-error');
+    if (el) { el.textContent = msg; el.style.display = 'block'; }
+  }
+
+  function hideLeadError() {
+    var el = document.getElementById('chatbotai-lead-error');
+    if (el) { el.textContent = ''; el.style.display = 'none'; }
   }
 
   function addMessage(text, role) {

@@ -11,15 +11,15 @@ import { DemoChatbotWidget } from "@/components/shared/DemoChatbotWidget";
 
 const DemoSection = () => {
   return (
-    <section id="demo" className="relative scroll-mt-32 overflow-hidden bg-card/50 py-20 lg:py-32">
+    <section id="demo" className="relative scroll-mt-32 overflow-hidden bg-card/50 py-20 lg:py-24">
       {/* Background decorations */}
       <div className="orb orb-accent -left-40 top-1/4 h-80 w-80 opacity-40" />
       <div className="orb orb-primary -right-30 bottom-1/4 h-60 w-60 opacity-30" />
 
       <div className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-3xl">
           {/* Section header */}
-          <div className="mb-12 text-center">
+          <div className="mb-4 text-center">
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}

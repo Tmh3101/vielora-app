@@ -11,9 +11,21 @@ export interface PricingPolicy {
 export const planOrder: readonly PlanCode[] = ["free", "standard", "pro", "enterprise"];
 
 const unifiedPlanFeatures: Partial<Record<PlanCode, string[]>> = {
-  free: [],
-  standard: ["Tùy chỉnh kiến thức chatbot", "Tạo các câu hỏi gợi ý"],
-  pro: ["Tùy chỉnh kiến thức chatbot", "Tạo các câu hỏi gợi ý"],
+  free: ["Thu thập Lead Form", "Chatbot Mobile App"],
+  standard: [
+    "Tùy chỉnh kiến thức chatbot",
+    "Tạo các câu hỏi gợi ý",
+    "Tùy chỉnh tính cách",
+    "Thu thập Lead Form",
+    "Chatbot Mobile App",
+  ],
+  pro: [
+    "Tùy chỉnh kiến thức chatbot",
+    "Tạo các câu hỏi gợi ý",
+    "Tùy chỉnh tính cách",
+    "Thu thập Lead Form",
+    "Chatbot Mobile App",
+  ],
 };
 
 export const planFeatures: Record<PricingVariant, Partial<Record<PlanCode, string[]>>> = {

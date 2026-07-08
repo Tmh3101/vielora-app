@@ -742,7 +742,7 @@ export async function updateBotAllowedDomains(
 export async function updateBotStatus(
   client: ServiceClient,
   botId: string,
-  status: EBotStatus
+  status: string
 ): Promise<void> {
   const { error } = await client.from("bots").update({ status }).eq("id", botId);
   if (error) throw new Error(error.message);

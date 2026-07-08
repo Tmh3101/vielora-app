@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Mail, Facebook } from "lucide-react";
+import { Mail } from "lucide-react";
 
 interface FooterProps {
   isLegalLayout?: boolean;
@@ -15,7 +15,7 @@ interface FooterProps {
 
 const Footer = ({ isLegalLayout }: FooterProps) => {
   return (
-    <footer className="relative overflow-hidden bg-[#111626] pb-12 pt-16 text-secondary-foreground">
+    <footer className="relative overflow-hidden rounded-t-3xl bg-[#111626] pb-12 pt-16 text-secondary-foreground">
       <div className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-10 grid gap-10 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {/* Brand */}
@@ -119,10 +119,19 @@ const Footer = ({ isLegalLayout }: FooterProps) => {
                   rel="noopener noreferrer"
                   className="group flex items-center gap-2 py-1 transition-colors hover:text-secondary-foreground"
                 >
-                  <Facebook
-                    size={16}
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     className="text-secondary-foreground/40 transition-colors group-hover:text-primary"
-                  />
+                  >
+                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+                  </svg>
                   <span className="text-sm">facebook.com/vieloravn</span>
                 </a>
               </li>

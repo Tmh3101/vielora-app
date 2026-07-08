@@ -2,30 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { addDiscoverJob } from "@/lib/scraper";
 import { RenderMode as RenderModeEnum, corsHeaders } from "@/lib/constants";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
-import { EBotStatus, type RenderModeType } from "@/types";
+import { EBotStatus, DiscoverRequest, DiscoverResponse } from "@/types";
 import { getBotByIdServer, updateBotStatusServer } from "@/lib/services/bot.service";
+import { clearBotCache } from "@/lib/services/server/bot-cache.service";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
-}
-
-interface DiscoverRequest {
-  botId: string;
-  url: string;
-  includeSubdomains?: boolean;
-  includePatterns?: string[];
-  excludePatterns?: string[];
-  renderMode?: RenderModeType;
-}
-
-interface DiscoverResponse {
-  success: boolean;
-  message?: string;
-  data?: {
-    discoverJobId: string;
-    botId: string;
-    status: "queued";
-  };
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<DiscoverResponse>> {
@@ -62,6 +44,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<DiscoverRespo
 
     if (bot.status !== EBotStatus.Ready) {
       await updateBotStatusServer(supabase, botId, EBotStatus.Discovering);
+      clearBotCache(botId).catch(console.error);
     }
 
     const discoverJobId = await addDiscoverJob({
@@ -79,6 +62,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<DiscoverRespo
     return NextResponse.json(
       {
         success: true,
+        message: "Discover job queued successfully",
         data: {
           discoverJobId,
           botId,

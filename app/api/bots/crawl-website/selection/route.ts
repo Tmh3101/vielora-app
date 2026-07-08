@@ -2,31 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { addIndexerJobs } from "@/lib/scraper";
 import { corsHeaders } from "@/lib/constants";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
-import { EBotStatus, EPageStatus, ETransactionType } from "@/types";
+import {
+  EBotStatus,
+  EPageStatus,
+  ETransactionType,
+  SelectionRequest,
+  SelectionResponse,
+} from "@/types";
 import { CREDIT_PER_PAGE } from "@/config";
 import { deductCredits, refundCredits, CreditDeductionResult } from "@/lib/services/credit.service";
 import { getBotByIdServer, updateBotStatusServer } from "@/lib/services/bot.service";
+import { clearBotCache } from "@/lib/services/server/bot-cache.service";
 import { getPagesByBotIdServer, updatePagesStatusServer } from "@/lib/services/page.service";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
-}
-
-interface SelectionRequest {
-  botId: string;
-  selectedPageIds: string[];
-}
-
-interface SelectionResponse {
-  success: boolean;
-  message?: string;
-  data?: {
-    botId: string;
-    jobIds: string[];
-    selectedCount: number;
-    ignoredCount: number;
-    queuedCount: number;
-  };
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<SelectionResponse>> {
@@ -125,10 +115,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<SelectionResp
         });
 
         await updateBotStatusServer(supabase, botId, EBotStatus.Indexing);
+        clearBotCache(botId).catch(console.error);
 
         indexerJobIds = await addIndexerJobs(selectedPageIds.map((pageId) => ({ botId, pageId })));
       } else {
         await updateBotStatusServer(supabase, botId, EBotStatus.Ready);
+        clearBotCache(botId).catch(console.error);
       }
     } catch (processingError) {
       const deductedFromSubscription = deductionResult.deductedFromSubscription || 0;
@@ -150,6 +142,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<SelectionResp
     return NextResponse.json(
       {
         success: true,
+        message: "Pages selection processed successfully",
         data: {
           botId,
           selectedCount: selectedPageIds.length,

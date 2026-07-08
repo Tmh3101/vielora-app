@@ -138,6 +138,22 @@ export enum EIOSBrowser {
   Other = "other",
 }
 
+export enum EAndroidBrowser {
+  Chrome = "chrome",
+  Edge = "edge",
+  Opera = "opera",
+  Brave = "brave",
+  CocCoc = "coccoc",
+  Samsung = "samsung",
+  Other = "other",
+}
+
+export enum ELeadStatus {
+  Pending = "pending",
+  Contacted = "contacted",
+  Closed = "closed",
+}
+
 export enum BannerState {
   Hidden = "hidden",
   Offline = "offline",

@@ -382,7 +382,7 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border/40">
                         <Image
-                          src="/images/guides/wordpress/Step1.png"
+                          src="/images/guides/wordpress/Step1.webp"
                           alt="Trang tải WPCode trên WordPress.org"
                           width={800}
                           height={600}
@@ -410,7 +410,7 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border/40">
                         <Image
-                          src="/images/guides/wordpress/Step2.png"
+                          src="/images/guides/wordpress/Step2.webp"
                           alt="Upload plugin WPCode trên WordPress Admin"
                           width={800}
                           height={600}
@@ -438,7 +438,7 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border/40">
                         <Image
-                          src="/images/guides/wordpress/Step3.png"
+                          src="/images/guides/wordpress/Step3.webp"
                           alt="Tạo Custom Snippet mới trong WPCode"
                           width={800}
                           height={600}
@@ -469,7 +469,7 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border/40">
                         <Image
-                          src="/images/guides/wordpress/Step4.png"
+                          src="/images/guides/wordpress/Step4.webp"
                           alt="Dán script Vielora vào Code Preview"
                           width={800}
                           height={600}
@@ -498,7 +498,7 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border/40">
                         <Image
-                          src="/images/guides/wordpress/Step5.png"
+                          src="/images/guides/wordpress/Step5.webp"
                           alt="Cấu hình Auto Insert và Site Wide Footer"
                           width={800}
                           height={600}

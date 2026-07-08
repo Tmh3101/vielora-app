@@ -11,6 +11,7 @@ import {
   sendSubscriptionExpiryReminderEmail,
   getUserEmailById,
 } from "@/lib/services/email.service";
+import { clearBotWidgetCache } from "@/lib/cache";
 
 function addOneMonth(date: Date): Date {
   const result = new Date(date);
@@ -124,6 +125,9 @@ export async function processSubscriptionLifecycle(
           console.log(
             `[SubscriptionCron] Scenario A: Stopped ${stoppedCount} bot(s) for user ${sub.user_id}`
           );
+          Promise.all(
+            (stoppedBots ?? []).map((b: { id: string }) => clearBotWidgetCache(b.id))
+          ).catch(console.error);
         }
       }
 

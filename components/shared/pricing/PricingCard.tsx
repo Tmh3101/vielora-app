@@ -49,7 +49,7 @@ export function PricingCard({
         viewport={{ once: true }}
         transition={{ duration: 0.5, delay: animationDelay }}
         className={cn(
-          "relative flex min-h-[420px] flex-col overflow-visible rounded-3xl p-8 pt-10 transition-all duration-300",
+          "relative flex min-h-[420px] flex-col overflow-visible rounded-3xl p-8 pt-10 transition-transform duration-300",
           isPopular && !isDisabled
             ? "card-highlighted animate-pulse-glow"
             : "glass hover:-translate-y-1 hover:border-primary/40"
@@ -63,7 +63,7 @@ export function PricingCard({
           </div>
         )}
 
-        <div className="mb-8 text-center">
+        <div className="mb-5 text-center">
           <h3 className="mb-2 text-xl font-semibold text-foreground">{plan.name}</h3>
           <p className="mb-4 text-sm text-muted-foreground">{plan.description}</p>
           <div className="flex items-baseline justify-center gap-1">
@@ -79,7 +79,7 @@ export function PricingCard({
           )}
         </div>
 
-        <ul className="mb-8 flex-1 space-y-4">
+        <ul className="mb-4 flex-1 space-y-2">
           {features.map((feature) => (
             <li key={feature} className="flex items-center gap-3">
               <div className="bg-gradient-primary flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full">
