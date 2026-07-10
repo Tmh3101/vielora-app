@@ -48,11 +48,6 @@ const PWAInstallHeaderButton = dynamic(
   () => import("./pwa-install/PWAInstallHeaderButton").then((mod) => mod.PWAInstallHeaderButton),
   { ssr: false }
 );
-const PWAInstallBanner = dynamic(
-  () => import("./pwa-install/PWAInstallBanner").then((mod) => mod.PWAInstallBanner),
-  { ssr: false }
-);
-
 interface WidgetSettings {
   primaryColor?: string;
   welcomeMessage?: string;
@@ -573,7 +568,7 @@ export function StandaloneChatUI({
   };
 
   return (
-    <div className="flex h-screen flex-col bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="flex h-dvh flex-col bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Markdown Link Styles */}
       <style jsx>{`
         .chatbot-message-content a {
@@ -625,7 +620,6 @@ export function StandaloneChatUI({
                 {shareDialog}
               </div>
             </div>
-            <PWAInstallBanner />
           </PWAInstallRoot>
         ) : (
           <div
@@ -642,7 +636,7 @@ export function StandaloneChatUI({
 
       {/* Messages */}
       <div
-        className="flex-1 overflow-y-auto px-4 py-6"
+        className="flex-1 overflow-y-auto px-4 py-6 pb-safe"
         style={getBackgroundStyle(bgType, bgValue, bgOpacity)}
       >
         <div className="mx-auto max-w-3xl space-y-3">

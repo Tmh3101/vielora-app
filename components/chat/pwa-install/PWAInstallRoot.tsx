@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { PWAInstallContext, type PWAInstallContextValue } from "@/providers/PWAInstallProvider";
-import { BANNER_DISMISSED_KEY } from "@/lib/constants";
 import {
   isStandaloneMode,
   isIOS,
+  isAndroid,
   getIOSBrowser,
   getAndroidBrowser,
 } from "@/lib/helpers/pwa-helpers";
@@ -45,25 +45,21 @@ export function PWAInstallRoot({
 }: PWAInstallRootProps) {
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [isBannerVisible, setIsBannerVisible] = useState(false);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [isAndroidSheetOpen, setIsAndroidSheetOpen] = useState(false);
-  const [iosBrowser, setIosBrowser] = useState<EIOSBrowser>(EIOSBrowser.Safari);
-  const [androidBrowser, setAndroidBrowser] = useState<EAndroidBrowser>(EAndroidBrowser.Chrome);
   const [isHydrated, setIsHydrated] = useState(false);
+
+  const [isIOSSheetOpen, setIsIOSSheetOpen] = useState(false);
+  const [iosBrowser, setIosBrowser] = useState<EIOSBrowser>(EIOSBrowser.Safari);
+  const [isAndroidSheetOpen, setIsAndroidSheetOpen] = useState(false);
+  const [androidBrowser, setAndroidBrowser] = useState<EAndroidBrowser>(EAndroidBrowser.Chrome);
 
   useEffect(() => {
     if (isStandaloneMode()) {
-      setIsVisible(false);
-      setIsBannerVisible(false);
       setIsHydrated(true);
       return;
     }
 
-    const bannerDismissed = localStorage.getItem(BANNER_DISMISSED_KEY) === "true";
-    setIsVisible(true);
-    setIsBannerVisible(!bannerDismissed);
     setIsHydrated(true);
+    setIsVisible(isAndroid() || isIOS());
 
     const handleBeforeInstallPrompt = (event: BeforeInstallPromptEvent) => {
       event.preventDefault();
@@ -71,76 +67,61 @@ export function PWAInstallRoot({
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    };
-  }, []);
-
-  const dismissBanner = useCallback(() => {
-    localStorage.setItem(BANNER_DISMISSED_KEY, "true");
-    setIsBannerVisible(false);
+    return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
   }, []);
 
   const handleInstallClick = useCallback(async () => {
     if (isIOS()) {
-      const browser = getIOSBrowser() ?? EIOSBrowser.Other;
-      setIosBrowser(browser);
-      setIsSheetOpen(true);
+      setIosBrowser(getIOSBrowser() ?? EIOSBrowser.Other);
+      setIsIOSSheetOpen(true);
       return;
     }
 
-    const deferredPrompt = deferredPromptRef.current;
-    if (deferredPrompt) {
-      try {
-        await deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-      } catch {
-        toast.error("Không thể mở hộp thoại cài đặt. Vui lòng thử lại sau.");
-      } finally {
-        deferredPromptRef.current = null;
+    if (isAndroid()) {
+      const deferredPrompt = deferredPromptRef.current;
+      if (deferredPrompt) {
+        try {
+          await deferredPrompt.prompt();
+          await deferredPrompt.userChoice;
+        } catch {
+          toast.error("Không thể mở hộp thoại cài đặt. Vui lòng thử lại sau.");
+        } finally {
+          deferredPromptRef.current = null;
+        }
+        return;
       }
-      return;
-    }
 
-    const androidBrowserDetected = getAndroidBrowser();
-    if (androidBrowserDetected) {
-      setAndroidBrowser(androidBrowserDetected);
+      setAndroidBrowser(getAndroidBrowser() ?? EAndroidBrowser.Other);
       setIsAndroidSheetOpen(true);
       return;
     }
 
-    toast("Trình duyệt của bạn chưa hỗ trợ cài đặt ứng dụng trực tiếp.");
+    toast("Trình duyệt của bạn chưa hỗ trợ cài đặt ứng dụng.");
   }, []);
 
   const contextValue: PWAInstallContextValue = {
     appName,
     isVisible: isHydrated && isVisible,
-    isBannerVisible: isHydrated && isVisible && isBannerVisible,
     primaryColor,
     headerForeground,
-    dismissBanner,
     handleInstallClick,
   };
 
   return (
     <PWAInstallContext.Provider value={contextValue}>
       {children}
-      {isHydrated && isVisible && (
-        <PWAInstallIOSSheet
-          appName={appName}
-          browser={iosBrowser}
-          open={isSheetOpen}
-          onClose={() => setIsSheetOpen(false)}
-        />
-      )}
-      {isHydrated && isVisible && (
-        <PWAInstallAndroidSheet
-          appName={appName}
-          browser={androidBrowser}
-          open={isAndroidSheetOpen}
-          onClose={() => setIsAndroidSheetOpen(false)}
-        />
-      )}
+      <PWAInstallIOSSheet
+        appName={appName}
+        browser={iosBrowser}
+        open={isIOSSheetOpen}
+        onClose={() => setIsIOSSheetOpen(false)}
+      />
+      <PWAInstallAndroidSheet
+        appName={appName}
+        browser={androidBrowser}
+        open={isAndroidSheetOpen}
+        onClose={() => setIsAndroidSheetOpen(false)}
+      />
     </PWAInstallContext.Provider>
   );
 }

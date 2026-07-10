@@ -25,7 +25,7 @@ export async function GET(
         const processedBuffer = await sharp(imageBuffer)
           .resize(PUBLIC_BOT_ICON_SIZE_512, PUBLIC_BOT_ICON_SIZE_512, {
             fit: "cover",
-            position: "centre",
+            position: "center",
           })
           .flatten({ background: themeColor })
           .png()

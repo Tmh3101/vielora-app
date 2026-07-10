@@ -51,7 +51,7 @@ function shouldCacheRequest(request) {
     return false;
   }
 
-  if (url.pathname.startsWith("/api/")) {
+  if (url.pathname.startsWith("/api/") && !url.pathname.includes("/manifest")) {
     return false;
   }
 

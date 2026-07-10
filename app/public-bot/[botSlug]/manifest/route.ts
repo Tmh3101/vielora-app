@@ -17,7 +17,7 @@ export async function GET(
     return NextResponse.json(manifest, {
       headers: {
         "Content-Type": "application/manifest+json; charset=utf-8",
-        "Cache-Control": "no-store",
+        "Cache-Control": "public, max-age=300, stale-while-revalidate=60",
       },
     });
   } catch (error) {
@@ -27,7 +27,7 @@ export async function GET(
     return NextResponse.json(manifest, {
       headers: {
         "Content-Type": "application/manifest+json; charset=utf-8",
-        "Cache-Control": "no-store",
+        "Cache-Control": "public, max-age=300, stale-while-revalidate=60",
       },
     });
   }

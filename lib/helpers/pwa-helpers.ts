@@ -14,6 +14,10 @@ export function isIOS(): boolean {
   );
 }
 
+export function isAndroid(): boolean {
+  return /Android/i.test(navigator.userAgent);
+}
+
 export function getIOSBrowser(): EIOSBrowser | null {
   if (!isIOS()) {
     return null;
@@ -37,16 +41,15 @@ export function getIOSBrowser(): EIOSBrowser | null {
     return EIOSBrowser.Edge;
   }
 
+  if (/OPiOS|OPT\//i.test(ua)) {
+    return EIOSBrowser.Opera;
+  }
+
   if (/Safari/i.test(ua)) {
     return EIOSBrowser.Safari;
   }
 
   return EIOSBrowser.Other;
-}
-
-export function isAndroidChromium(): boolean {
-  const ua = navigator.userAgent;
-  return /Android/i.test(ua) && /Chrome/i.test(ua);
 }
 
 export function getAndroidBrowser(): EAndroidBrowser | null {
@@ -57,7 +60,7 @@ export function getAndroidBrowser(): EAndroidBrowser | null {
   if (/OPR\//i.test(ua)) return EAndroidBrowser.Opera;
   if (/EdgA\//i.test(ua)) return EAndroidBrowser.Edge;
   if (/SamsungBrowser/i.test(ua)) return EAndroidBrowser.Samsung;
-  if ((navigator as { brave?: { isBrave?: boolean } }).brave?.isBrave) return EAndroidBrowser.Brave;
+  if (/Brave/i.test(ua)) return EAndroidBrowser.Brave;
   if (/Chrome\//i.test(ua)) return EAndroidBrowser.Chrome;
 
   return EAndroidBrowser.Other;

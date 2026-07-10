@@ -5,10 +5,8 @@ import { createContext, useContext } from "react";
 export interface PWAInstallContextValue {
   appName: string;
   isVisible: boolean;
-  isBannerVisible: boolean;
   primaryColor: string;
   headerForeground: string;
-  dismissBanner: () => void;
   handleInstallClick: () => void;
 }
 

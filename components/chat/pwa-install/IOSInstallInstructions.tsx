@@ -74,6 +74,22 @@ function EdgeInstructions() {
   );
 }
 
+function OperaInstructions() {
+  return (
+    <InstallStepsList>
+      <InstallStep step={1}>
+        Nhấn nút <ActionBadge icon={Ellipsis} label="ba chấm dọc" /> trên thanh địa chỉ.
+      </InstallStep>
+      <InstallStep step={2}>
+        Chọn <ActionBadge icon={Share} label="Chia sẻ" /> trong menu.
+      </InstallStep>
+      <InstallStep step={3}>
+        Chọn <ActionBadge icon={CirclePlus} label="Thêm vào Màn hình chính" />.
+      </InstallStep>
+    </InstallStepsList>
+  );
+}
+
 export function IOSInstallInstructions({ browser }: { browser: EIOSBrowser }) {
   if (browser === EIOSBrowser.Brave) {
     return (
@@ -91,13 +107,13 @@ export function IOSInstallInstructions({ browser }: { browser: EIOSBrowser }) {
     return <SafariInstructions />;
   }
 
-  if (
-    browser === EIOSBrowser.Chrome ||
-    browser === EIOSBrowser.Firefox ||
-    browser === EIOSBrowser.Other
-  ) {
-    return <ChromiumInstructions />;
+  if (browser === EIOSBrowser.Opera) {
+    return <OperaInstructions />;
   }
 
-  return <EdgeInstructions />;
+  if (browser === EIOSBrowser.Edge) {
+    return <EdgeInstructions />;
+  }
+
+  return <ChromiumInstructions />;
 }

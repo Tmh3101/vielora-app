@@ -20,6 +20,12 @@ const config: Config = {
       },
     },
     extend: {
+      height: {
+        dvh: "100dvh",
+      },
+      padding: {
+        safe: "env(safe-area-inset-bottom)",
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

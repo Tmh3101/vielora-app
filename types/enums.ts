@@ -134,6 +134,7 @@ export enum EIOSBrowser {
   Chrome = "chrome",
   Firefox = "firefox",
   Edge = "edge",
+  Opera = "opera",
   Brave = "brave",
   Other = "other",
 }
