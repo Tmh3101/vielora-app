@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Send, Mail, Loader2, Clock, CheckCircle } from "lucide-react";
+import { Send, Mail, Loader2, Clock, CheckCircle, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { DashboardSidebar } from "@/components/dashboard/shared/DashboardSidebar";
+import { PageHeader } from "@/components/dashboard/shared/PageHeader";
 import { DashboardMobileHeader } from "@/components/dashboard/shared/DashboardMobileHeader";
+import { DashboardMobileNav } from "@/components/dashboard/shared/DashboardMobileNav";
 import { ESubscriptionPlan } from "@/types";
 import type { Tables } from "@/lib/supabase/types";
 import type { User } from "@supabase/supabase-js";
@@ -80,7 +82,7 @@ export default function SupportClient({
       }
 
       if (data?.success) {
-        toast.success("Gửi yêu cầu hỗ trợ thành công!");
+        toast.success("Gửi yêu cầu hỗ trợ thành công");
         setSubject("");
         setMessage("");
         setSubmitted(true);
@@ -116,22 +118,16 @@ export default function SupportClient({
       />
 
       <main className="lg:pl-64">
-        <div className="container relative mx-auto px-4 pb-24 pt-12 sm:px-6 lg:px-8">
-          {/* Header Section */}
-          <div className="mb-8 flex flex-col gap-2">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Yêu cầu hỗ trợ
-            </h1>
-            <p className="text-muted-foreground">
-              Gửi yêu cầu hỗ trợ hoặc báo cáo lỗi cho đội ngũ quản trị viên Vielora. Chúng tôi sẽ
-              phản hồi sớm nhất qua email.
-            </p>
-          </div>
+        <div className="container mx-auto space-y-8 px-4 pb-24 pt-8 sm:px-6 lg:px-8">
+          <PageHeader
+            title="Yêu cầu hỗ trợ"
+            description="Gửi yêu cầu hỗ trợ hoặc báo cáo lỗi cho đội ngũ quản trị viên Vielora. Chúng tôi sẽ phản hồi sớm nhất qua email."
+          />
 
           <div className="grid gap-8 md:grid-cols-3">
             {/* Form Section */}
             <div className="md:col-span-2">
-              <Card className="border-border/50 bg-card/50 shadow-xl backdrop-blur-sm">
+              <Card className="border-border/50 bg-card/50 shadow-md backdrop-blur-sm">
                 <CardHeader>
                   <CardTitle>Tạo Ticket hỗ trợ mới</CardTitle>
                   <CardDescription>
@@ -217,11 +213,12 @@ export default function SupportClient({
                   Lịch sử yêu cầu
                 </h2>
                 {tickets.length === 0 ? (
-                  <Card className="border-dashed border-border/60 bg-card/20 shadow-none">
-                    <CardContent className="flex flex-col items-center justify-center py-8 text-center text-sm text-muted-foreground">
+                  <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 bg-muted/20 text-center">
+                    <Inbox className="h-8 w-8 text-muted-foreground opacity-50" />
+                    <p className="text-sm text-muted-foreground">
                       Bạn chưa gửi yêu cầu hỗ trợ nào.
-                    </CardContent>
-                  </Card>
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {tickets.map((ticket) => {
@@ -363,6 +360,7 @@ export default function SupportClient({
           </div>
         </div>
       </main>
+      <DashboardMobileNav />
     </div>
   );
 }

@@ -61,7 +61,7 @@ async function main() {
   const { data: sub } = await supabase
     .from("subscriptions")
     .select(
-      "id, plan_id, current_period_end, needs_bot_selection, plans!inner(code, name, bots_limit)"
+      "id, plan_id, current_period_end, needs_bot_selection, workspace_id, plans!inner(code, name, bots_limit)"
     )
     .eq("user_id", TARGET_USER_ID)
     .single();
@@ -96,7 +96,7 @@ async function main() {
   const { data: wallet } = await supabase
     .from("wallets")
     .select("subscription_credits")
-    .eq("user_id", TARGET_USER_ID)
+    .eq("workspace_id", sub.workspace_id)
     .single();
   const originalCredits = wallet?.subscription_credits;
 
@@ -166,7 +166,7 @@ async function main() {
   await supabase
     .from("wallets")
     .update({ subscription_credits: freePlan.monthly_credits })
-    .eq("user_id", TARGET_USER_ID);
+    .eq("workspace_id", sub.workspace_id);
   console.log(`  ✅ Wallet credits reset to ${freePlan.monthly_credits}`);
 
   // Stop all active bots
@@ -246,7 +246,7 @@ async function main() {
       await supabase
         .from("wallets")
         .update({ subscription_credits: originalCredits })
-        .eq("user_id", TARGET_USER_ID);
+        .eq("workspace_id", sub.workspace_id);
     }
 
     for (const bot of original.bots) {

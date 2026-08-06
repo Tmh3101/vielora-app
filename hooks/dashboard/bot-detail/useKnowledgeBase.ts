@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/types";
@@ -11,13 +11,13 @@ import {
   deleteKnowledge,
   editKnowledge,
   getKnowledge,
-  pollPipelineStatus,
   startDiscover,
   submitSelection,
 } from "@/lib/services/bot.service";
 import { useReindexDiscover } from "@/hooks/dashboard/bot-detail/useReindexDiscover";
-import { getCreditSummary } from "@/lib/services/credit.service";
-import { getPagePreviewByBotId } from "@/lib/services/page.service";
+import { usePageStatusPoller } from "@/hooks/dashboard/bot-detail/usePageStatusPoller";
+import { getWorkspaceCreditSummary } from "@/lib/services/credit.service";
+import { getPagePreviewByBotId, getPagesByBotId } from "@/lib/services/page.service";
 import { getDiscoverSeedUrl, normalizeKnowledgeUrl } from "@/lib/helpers";
 import { CREDIT_PER_PAGE } from "@/config";
 import { EPageSourceType, EPageStatus, ESubscriptionPlan } from "@/types";
@@ -40,12 +40,12 @@ type ToastFn = (payload: ToastPayload) => void;
 
 interface UseKnowledgeBaseParams {
   bot: BotType | null;
-  userId?: string;
   planCode: string;
   totalCredits: number;
   supabase: SupabaseClient;
   toast: ToastFn;
   fetchData: () => Promise<void>;
+  setPages: Dispatch<SetStateAction<PageListItem[]>>;
   setTotalCredits: Dispatch<SetStateAction<number>>;
   onRequireUpgrade: () => void;
 }
@@ -92,7 +92,7 @@ export interface UseKnowledgeBaseResult {
   handleTogglePage: (id: string, status: EPageStatus) => void;
   handleOpenAddDataSource: () => void;
   handleAddDataSource: (title: string, content: string) => Promise<void>;
-  handleAddFileDataSource: (file: File) => Promise<void>;
+  handleAddFileDataSource: (files: File[]) => Promise<void>;
   handleAddUrlDataSource: (url: string) => Promise<void>;
   handleOpenEditKnowledge: (page: PageListItem) => Promise<void>;
   handleSaveEditKnowledge: (title: string, content: string) => Promise<void>;
@@ -103,12 +103,12 @@ export interface UseKnowledgeBaseResult {
 
 export function useKnowledgeBase({
   bot,
-  userId,
   planCode,
   totalCredits,
   supabase,
   toast,
   fetchData,
+  setPages,
   setTotalCredits,
   onRequireUpgrade,
 }: UseKnowledgeBaseParams): UseKnowledgeBaseResult {
@@ -139,6 +139,47 @@ export function useKnowledgeBase({
 
   const [deletingPage, setDeletingPage] = useState<PageListItem | null>(null);
   const [isDeletingKnowledge, setIsDeletingKnowledge] = useState(false);
+
+  const pollingEnabledRef = useRef(false);
+  const [pollingEnabled, setPollingEnabled] = useState(false);
+
+  const onPollComplete = useCallback(
+    (pages: PageListItem[]) => {
+      setPages(pages);
+      pollingEnabledRef.current = false;
+      setPollingEnabled(false);
+      toast({
+        title: "Hoàn thành",
+        description: "Tất cả trang đã được xử lý xong.",
+      });
+    },
+    [setPages, toast]
+  );
+
+  usePageStatusPoller({
+    botId: bot?.id ?? null,
+    supabase,
+    enabled: pollingEnabled,
+    onComplete: onPollComplete,
+  });
+
+  const startPollingAfterOperation = useCallback(async () => {
+    if (!bot) return;
+    try {
+      const pages = await getPagesByBotId(supabase, bot.id, [
+        EPageStatus.Pending,
+        EPageStatus.Completed,
+        EPageStatus.PendingIndex,
+        EPageStatus.Processing,
+        EPageStatus.Failed,
+      ]);
+      setPages(pages);
+      pollingEnabledRef.current = true;
+      setPollingEnabled(true);
+    } catch (error) {
+      console.error("[useKnowledgeBase] Error starting poll:", error);
+    }
+  }, [bot, supabase, setPages]);
 
   const selectedPendingCount = useMemo(
     () =>
@@ -214,9 +255,11 @@ export function useKnowledgeBase({
     setReindexScope(CrawlScope.FULL_WEBSITE);
 
     try {
-      if (userId) {
-        const summary = await getCreditSummary(supabase, userId);
-        setTotalCredits(summary?.totalRemainingCredits ?? 0);
+      const wsId = (bot as { workspace_id?: string | null }).workspace_id;
+      if (wsId) {
+        const summary = await getWorkspaceCreditSummary(supabase, wsId);
+        const credits = summary ? summary.totalCredits : 0;
+        setTotalCredits(credits);
       }
     } catch (error) {
       console.error("Preview error:", error);
@@ -233,7 +276,6 @@ export function useKnowledgeBase({
     setTotalCredits,
     supabase,
     toast,
-    userId,
     setReindexModalOpen,
     setHasStartedReindexDiscover,
     setReindexScope,
@@ -288,20 +330,13 @@ export function useKnowledgeBase({
       const selectedPageIds = previewPages.filter((p) => selectedUrls.has(p.id)).map((p) => p.id);
       const selectionResult = await submitSelection(supabase, bot.id, selectedPageIds);
 
-      const { jobIds } = selectionResult;
-      if (jobIds && jobIds.length > 0) {
-        await Promise.all(jobIds.map((jobId) => pollPipelineStatus(supabase, jobId)));
-      }
-
       toast({
         title: "Thành công",
-        description: `Đã cập nhật ${selectionResult.queuedCount} trang.`,
+        description: `Đã gửi ${selectionResult.queuedCount} trang vào hàng chờ index.`,
       });
 
       setReindexModalOpen(false);
-      setTimeout(() => {
-        void fetchData();
-      }, 1000);
+      void startPollingAfterOperation();
     } catch (error) {
       console.error("Update error:", error);
       toast({
@@ -314,7 +349,7 @@ export function useKnowledgeBase({
     }
   }, [
     bot,
-    fetchData,
+    startPollingAfterOperation,
     previewPages,
     selectedCreditsCost,
     selectedUrlCount,
@@ -401,10 +436,7 @@ export function useKnowledgeBase({
         });
 
         setAddDataSourceOpen(false);
-
-        setTimeout(() => {
-          void fetchData();
-        }, 2000);
+        void startPollingAfterOperation();
       } catch (error) {
         console.error("Add data source error:", error);
         toast({
@@ -416,30 +448,57 @@ export function useKnowledgeBase({
         setIsSubmittingDataSource(false);
       }
     },
-    [bot, fetchData, supabase, toast, setAddDataSourceOpen]
+    [bot, startPollingAfterOperation, supabase, toast, setAddDataSourceOpen]
   );
 
   const handleAddFileDataSource = useCallback(
-    async (file: File) => {
-      if (!bot) return;
+    async (files: File[]) => {
+      if (!bot || files.length === 0) return;
+
+      const totalRequiredCredits = files.length * CREDIT_PER_PAGE;
+      if (totalCredits < totalRequiredCredits) {
+        toast({
+          title: "Không đủ credits",
+          description: `Bạn cần ${totalRequiredCredits} credits để thêm ${files.length} tệp.`,
+          variant: "destructive",
+        });
+        return;
+      }
 
       setIsSubmittingDataSource(true);
       try {
-        await addKnowledgeFile(supabase, {
-          botId: bot.id,
-          file,
-        });
+        let successCount = 0;
+        let failCount = 0;
 
-        toast({
-          title: "Thành công",
-          description: "Đã tải tệp lên và đưa vào hàng chờ index.",
-        });
+        for (const file of files) {
+          try {
+            await addKnowledgeFile(supabase, {
+              botId: bot.id,
+              file,
+            });
+            successCount++;
+          } catch (error) {
+            console.error("Add file data source error for file:", file.name, error);
+            failCount++;
+          }
+        }
+
+        if (successCount > 0) {
+          toast({
+            title: "Thành công",
+            description:
+              failCount > 0
+                ? `Đã tải ${successCount}/${files.length} tệp lên và đưa vào hàng chờ index.`
+                : files.length > 1
+                  ? `Đã tải ${files.length} tệp lên và đưa vào hàng chờ index.`
+                  : "Đã tải tệp lên và đưa vào hàng chờ index.",
+          });
+        } else {
+          throw new Error("Không thể tải tệp dữ liệu.");
+        }
 
         setAddDataSourceOpen(false);
-
-        setTimeout(() => {
-          void fetchData();
-        }, 2000);
+        void startPollingAfterOperation();
       } catch (error) {
         console.error("Add file data source error:", error);
         toast({
@@ -451,7 +510,7 @@ export function useKnowledgeBase({
         setIsSubmittingDataSource(false);
       }
     },
-    [bot, fetchData, supabase, toast, setAddDataSourceOpen]
+    [bot, startPollingAfterOperation, supabase, toast, setAddDataSourceOpen, totalCredits]
   );
 
   const handleAddUrlDataSource = useCallback(
@@ -490,10 +549,7 @@ export function useKnowledgeBase({
         });
 
         setAddDataSourceOpen(false);
-
-        setTimeout(() => {
-          void fetchData();
-        }, 2000);
+        void startPollingAfterOperation();
       } catch (error) {
         console.error("Add URL data source error:", error);
         toast({
@@ -502,10 +558,11 @@ export function useKnowledgeBase({
           variant: "destructive",
         });
       } finally {
-        if (userId) {
+        const wsId = (bot as { workspace_id?: string | null }).workspace_id;
+        if (wsId) {
           try {
-            const summary = await getCreditSummary(supabase, userId);
-            setTotalCredits(summary?.totalRemainingCredits ?? 0);
+            const summary = await getWorkspaceCreditSummary(supabase, wsId);
+            setTotalCredits(summary ? summary.totalCredits : 0);
           } catch (creditError) {
             console.error("Credit refresh error:", creditError);
           }
@@ -513,7 +570,15 @@ export function useKnowledgeBase({
         setIsSubmittingDataSource(false);
       }
     },
-    [bot, fetchData, setTotalCredits, supabase, toast, totalCredits, userId, setAddDataSourceOpen]
+    [
+      bot,
+      startPollingAfterOperation,
+      setTotalCredits,
+      supabase,
+      toast,
+      totalCredits,
+      setAddDataSourceOpen,
+    ]
   );
 
   const handleOpenEditKnowledge = useCallback(
@@ -588,10 +653,7 @@ export function useKnowledgeBase({
 
         setEditKnowledgeOpen(false);
         setEditingPage(null);
-
-        setTimeout(() => {
-          void fetchData();
-        }, 1500);
+        void startPollingAfterOperation();
       } catch (error) {
         console.error("Edit knowledge error:", error);
         toast({
@@ -603,7 +665,7 @@ export function useKnowledgeBase({
         setIsSavingKnowledge(false);
       }
     },
-    [editingPage, fetchData, supabase, toast, setEditKnowledgeOpen]
+    [editingPage, startPollingAfterOperation, supabase, toast, setEditKnowledgeOpen]
   );
 
   const handleOpenDeleteKnowledge = useCallback(

@@ -6,6 +6,9 @@ import { getMessagesForContext } from "@/lib/services/conversations.service";
 import { verifyWidgetRequest, apiRateLimitMiddleware } from "@/lib/security";
 import { API_RATE_LIMITS } from "@/lib/constants";
 import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
+import { getBotByIdCached } from "@/lib/services/server/bot-cache.service";
+import { isMissingBotError } from "@/lib/helpers";
+import { CHATBOT_UNAVAILABLE_MESSAGE } from "@/lib/constants/chat";
 import type { LeadFormRequest } from "@/types/widget-api";
 
 export async function OPTIONS() {
@@ -70,20 +73,49 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const isStandaloneRequest = req.headers.get("x-standalone-chat") === "true";
 
-    const securityResult = await verifyWidgetRequest(req, {
-      checkRateLimits: false,
-      requireVisitorId: true,
-    });
+    if (isStandaloneRequest) {
+      const botData = await getBotByIdCached(supabase, botId).catch((error) => {
+        if (isMissingBotError(error)) return null;
+        throw error;
+      });
 
-    if (!securityResult.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: securityResult.error || "Unauthorized",
-        },
-        { status: securityResult.statusCode || 401, headers: corsHeaders }
-      );
+      if (!botData) {
+        return NextResponse.json(
+          { success: false, message: CHATBOT_UNAVAILABLE_MESSAGE },
+          { status: 404, headers: corsHeaders }
+        );
+      }
+
+      if (!botData.is_public) {
+        return NextResponse.json(
+          { success: false, message: "This bot is not publicly accessible" },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+
+      if (botData.is_banned) {
+        return NextResponse.json(
+          { success: false, message: CHATBOT_UNAVAILABLE_MESSAGE },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+    } else {
+      const securityResult = await verifyWidgetRequest(req, {
+        checkRateLimits: false,
+        requireVisitorId: true,
+      });
+
+      if (!securityResult.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: securityResult.error || "Unauthorized",
+          },
+          { status: securityResult.statusCode || 401, headers: corsHeaders }
+        );
+      }
     }
 
     // Verify conversation belongs to the specified bot to prevent IDOR / information disclosure

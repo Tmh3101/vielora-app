@@ -8,3 +8,4 @@ export * from "./environment";
 export * from "./reserved-subdomains";
 export * from "./payment";
 export * from "./pricing";
+export * from "./voice-chat";

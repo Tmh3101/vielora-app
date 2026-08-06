@@ -1,7 +1,7 @@
 import type { ServiceClient } from "@/lib/services/types";
 import type { Tables } from "@/lib/supabase/types";
 import { getBotById, getBotForWidgetServer } from "@/lib/services/bot.service";
-import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
+import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { getBotWidgetCache, getBotConfigCache, clearBotWidgetCache } from "@/lib/cache";
 
 export type BotRow = Tables<"bots">;
@@ -53,6 +53,7 @@ export interface BotAIConfig {
   allowed_domains: string[];
   slug: string | null;
   is_public: boolean;
+  workspace_id: string | null;
   personality_prompt: string | null;
   skills_prompt: string | null;
   owner_plan_code: string | null;
@@ -88,6 +89,7 @@ export async function getBotWithAIConfigCached(
           allowed_domains,
           slug,
           is_public,
+          workspace_id,
           personality_id,
           ai_personalities!bots_personality_id_fkey (
             prompt_injection
@@ -114,7 +116,7 @@ export async function getBotWithAIConfigCached(
         .filter(Boolean)
         .join("\n\n") ?? null;
 
-    const ownerPlanCode = await getUserActivePlanCodeServer(client, bot.user_id);
+    const ownerPlanCode = await getBotActivePlanCode(client, bot);
 
     return {
       id: bot.id,
@@ -130,6 +132,7 @@ export async function getBotWithAIConfigCached(
       allowed_domains: bot.allowed_domains,
       slug: bot.slug,
       is_public: bot.is_public,
+      workspace_id: bot.workspace_id ?? null,
       personality_prompt: personalityPrompt,
       skills_prompt: skillsPrompt,
       owner_plan_code: ownerPlanCode,

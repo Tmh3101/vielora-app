@@ -6,6 +6,7 @@ import {
   updatePaymentStatus,
 } from "@/lib/services/payment.service";
 import { createAdminClient } from "@/lib/supabase/server";
+import { EPaymentStatus } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -19,19 +20,22 @@ export async function POST(request: NextRequest) {
     if (webhookData.code === "00") {
       const payment = await getPaymentByProviderTxnId(supabase, String(orderCode));
 
-      if (payment && payment.status === "pending") {
+      if (payment && payment.status === EPaymentStatus.Pending) {
         await handlePaymentSuccess(supabase, payment.id);
       }
     } else {
       const payment = await getPaymentByProviderTxnId(supabase, String(orderCode));
-      if (payment && payment.status === "pending") {
-        await updatePaymentStatus(supabase, payment.id, "failed");
+      if (payment && payment.status === EPaymentStatus.Pending) {
+        await updatePaymentStatus(supabase, payment.id, EPaymentStatus.Failed);
       }
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("PayOS webhook error:", error);
-    return NextResponse.json({ success: false }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: "Webhook processing failed" },
+      { status: 500 }
+    );
   }
 }

@@ -27,7 +27,6 @@ import {
   Plus,
   MinusCircle,
   Bot,
-  Home,
   UserPlus,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -64,16 +63,14 @@ function BotSkillIdsFetcher({
   botId: string;
   children: (skillIds: string[], refetchSkills: () => void) => ReactNode;
 }) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const queryClient = useQueryClient();
   const { data: skillIds = [] } = useQuery({
     queryKey: [BOT_SKILLS_KEY, botId],
     queryFn: async () => {
-      const { data } = (await supabase
-        .from("bot_skills")
-        .select("skill_id")
-        .eq("bot_id", botId)) as unknown as { data: { skill_id: string }[] | null };
-      return data?.map((r) => r.skill_id) ?? [];
+      const res = await fetch(`/api/bots/${botId}/skills`);
+      if (!res.ok) return [];
+      const json = await res.json();
+      return json.success && Array.isArray(json.data) ? json.data : [];
     },
     enabled: !!botId,
   });
@@ -140,6 +137,7 @@ export function BotDetailClient({
     botLoadVersion,
     pagesCount,
     fetchData,
+    setPages,
     setBot,
     setTotalCredits,
   } = useBotData({
@@ -219,12 +217,12 @@ export function BotDetailClient({
     clearEditingPage,
   } = useKnowledgeBase({
     bot,
-    userId: user?.id ?? initialUserId,
     planCode,
     totalCredits,
     supabase,
     toast,
     fetchData,
+    setPages,
     setTotalCredits,
     onRequireUpgrade: () => openUpgradeModal(),
   });
@@ -305,31 +303,30 @@ export function BotDetailClient({
               className="h-16 w-auto px-1"
               priority
             />
-            {/* <span className="text-xl font-bold text-foreground">Vielora</span> */}
           </Link>
         </div>
 
-        {/* Bot Info */}
+        {/* Bot Info Header */}
         <div className="border-b border-border/50 p-4">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10 rounded-2xl">
+          <div className="flex items-center gap-3 rounded-xl border border-border/40 bg-muted/30 p-2.5">
+            <Avatar className="h-9 w-9 shrink-0 rounded-xl border border-border/50">
               <AvatarImage src={bot.avatar_url || undefined} alt={bot.name} />
-              <AvatarFallback className="rounded-2xl bg-primary/10 text-primary">
-                <Bot className="h-5 w-5" />
+              <AvatarFallback className="rounded-xl bg-primary/10 text-primary">
+                <Bot className="h-4 w-4" />
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
-              <p className="truncate font-medium text-foreground">{bot.name}</p>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <p className="truncate text-xs font-semibold text-foreground">{bot.name}</p>
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
                     bot.is_stopped
-                      ? "bg-gray-500"
+                      ? "bg-gray-400"
                       : bot.status === EBotStatus.Ready
-                        ? "bg-green-500"
+                        ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                         : bot.status === EBotStatus.Failed
-                          ? "bg-red-500"
-                          : "bg-yellow-500"
+                          ? "bg-rose-500"
+                          : "animate-pulse bg-amber-500"
                   }`}
                 />
                 {bot.is_stopped
@@ -346,32 +343,24 @@ export function BotDetailClient({
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 p-4">
-          {sidebarItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 transition-colors ${
-                activeTab === item.id
-                  ? "bg-primary/10 font-medium text-primary"
-                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-              }`}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              <span className="whitespace-nowrap text-left">{item.label}</span>
-            </button>
-          ))}
+          {sidebarItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-xs transition-all ${
+                  isActive
+                    ? "border-primary/20 bg-primary/10 font-semibold text-primary shadow-sm"
+                    : "border-transparent font-medium text-muted-foreground hover:border-border/40 hover:bg-muted/30 hover:text-foreground"
+                }`}
+              >
+                <item.icon className="h-4 w-4 shrink-0" />
+                <span className="whitespace-nowrap text-left">{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
-
-        {/* Dashboard Link */}
-        <div className="border-t border-border/50 p-4">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-          >
-            <Home className="h-5 w-5" />
-            Về Dashboard
-          </Link>
-        </div>
       </aside>
 
       {/* Mobile Header */}

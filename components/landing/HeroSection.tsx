@@ -19,18 +19,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { motion, type Variants } from "framer-motion";
 import { Mockup3DWrapper } from "@/components/landing/features/Mockup3DWrapper";
-import {
-  ArrowRight,
-  Zap,
-  MessageSquare,
-  Bot,
-  Globe,
-  Code2,
-  Cpu,
-  Send,
-  Clock,
-  X,
-} from "lucide-react";
+import { ArrowRight, MessageSquare, Bot, Globe, Send, Clock, X } from "lucide-react";
 
 const containerVariants: Variants = {
   hidden: {},
@@ -60,14 +49,13 @@ const HeroSection = () => {
       {/* Floating decorative orbs */}
       <div className="orb orb-primary animate-float-slow -left-10 bottom-0 h-72 w-72" />
       <div className="orb orb-accent animate-float-delayed right-0 top-10 h-96 w-96" />
-      <div className="orb orb-primary animate-float left-2/4 top-1/2 h-48 w-48 opacity-80" />
 
       {/* Floating icon elements */}
       <motion.div
         initial={{ opacity: 0, scale: 0 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, delay: 0.8 }}
-        className="glass-primary shadow-glow-sm animate-float-slow top-38 absolute left-[40%] hidden h-12 w-12 items-center justify-center rounded-2xl lg:flex"
+        className="glass-primary shadow-glow-sm animate-float-subtle top-38 absolute left-[40%] hidden h-12 w-12 items-center justify-center rounded-2xl lg:flex"
       >
         <MessageSquare className="h-6 w-6 text-primary" />
       </motion.div>
@@ -76,7 +64,7 @@ const HeroSection = () => {
         initial={{ opacity: 0, scale: 0 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, delay: 1 }}
-        className="glass animate-float-delayed absolute right-[10%] top-28 hidden h-12 w-12 items-center justify-center rounded-xl lg:flex"
+        className="glass animate-float-subtle absolute right-[10%] top-28 hidden h-12 w-12 items-center justify-center rounded-xl lg:flex"
       >
         <Bot className="h-6 w-6 text-accent" />
       </motion.div>
@@ -85,36 +73,9 @@ const HeroSection = () => {
         initial={{ opacity: 0, scale: 0 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, delay: 1.2 }}
-        className="bg-gradient-primary shadow-glow-sm animate-float absolute bottom-20 left-[8%] hidden h-10 w-10 items-center justify-center rounded-lg lg:flex"
-      >
-        <Zap className="h-5 w-5 text-primary-foreground" />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, delay: 1.4 }}
-        className="glass-primary animate-float-slow absolute bottom-14 right-[10%] hidden h-11 w-11 items-center justify-center rounded-xl lg:flex"
+        className="glass-primary animate-float-subtle absolute bottom-14 right-[10%] hidden h-11 w-11 items-center justify-center rounded-xl lg:flex"
       >
         <Globe className="h-5 w-5 text-primary" />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, delay: 1.1 }}
-        className="glass animate-float-delayed absolute bottom-[30%] right-[44%] hidden h-10 w-10 items-center justify-center rounded-lg lg:flex"
-      >
-        <Code2 className="h-5 w-5 text-muted-foreground" />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, delay: 1.3 }}
-        className="glass animate-float absolute left-[3%] top-[14%] hidden h-9 w-9 items-center justify-center rounded-lg lg:flex"
-      >
-        <Cpu className="h-4 w-4 text-muted-foreground" />
       </motion.div>
 
       <div className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-16">
@@ -211,22 +172,12 @@ const HeroSection = () => {
 
           {/* Right column — 3D floating logo showcase */}
           <div className="relative hidden h-full items-start justify-start pb-12 pt-4 lg:flex lg:pt-8">
-            <motion.div
-              animate={{ opacity: [0.5, 0.8, 0.5], scale: [0.9, 1, 0.9] }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute h-60 w-60 rounded-full bg-gradient-to-br from-primary/45 via-accent/25 to-transparent blur-3xl"
-            />
+            <div className="absolute h-60 w-60 rounded-full bg-gradient-to-br from-primary/45 via-accent/25 to-transparent opacity-60 blur-3xl" />
 
             {/* perspective stage */}
             <div style={{ perspective: 1200 }} className="relative">
-              <motion.div
+              <div
                 style={{ transformStyle: "preserve-3d" }}
-                animate={{
-                  rotateY: [-10, 10, -10],
-                  rotateX: [4, -4, 4],
-                  y: [0, -14, 0],
-                }}
-                transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
                 className="relative -ml-8 -mt-16 h-56 w-56 sm:h-[350px] sm:w-[350px]"
               >
                 {[24, 16, 8, 4].map((depth, i) => (
@@ -257,7 +208,7 @@ const HeroSection = () => {
                     className="object-contain"
                   />
                 </div>
-              </motion.div>
+              </div>
 
               <motion.div
                 animate={{ opacity: [0.35, 0.15, 0.35], scaleX: [1, 0.85, 1] }}

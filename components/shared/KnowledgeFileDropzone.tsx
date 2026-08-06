@@ -80,7 +80,10 @@ export function KnowledgeFileDropzone({
         disabled={disabled}
         multiple={multiple}
         className="hidden"
-        onChange={(event) => applyFiles(event.target.files)}
+        onChange={(event) => {
+          applyFiles(event.target.files);
+          event.target.value = "";
+        }}
       />
       <div
         role="button"

@@ -49,14 +49,26 @@ export function useBotSelectionAlert({
   const [isSavingBotSelection, setIsSavingBotSelection] = useState(false);
 
   useEffect(() => {
-    if (isLoading || !subscription || bots.length === 0) return;
+    if (isLoading || bots.length === 0) return;
 
-    if (subscription.needs_bot_selection) {
+    if (subscription?.needs_bot_selection) {
       const activeBots = bots.filter((b) => !b.is_stopped);
       setSelectedBotIds(new Set(activeBots.map((b) => b.id)));
       setBotSelectorOpen(true);
     }
   }, [isLoading, subscription, bots, setBotSelectorOpen]);
+
+  useEffect(() => {
+    if (botSelectorOpen && bots.length > 0) {
+      const activeBots = bots.filter((b) => !b.is_stopped);
+      setSelectedBotIds((prev) => {
+        if (prev.size === 0) {
+          return new Set(activeBots.map((b) => b.id));
+        }
+        return prev;
+      });
+    }
+  }, [botSelectorOpen, bots]);
 
   const handleToggleBotSelection = useCallback(
     (botId: string) => {
@@ -83,27 +95,35 @@ export function useBotSelectionAlert({
       await stopBots(supabase, unselectedBotIds);
 
       if (subscription) {
-        const response = await fetch("/api/subscriptions/clear-bot-selection", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ subscriptionId: subscription.id }),
-        });
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const token = session?.access_token;
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to clear bot selection flag");
+          const response = await fetch("/api/subscriptions/clear-bot-selection", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ subscriptionId: subscription.id }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error("Failed to clear bot selection flag:", errorData);
+          } else {
+            subscription.needs_bot_selection = false;
+          }
+        } catch (subErr) {
+          console.error("Error clearing bot selection flag:", subErr);
         }
-
-        subscription.needs_bot_selection = false;
       }
 
       setBotSelectorOpen(false);
       toast.success("Đã cập nhật trạng thái chatbot");
-      setTimeout(async () => {
-        await onRefresh();
-      }, 1500);
+      await onRefresh();
     } catch (error) {
       console.error("Error updating bot selection:", error);
       toast.error("Không thể cập nhật. Vui lòng thử lại.");

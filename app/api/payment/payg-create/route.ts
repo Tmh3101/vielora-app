@@ -6,6 +6,8 @@ import {
   EPaymentType,
   EPaymentProvider,
   EPaymentCurrency,
+  EInvoiceStatus,
+  EInvoiceProvider,
   CreditPackagePrice,
 } from "@/types";
 import {
@@ -21,9 +23,19 @@ import {
   getPaymentAmount,
   generateOrderCode,
 } from "@/lib/helpers/payos-helpers";
+import { validateInvoiceFields } from "@/lib/utils/invoice-validation";
 
 export interface PaygCreateRequestBody {
   packageId: string;
+  quantity?: number;
+  requestInvoice?: boolean;
+  workspaceId?: string;
+  invoice?: {
+    companyName: string;
+    companyTaxCode: string;
+    companyAddress: string;
+    recipientEmail: string;
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -32,9 +44,48 @@ export async function POST(request: NextRequest) {
     if (isAuthError(authResult)) return authResult;
     const { user, supabase } = authResult;
 
-    const { packageId } = (await request.json()) as PaygCreateRequestBody;
+    const body = (await request.json()) as PaygCreateRequestBody;
+    const {
+      packageId,
+      quantity: rawQuantity,
+      requestInvoice = false,
+      invoice,
+      workspaceId: bodyWorkspaceId,
+    } = body;
+
+    const workspaceId: string | null =
+      bodyWorkspaceId ||
+      request.headers.get("x-workspace-id") ||
+      request.cookies.get("active_workspace_id")?.value ||
+      null;
+
     if (!packageId) {
       return NextResponse.json({ error: "Missing packageId" }, { status: 400 });
+    }
+
+    const quantity = Math.max(1, Math.floor(Number(rawQuantity) || 1));
+
+    let invoiceData:
+      | {
+          companyName: string;
+          companyTaxCode: string;
+          companyAddress: string;
+          recipientEmail: string;
+        }
+      | undefined;
+
+    if (requestInvoice) {
+      const validation = validateInvoiceFields(invoice ?? {});
+      if (!validation.valid || !validation.data) {
+        return NextResponse.json(
+          {
+            error: "Thông tin xuất hóa đơn không hợp lệ",
+            fieldErrors: validation.errors,
+          },
+          { status: 400 }
+        );
+      }
+      invoiceData = validation.data;
     }
 
     const creditPackage = await getCreditPackageById(supabase, packageId);
@@ -43,13 +94,16 @@ export async function POST(request: NextRequest) {
     }
 
     const priceObj = creditPackage.price as CreditPackagePrice;
-    const amount = priceObj?.VND;
-    if (!amount || amount <= 0) {
+    const unitPrice = priceObj?.VND;
+    if (!unitPrice || unitPrice <= 0) {
       return NextResponse.json({ error: "Invalid package price." }, { status: 400 });
     }
 
+    const totalCredits = creditPackage.credits_amount * quantity;
+    const totalAmount = unitPrice * quantity;
+
     // Cancel all existing pending PayOS payments for this user
-    const pendingPayments = await getPendingPayOSPaymentsByUser(supabase, user.id);
+    const pendingPayments = await getPendingPayOSPaymentsByUser(supabase, user.id, workspaceId);
 
     if (pendingPayments.length > 0) {
       for (const pending of pendingPayments) {
@@ -77,7 +131,8 @@ export async function POST(request: NextRequest) {
     const orderCode = generateOrderCode();
     const payment = await createPaymentRecord(supabase, {
       user_id: user.id,
-      amount: amount,
+      workspace_id: workspaceId,
+      amount: totalAmount,
       currency: EPaymentCurrency.VND,
       status: EPaymentStatus.Pending,
       payment_type: EPaymentType.PayAsYouGo,
@@ -86,17 +141,64 @@ export async function POST(request: NextRequest) {
       metadata: {
         packageId: creditPackage.id,
         packageName: creditPackage.name,
-        credits: creditPackage.credits_amount,
+        credits: totalCredits,
+        quantity,
+        requestInvoice: Boolean(invoiceData),
       },
     });
 
+    console.log("Created PAYG payment record:", payment);
+
+    if (invoiceData) {
+      console.log("[InvoiceCreate] Creating invoice row for PAYG payment:", payment.id, {
+        company: invoiceData.companyName,
+        taxCode: invoiceData.companyTaxCode,
+        email: invoiceData.recipientEmail,
+      });
+
+      const { error: invoiceInsertError } = await supabase.from("invoices").insert({
+        payment_id: payment.id,
+        user_id: user.id,
+        company_name: invoiceData.companyName,
+        company_tax_code: invoiceData.companyTaxCode,
+        company_address: invoiceData.companyAddress,
+        recipient_email: invoiceData.recipientEmail,
+        status: EInvoiceStatus.Pending,
+        provider: EInvoiceProvider.EasyInvoice,
+        line_items: [
+          {
+            name: `Nạp Credit Vielora - ${creditPackage.name}`,
+            code: `CREDIT_${creditPackage.id.slice(0, 8).toUpperCase()}`,
+            quantity,
+            unit: "Gói",
+            amount: totalAmount,
+          },
+        ],
+      });
+
+      if (invoiceInsertError) {
+        console.error(
+          "[InvoiceCreate] Insert FAILED:",
+          invoiceInsertError.message,
+          invoiceInsertError.code
+        );
+        await updatePaymentStatus(supabase, payment.id, EPaymentStatus.Failed);
+        return NextResponse.json(
+          { error: "Không thể tạo yêu cầu xuất hóa đơn. Vui lòng thử lại." },
+          { status: 500 }
+        );
+      }
+
+      console.log("[InvoiceCreate] Invoice row created successfully for PAYG payment:", payment.id);
+    }
+
     // Build PayOS payment link
-    const paymentAmount = getPaymentAmount(amount);
-    const expiredAt = Math.floor(Date.now() / 1000) + PAYMENT_LINK_EXPIRATION_SECONDS; // Payment link expires after 15 minutes
+    const paymentAmount = getPaymentAmount(totalAmount);
+    const expiredAt = Math.floor(Date.now() / 1000) + PAYMENT_LINK_EXPIRATION_SECONDS;
     const requestData = {
       orderCode,
       amount: paymentAmount,
-      description: `Nap ${creditPackage.credits_amount} credits`.slice(0, 25),
+      description: `Mua ${totalCredits} credits`.slice(0, 25),
       cancelUrl: getPayOSCancelUrl(payment.id),
       returnUrl: getPayOSReturnUrl(payment.id),
       expiredAt,

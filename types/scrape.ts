@@ -171,7 +171,7 @@ export interface PageCrawlerJobData {
   config?: CrawlJobConfig;
   pageId?: string;
   creditRefund?: {
-    userId: string;
+    workspaceId: string;
     deductedFromSubscription: number;
     deductedFromPayg: number;
     creditAmount: number;
@@ -183,11 +183,17 @@ export interface IndexerJobData {
   pageId: string;
   requestId: string;
   creditRefund?: {
-    userId: string;
+    workspaceId: string;
     deductedFromSubscription: number;
     deductedFromPayg: number;
     creditAmount: number;
   };
+}
+
+export interface WorkspaceKnowledgeJobData {
+  itemId: string;
+  workspaceId: string;
+  requestId: string;
 }
 
 /**

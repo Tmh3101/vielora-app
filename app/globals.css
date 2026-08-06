@@ -139,6 +139,19 @@
     }
   }
 
+  @keyframes float-subtle {
+    0%,
+    100% {
+      transform: translateY(0px) rotate(0deg);
+    }
+    33% {
+      transform: translateY(-6px) rotate(0.5deg);
+    }
+    66% {
+      transform: translateY(-3px) rotate(-0.5deg);
+    }
+  }
+
   @keyframes float-slow {
     0%,
     100% {
@@ -231,6 +244,10 @@
 
   .animate-float-slow {
     animation: float-slow 8s ease-in-out infinite;
+  }
+
+  .animate-float-subtle {
+    animation: float-subtle 8s ease-in-out infinite;
   }
 
   .animate-float-delayed {

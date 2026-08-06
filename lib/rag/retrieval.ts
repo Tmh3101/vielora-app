@@ -15,7 +15,8 @@ import { HYBRID_SEARCH_FUNC_NAME } from "@/lib/constants/rag";
 
 export interface HybridSearchRow {
   id: string;
-  bot_id: string;
+  bot_id: string | null;
+  workspace_id: string | null;
   content: string;
   metadata: {
     url?: string;
@@ -122,7 +123,11 @@ const getFallbackPages = async (botId: string, supabase: SupabaseClient<Database
   }
 };
 
-export async function hybridRetrival(message: string, botId: string): Promise<RetrievalResult> {
+export async function hybridRetrival(
+  message: string,
+  botId: string,
+  workspaceId?: string | null
+): Promise<RetrievalResult> {
   const supabase = createAdminClient();
 
   try {
@@ -140,6 +145,7 @@ export async function hybridRetrival(message: string, botId: string): Promise<Re
         full_text_weight: FULL_TEXT_WEIGHT,
         semantic_weight: SEMANTIC_WEIGHT,
         p_bot_id: botId,
+        p_workspace_id: workspaceId ?? null,
       }
     )) as {
       data: HybridSearchRow[] | null;

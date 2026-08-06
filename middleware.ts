@@ -4,8 +4,11 @@ import {
   LOCAL_ROOT,
   PRODUCTION_ROOT,
   RESERVED_SUBDOMAINS as RESERVED_SUBDOMAINS_LIST,
+  RESERVED_PATHS,
 } from "@/config";
+import { createServerClient } from "@supabase/ssr";
 import { getDeviceType } from "@/lib/utils/device-type";
+import { createAdminClient } from "@/lib/supabase/server";
 
 const SHOPIFY_FRAME_ANCESTORS_CSP =
   "frame-ancestors https://admin.shopify.com https://*.myshopify.com;";
@@ -62,14 +65,22 @@ function getSubdomainForRoot(hostname: string, rootDomain: string): string | nul
   return subdomain;
 }
 
-function getBotSubdomain(host: string | null): string | null {
-  const hostname = getHostname(host);
-  return (
-    getSubdomainForRoot(hostname, LOCAL_ROOT) ?? getSubdomainForRoot(hostname, PRODUCTION_ROOT)
-  );
+const SLUG_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+
+function isValidBotSlug(slug: string): boolean {
+  if (!slug || slug.length < 2 || slug.length > 48) return false;
+  return SLUG_PATTERN.test(slug);
 }
 
-export function middleware(request: NextRequest) {
+function getBotSubdomain(host: string | null): string | null {
+  const hostname = getHostname(host);
+  const slug =
+    getSubdomainForRoot(hostname, LOCAL_ROOT) ?? getSubdomainForRoot(hostname, PRODUCTION_ROOT);
+  if (slug && !isValidBotSlug(slug)) return null;
+  return slug;
+}
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const host = (request.headers.get("host") ?? "").toLowerCase();
   const mainDomain = getMainDomain();
@@ -107,6 +118,91 @@ export function middleware(request: NextRequest) {
 
   if (pathname.startsWith("/api/shopify") || pathname.startsWith("/shopify")) {
     return withShopifyCsp(NextResponse.next({ request: { headers: requestHeaders } }));
+  }
+
+  // Workspace path-based routing detection
+  const segments = pathname.split("/").filter(Boolean);
+  const firstSegment = segments[0];
+
+  if (firstSegment && !RESERVED_PATHS.has(firstSegment) && SLUG_PATTERN.test(firstSegment)) {
+    try {
+      const supabase = createAdminClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: workspace } = await (supabase as any)
+        .from("workspaces")
+        .select("id, slug")
+        .eq("slug", firstSegment)
+        .maybeSingle();
+
+      if (workspace) {
+        const remainingSegments = segments.slice(1);
+        const remainingPath = remainingSegments.length > 0 ? `/${remainingSegments.join("/")}` : "";
+        const rewriteUrl = request.nextUrl.clone();
+        rewriteUrl.pathname = `/dashboard${remainingPath}`;
+
+        requestHeaders.set("x-workspace-id", workspace.id);
+
+        const response = NextResponse.rewrite(rewriteUrl, {
+          request: { headers: requestHeaders },
+        });
+
+        response.cookies.set("active_workspace_id", workspace.id, {
+          path: "/",
+          maxAge: 2592000,
+          sameSite: "lax",
+        });
+
+        response.headers.set("x-workspace-id", workspace.id);
+
+        return withShopifyCsp(response);
+      }
+    } catch {
+      // Workspace lookup error; fall through to bot subdomain logic
+    }
+  }
+
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+    try {
+      const supabaseAuth = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() {
+              return request.cookies.getAll();
+            },
+            setAll() {},
+          },
+        }
+      );
+      const {
+        data: { session },
+      } = await supabaseAuth.auth.getSession();
+
+      if (session) {
+        const activeWorkspaceId = request.cookies.get("active_workspace_id")?.value;
+
+        if (activeWorkspaceId) {
+          const supabase = createAdminClient();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: workspace } = await (supabase as any)
+            .from("workspaces")
+            .select("slug")
+            .eq("id", activeWorkspaceId)
+            .maybeSingle();
+
+          if (workspace?.slug) {
+            const remainingPath = pathname.slice("/dashboard".length);
+            const redirectUrl = request.nextUrl.clone();
+            redirectUrl.pathname = `/${workspace.slug}${remainingPath}`;
+
+            return withShopifyCsp(NextResponse.redirect(redirectUrl, 308));
+          }
+        }
+      }
+    } catch {
+      // Auth or workspace lookup error; pass through
+    }
   }
 
   const botSlug = getBotSubdomain(host);

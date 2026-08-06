@@ -2,6 +2,7 @@ import { cache } from "react";
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getBotBySlug } from "@/lib/services/bot.service";
+import { getPublicBotPwaVersion } from "@/lib/helpers/pwa-helpers";
 import { FALLBACK_CHAT_TITLE } from "@/lib/constants/chat";
 import { StandaloneChatUI } from "@/components/chat/StandaloneChatUI";
 import { EBotStatus } from "@/types";
@@ -52,13 +53,14 @@ export default async function PublicBotPage({ params }: { params: Promise<{ botS
 
   const deviceType = headers().get("x-device-type") ?? "desktop";
   const isMobile = deviceType === "mobile" || deviceType === "tablet";
+  const pwaVersion = getPublicBotPwaVersion(bot.pwa_updated_at);
 
   return (
     <main
       className="h-dvh overflow-hidden"
       aria-label={bot.name ? `Chat with ${bot.name}` : FALLBACK_CHAT_TITLE}
     >
-      <StandaloneChatUI bot={bot} isMobile={isMobile} />
+      <StandaloneChatUI bot={bot} isMobile={isMobile} pwaVersion={pwaVersion} />
     </main>
   );
 }

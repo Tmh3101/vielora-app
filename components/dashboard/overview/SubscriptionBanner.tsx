@@ -10,7 +10,7 @@ import { ESubscriptionPlan } from "@/types";
 type SubscriptionType = Tables<"subscriptions">;
 
 export interface SubscriptionBannerProps {
-  subscription: SubscriptionType;
+  subscription?: SubscriptionType | null;
   currentPlan: ESubscriptionPlan;
   creditsUsedThisMonth: number;
   creditsTotalThisMonth: number;
@@ -32,14 +32,21 @@ export function SubscriptionBanner({
 }: SubscriptionBannerProps) {
   const router = useRouter();
 
+  const formattedPeriod =
+    subscription?.current_period_start && subscription?.current_period_end
+      ? `${new Date(subscription.current_period_start).toLocaleDateString("vi-VN")} - ${new Date(
+          subscription.current_period_end
+        ).toLocaleDateString("vi-VN")}`
+      : "Vĩnh viễn (Gói Miễn phí)";
+
   return (
     <Card
-      className={`relative overflow-hidden ${
+      className={`relative overflow-hidden border backdrop-blur-md transition-all ${
         currentPlan === ESubscriptionPlan.Pro
-          ? "border-violet-500/30 bg-gradient-to-r from-violet-500/5 via-background to-purple-500/5"
+          ? "border-violet-500/30 bg-gradient-to-br from-violet-500/10 via-card/80 to-purple-500/5 shadow-lg shadow-violet-500/5"
           : currentPlan === ESubscriptionPlan.Standard
-            ? "border-blue-500/30 bg-gradient-to-r from-blue-500/5 via-background to-cyan-500/5"
-            : "border-border/50 bg-gradient-to-r from-muted/30 via-background to-muted/30"
+            ? "border-blue-500/30 bg-gradient-to-br from-blue-500/10 via-card/80 to-cyan-500/5 shadow-lg shadow-blue-500/5"
+            : "border-border/60 bg-gradient-to-br from-card/60 via-card/90 to-muted/20 shadow-sm"
       }`}
     >
       <div
@@ -48,89 +55,81 @@ export function SubscriptionBanner({
             ? "bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500"
             : currentPlan === ESubscriptionPlan.Standard
               ? "bg-gradient-to-r from-blue-500 via-cyan-500 to-sky-500"
-              : "bg-gradient-to-r from-gray-300 via-gray-400 to-gray-300"
+              : "bg-gradient-to-r from-slate-400 via-slate-500 to-slate-400"
         }`}
       />
-      <CardContent className="p-6">
-        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
-          <div className="flex items-center gap-4">
+      <CardContent className="p-4 sm:p-6">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          <div className="flex items-center gap-3 sm:gap-4">
             <div
-              className={`flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg ${
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-md sm:h-14 sm:w-14 ${
                 currentPlan === ESubscriptionPlan.Pro
-                  ? "bg-gradient-to-br from-violet-500 to-purple-600"
+                  ? "bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-violet-500/25"
                   : currentPlan === ESubscriptionPlan.Standard
-                    ? "bg-gradient-to-br from-blue-500 to-cyan-600"
-                    : "bg-gradient-to-br from-gray-400 to-gray-500"
+                    ? "bg-gradient-to-br from-blue-500 to-cyan-600 text-white shadow-blue-500/25"
+                    : "bg-gradient-to-br from-slate-500 to-slate-700 text-white shadow-slate-500/20"
               }`}
             >
-              <Crown className="h-7 w-7 text-white" />
+              <Crown className="h-6 w-6 sm:h-7 sm:w-7" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-bold">
-                  Gói{" "}
-                  {currentPlan === ESubscriptionPlan.Free
-                    ? "Miễn phí"
-                    : currentPlan === ESubscriptionPlan.Standard
-                      ? "Standard"
-                      : currentPlan === ESubscriptionPlan.Pro
-                        ? "Pro"
-                        : "Enterprise"}
-                </h2>
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${
                     currentPlan === ESubscriptionPlan.Pro
-                      ? "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300"
+                      ? "border border-violet-500/30 bg-violet-500/15 text-violet-600 dark:text-violet-300"
                       : currentPlan === ESubscriptionPlan.Standard
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                        : "bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-300"
+                        ? "border border-blue-500/30 bg-blue-500/15 text-blue-600 dark:text-blue-300"
+                        : "border border-slate-500/30 bg-slate-500/15 text-slate-700 dark:text-slate-300"
                   }`}
                 >
-                  {currentPlan.toUpperCase()}
+                  Gói{" "}
+                  {currentPlan === ESubscriptionPlan.Free ? "Miễn phí" : currentPlan.toUpperCase()}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Thời hạn: {new Date(subscription.current_period_start).toLocaleDateString("vi-VN")}{" "}
-                - {new Date(subscription.current_period_end).toLocaleDateString("vi-VN")}
-              </p>
+              {currentPlan !== ESubscriptionPlan.Free && (
+                <p className="mt-1 text-xs font-medium text-muted-foreground sm:text-sm">
+                  Thời hạn: {formattedPeriod}
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">Credits đã dùng</p>
+          <div className="flex items-center justify-between gap-4 sm:justify-start sm:gap-6">
+            <div className="text-left sm:text-right">
+              <p className="text-xs font-medium text-muted-foreground">Credits đã dùng</p>
               {paygCredits > 0 && (
-                <p className="mt-1 text-xs font-medium text-primary">
+                <p className="mt-0.5 text-xs font-semibold text-primary">
                   + Dư PAYG: {paygCredits.toLocaleString()}
                 </p>
               )}
             </div>
-            <div className="relative h-24 w-24">
-              <svg className="h-full w-full -rotate-90 transform">
-                <circle cx="48" cy="48" r="40" className="fill-none stroke-muted stroke-[6]" />
+            <div className="relative h-16 w-16 shrink-0 sm:h-20 sm:w-20">
+              <svg className="h-full w-full -rotate-90 transform" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="32" className="fill-none stroke-muted/40 stroke-[5]" />
                 <circle
-                  cx="48"
-                  cy="48"
-                  r="40"
-                  className={`fill-none stroke-[6] transition-all duration-500 ${
+                  cx="40"
+                  cy="40"
+                  r="32"
+                  className={`fill-none stroke-[5] transition-all duration-500 ${
                     usagePercent > 90
                       ? "stroke-destructive"
                       : usagePercent > 70
-                        ? "stroke-yellow-500"
+                        ? "stroke-amber-500"
                         : currentPlan === ESubscriptionPlan.Pro
                           ? "stroke-violet-500"
                           : currentPlan === ESubscriptionPlan.Standard
                             ? "stroke-blue-500"
-                            : "stroke-primary"
+                            : "stroke-slate-500"
                   }`}
                   strokeLinecap="round"
-                  strokeDasharray={`${usagePercent * 2.51} 251`}
+                  strokeDasharray={`${(usagePercent * 201) / 100} 201`}
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-sm font-bold">
+                <span className="text-xs font-bold text-foreground sm:text-sm">
                   {creditsUsedThisMonth.toLocaleString()}
-                  <span className="text-sm font-normal text-muted-foreground">
+                  <span className="text-[10px] font-normal text-muted-foreground sm:text-xs">
                     /{creditsTotalThisMonth.toLocaleString()}
                   </span>
                 </span>
@@ -138,18 +137,17 @@ export function SubscriptionBanner({
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
             {currentPlan !== ESubscriptionPlan.Enterprise && (
               <Button
                 onClick={onUpgrade}
-                className={`btn-glow ${
+                className={`w-full rounded-xl px-5 font-semibold shadow-md transition-all sm:w-auto ${
                   currentPlan === ESubscriptionPlan.Pro
-                    ? "bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700"
-                    : "bg-gradient-primary"
+                    ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-violet-500/20 hover:from-violet-700 hover:to-purple-700"
+                    : "bg-primary text-primary-foreground shadow-primary/20 hover:bg-primary/90"
                 }`}
               >
-                <Crown className="mr-2 h-4 w-4" />
-                {currentPlan === ESubscriptionPlan.Free ? "Nâng cấp Pro" : "Nâng cấp"}
+                Nâng cấp gói
               </Button>
             )}
 
@@ -157,7 +155,7 @@ export function SubscriptionBanner({
               <Button
                 onClick={onBuyCredits ?? (() => router.push("/dashboard/upgrade"))}
                 variant="outline"
-                className="border-primary/50 text-primary hover:bg-primary/10"
+                className="w-full rounded-xl border-primary/40 text-primary hover:bg-primary/10 sm:w-auto"
               >
                 <Zap className="mr-2 h-4 w-4" />
                 Nạp Credits

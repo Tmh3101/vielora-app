@@ -12,8 +12,8 @@ import {
   EditKnowledgeResponse,
 } from "@/types";
 import { CREDIT_PER_PAGE, EDIT_KNOWLEDGE_ALLOWED_PLANS } from "@/config";
-import { deductCredits, refundCredits } from "@/lib/services/credit.service";
-import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
+import { deductBotCredits, refundBotCredits } from "@/lib/services/credit.service";
+import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { deleteKnowledgeFile } from "@/lib/supabase/upload";
 import {
   getPageByIdServer,
@@ -22,6 +22,7 @@ import {
   deletePageByIdServer,
   deleteDocumentsByPageUrl,
 } from "@/lib/services/page.service";
+import { getBotByIdServer, canUserAccessBot } from "@/lib/services/bot.service";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
@@ -46,13 +47,29 @@ export async function DELETE(req: NextRequest, { params }: RouteParams): Promise
     const authResult = await authenticateRequest(req);
     if (isAuthError(authResult)) return authResult;
 
-    const { supabase } = authResult;
+    const { user, supabase } = authResult;
     const page = await getPageByIdServer(supabase, pageId);
 
     if (!page) {
       return NextResponse.json(
         { success: false, message: "Page not found" },
         { status: 404, headers: corsHeaders }
+      );
+    }
+
+    const bot = await getBotByIdServer(supabase, page.bot_id);
+    if (!bot) {
+      return NextResponse.json(
+        { success: false, message: "Bot not found" },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    const hasAccess = await canUserAccessBot(supabase, bot, user.id);
+    if (!hasAccess) {
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403, headers: corsHeaders }
       );
     }
 
@@ -140,7 +157,7 @@ export async function PUT(
   try {
     const authResult = await authenticateRequest(req);
     if (isAuthError(authResult)) return authResult;
-    const { user, supabase } = authResult;
+    const { supabase } = authResult;
 
     const { pageId } = await params;
 
@@ -151,8 +168,25 @@ export async function PUT(
       );
     }
 
+    // Fetch the existing page with bot's user_id
+    const page = await getPageWithOwnerById(supabase, pageId);
+    if (!page) {
+      return NextResponse.json(
+        { success: false, message: "Page not found" },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    const bot = await getBotByIdServer(supabase, page.bot_id);
+    if (!bot) {
+      return NextResponse.json(
+        { success: false, message: "Bot not found" },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
     // Check user's subscription plan
-    const planCode = await getUserActivePlanCodeServer(supabase, user.id);
+    const planCode = await getBotActivePlanCode(supabase, bot);
 
     if (!planCode) {
       return NextResponse.json(
@@ -189,18 +223,6 @@ export async function PUT(
       );
     }
 
-    // Fetch the existing page with bot's user_id
-    const page = await getPageWithOwnerById(supabase, pageId);
-    if (!page) {
-      return NextResponse.json(
-        { success: false, message: "Page not found" },
-        { status: 404, headers: corsHeaders }
-      );
-    }
-
-    // Extract user_id from the joined bots table
-    const userId = (page.bots as { user_id: string }).user_id;
-
     // Hash the new content to check if it changed
     const trimmedContent = content.trim();
     const newContentHash = hashContent(trimmedContent);
@@ -226,8 +248,7 @@ export async function PUT(
     const newUrl = shouldConvertToManual ? `manual://${pageId}` : page.url;
 
     // Deduct credits before updating knowledge
-    const deductionResult = await deductCredits(supabase, {
-      userId,
+    const deductionResult = await deductBotCredits(supabase, bot, {
       creditAmount: CREDIT_PER_PAGE,
       transactionType: ETransactionType.UpdateKnowledge,
       transactionDescription: `Deducted ${CREDIT_PER_PAGE} credits to update knowledge for bot ${page.bot_id} (${CREDIT_PER_PAGE} credit/page)`,
@@ -267,8 +288,7 @@ export async function PUT(
       const updateError = updateErr as Error;
       console.error("[KnowledgeAPI] Update page error:", updateError);
       // Refund credits on failure
-      await refundCredits(supabase, {
-        userId,
+      await refundBotCredits(supabase, bot, {
         deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
         deductedFromPayg: deductionResult.deductedFromPayg || 0,
         transactionType: ETransactionType.UpdateKnowledgeRefund,
@@ -289,8 +309,7 @@ export async function PUT(
       });
     } catch (queueError) {
       console.error("[KnowledgeAPI] Queue indexer job error:", queueError);
-      await refundCredits(supabase, {
-        userId,
+      await refundBotCredits(supabase, bot, {
         deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
         deductedFromPayg: deductionResult.deductedFromPayg || 0,
         transactionType: ETransactionType.UpdateKnowledgeRefund,

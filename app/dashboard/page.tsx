@@ -1,15 +1,11 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
-
-export const dynamic = "force-dynamic";
-import { getBotsByUserId } from "@/lib/services/bot.service";
-import { getIndexedPageCountsByBotIds } from "@/lib/services/page.service";
-import { getSubscriptionByUserId } from "@/lib/services/subscription.service";
-import { getPlanById } from "@/lib/services/plan.service";
-import { getCreditSummary } from "@/lib/services/credit.service";
-import { getTotalConversationCount } from "@/lib/services/conversations.service";
+import { WorkspaceService } from "@/lib/services/workspace.service";
 import { DashboardClient } from "@/components/dashboard/overview/DashboardClient";
 import type { DashboardInitialData } from "@/hooks/dashboard/main/useDashboardData";
+
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const supabase = await createServerClient();
@@ -22,32 +18,54 @@ export default async function DashboardPage() {
     redirect("/auth");
   }
 
-  const [bots, subscription, creditSummary] = await Promise.all([
-    getBotsByUserId(supabase, user.id),
-    getSubscriptionByUserId(supabase, user.id),
-    getCreditSummary(supabase, user.id),
-  ]);
+  const cookieStore = await cookies();
+  const workspaceId = cookieStore.get("active_workspace_id")?.value;
 
-  const botIds = bots.map((b) => b.id);
-  const planId = subscription?.plan_id;
+  if (!workspaceId) {
+    let redirectUrl: string | null = null;
+    try {
+      const workspaces = await WorkspaceService.getUserWorkspaces(user.id);
+      if (workspaces && workspaces.length > 0) {
+        const firstWs = workspaces[0];
+        redirectUrl = `/${firstWs.slug}`;
+      }
+    } catch {
+      // DB error — fall through to "no workspace" message
+    }
 
-  const [indexedPagesByBot, totalConversations, plan] = await Promise.all([
-    bots.length > 0 ? getIndexedPageCountsByBotIds(supabase, botIds) : Promise.resolve({}),
-    bots.length > 0 ? getTotalConversationCount(supabase, botIds) : Promise.resolve(0),
-    planId ? getPlanById(supabase, planId) : Promise.resolve(null),
-  ]);
+    if (redirectUrl) {
+      redirect(redirectUrl);
+    }
 
-  const messagesThisMonth = creditSummary?.messageCreditsUsedThisMonth ?? 0;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-8">
+        <div className="max-w-md text-center">
+          <h2 className="text-2xl font-bold">Welcome to Vielora</h2>
+          <p className="mt-2 text-muted-foreground">
+            You don&apos;t have any workspace yet. Use the sidebar to create one.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  const initialData: DashboardInitialData = {
-    bots,
-    subscription,
-    plan,
-    creditSummary,
-    messagesThisMonth,
-    totalConversations,
-    indexedPagesByBot,
-  };
+  let initialData: DashboardInitialData | undefined = undefined;
+
+  try {
+    const dashData = await WorkspaceService.getWorkspaceDashboardData(workspaceId, user.id);
+    initialData = {
+      bots: dashData.bots,
+      subscription: dashData.subscription,
+      plan: dashData.plan,
+      creditSummary: dashData.creditSummary,
+      messagesThisMonth: dashData.messagesThisMonth,
+      totalConversations: dashData.totalConversations,
+      indexedPagesByBot: dashData.indexedPagesByBot,
+      workspaceId: dashData.workspaceId,
+    };
+  } catch (error) {
+    console.error("Error fetching workspace dashboard data:", error);
+  }
 
   return <DashboardClient initialData={initialData} />;
 }

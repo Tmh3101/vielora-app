@@ -41,21 +41,26 @@ export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
     let cancelled = false;
 
     const loadInitialState = async () => {
-      const { data, error: botError } = await supabase
-        .from("bots")
-        .select("status, domain")
-        .eq("id", botId)
-        .maybeSingle();
+      try {
+        const res = await fetch(`/api/bots/${botId}`);
+        if (cancelled) return;
 
-      if (cancelled) return;
-
-      if (botError) {
-        console.error("[UI: DiscoverPipeline] Fetch bot error:", botError);
-        setPipelineError(botError.message);
-      } else if (data) {
-        const botData = data as { status: string; domain: string | null };
-        setBotStatus(botData.status as EBotStatus);
-        setBotDomain(botData.domain);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            const botData = json.data as { status: string; domain: string | null };
+            setBotStatus(botData.status as EBotStatus);
+            setBotDomain(botData.domain);
+          }
+        } else {
+          console.error("[UI: DiscoverPipeline] Fetch bot error:", res.status);
+          setPipelineError("Cannot load bot information.");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[UI: DiscoverPipeline] Fetch bot error:", err);
+          setPipelineError(err instanceof Error ? err.message : "Unknown error");
+        }
       }
     };
 
@@ -63,34 +68,42 @@ export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
     return () => {
       cancelled = true;
     };
-  }, [botId, supabase]);
+  }, [botId]);
 
   useEffect(() => {
     if (!botId || activeJobId) return;
+    if (
+      botStatus === EBotStatus.Discovered ||
+      botStatus === EBotStatus.Ready ||
+      botStatus === EBotStatus.Failed ||
+      botStatus === EBotStatus.Indexing
+    ) {
+      return;
+    }
     let cancelled = false;
 
     const fetchJobId = async () => {
-      const { data: jobData, error: jobError } = await supabase
-        .from("jobs")
-        .select("id")
-        .eq("bot_id", botId)
-        .eq("name", "discover")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      try {
+        const res = await fetch(
+          `/api/bots/${botId}/jobs?name=discover&fields=${encodeURIComponent("id")}&limit=1`
+        );
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      if (jobError) {
-        console.error("[UI: DiscoverPipeline] Fetch jobId error:", jobError);
-      }
-
-      const job = jobData as { id: string } | null;
-      if (job?.id) {
-        console.log("[UI: DiscoverPipeline] Found activeJobId:", job.id);
-        setActiveJobId(job.id);
-      } else {
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            const job = json.data[0] as { id: string };
+            console.log("[UI: DiscoverPipeline] Found activeJobId:", job.id);
+            setActiveJobId(job.id);
+            return;
+          }
+        }
         console.log("[UI: DiscoverPipeline] Job Discover not found, retrying...");
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[UI: DiscoverPipeline] Fetch jobId error:", err);
+        }
       }
     };
 
@@ -103,28 +116,43 @@ export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [botId, activeJobId, supabase]);
+  }, [botId, activeJobId, botStatus]);
 
   // Poll bot status every 3s; stop when terminal status reached
   useEffect(() => {
     if (!botId) return;
+    if (
+      botStatus === EBotStatus.Discovered ||
+      botStatus === EBotStatus.Ready ||
+      botStatus === EBotStatus.Failed ||
+      botStatus === EBotStatus.Indexing
+    ) {
+      return;
+    }
     let cancelled = false;
 
     const poll = async () => {
-      const { data } = await supabase.from("bots").select("status").eq("id", botId).maybeSingle();
-      console.log("[UI: DiscoverPipeline] Polled bot status:", data);
-      if (cancelled) return;
-      const newStatus = (data as { status?: EBotStatus } | null)?.status;
-      if (!newStatus) return;
-      setBotStatus((prev) => {
-        if (prev === newStatus) return prev;
-        if (newStatus === EBotStatus.Failed) {
-          setPipelineError((e) => e ?? "Discover encountered an error. Please try again.");
-        } else {
-          setPipelineError(null);
+      try {
+        const res = await fetch(`/api/bots/${botId}`);
+        if (cancelled) return;
+        if (res.ok) {
+          const json = await res.json();
+          const newStatus = json.data?.status as EBotStatus | undefined;
+          console.log("[UI: DiscoverPipeline] Polled bot status:", newStatus);
+          if (!newStatus) return;
+          setBotStatus((prev) => {
+            if (prev === newStatus) return prev;
+            if (newStatus === EBotStatus.Failed) {
+              setPipelineError((e) => e ?? "Discover encountered an error. Please try again.");
+            } else {
+              setPipelineError(null);
+            }
+            return newStatus;
+          });
         }
-        return newStatus;
-      });
+      } catch {
+        // ignore polling errors
+      }
     };
 
     const interval = setInterval(() => void poll(), 3000);
@@ -132,7 +160,7 @@ export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [botId, supabase]);
+  }, [botId, botStatus]);
 
   // Job Tracker in Discover Worker
   const jobTracker = useJobTracker({ mode: JobTrackerMode.Job, jobId: activeJobId });
@@ -140,14 +168,13 @@ export function useDiscoverPipeline(botId: string): UseDiscoverPipelineReturn {
   const discoveredCountQuery = useQuery({
     queryKey: [ONBOARDING_DISCOVERED_PAGES_KEY, "count", botId],
     queryFn: async (): Promise<number> => {
-      const { count, error } = await supabase
-        .from("pages")
-        .select("id", { count: "exact", head: true })
-        .eq("bot_id", botId)
-        .in("status", [EPageStatus.Pending]);
-
-      if (error) throw new Error(error.message);
-      return count ?? 0;
+      const res = await fetch(`/api/bots/${botId}/pages`);
+      if (!res.ok) return 0;
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        return json.data.filter((p: { status: string }) => p.status === EPageStatus.Pending).length;
+      }
+      return 0;
     },
     enabled:
       !!botId &&

@@ -78,38 +78,27 @@ CREATE OR REPLACE FUNCTION public.handle_new_user_billing()
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-DECLARE
-  v_free_plan_id uuid;
-  v_monthly_credits int4;
 BEGIN
-  SELECT id, monthly_credits
-  INTO v_free_plan_id, v_monthly_credits
-  FROM public.plans
-  WHERE code = 'free'
-  LIMIT 1;
-
-  IF v_free_plan_id IS NULL THEN
-    RAISE EXCEPTION 'Missing required plan: free';
-  END IF;
-
-  INSERT INTO public.subscriptions (user_id, plan_id, billing_cycle, status, current_period_start, current_period_end, next_credit_reset_at)
-  VALUES (NEW.id, v_free_plan_id, 'monthly', 'active', now(), now() + '1 mon'::interval, now() + '1 mon'::interval);
-
-  INSERT INTO public.wallets (user_id, subscription_credits, payg_credits, is_payg_enabled)
-  VALUES (NEW.id, v_monthly_credits, 0, false);
-
-  INSERT INTO public.credit_transactions (user_id, amount, transaction_type, description)
-  VALUES (
-    NEW.id,
-    v_monthly_credits,
-    'subscription_renewal',
-    format('Initial %s credits granted for free plan', v_monthly_credits)
-  );
-
+  -- Subscriptions and wallets are workspace-scoped and created per-workspace in WorkspaceService.createWorkspace.
   RETURN NEW;
 END;
 $function$
 ;
+
+-- Trigger function is only invoked by the trigger itself — revoke public EXECUTE
+REVOKE EXECUTE ON FUNCTION public.handle_new_user_billing() FROM anon, authenticated;
+
+DO $$ BEGIN
+    CREATE TYPE public.invoice_status AS ENUM ('pending', 'issuing', 'issued', 'failed', 'cancelled', 'replaced');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE public.invoice_provider AS ENUM ('easyinvoice', 'misa_meinvoice');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 DO $$ BEGIN
     CREATE TYPE public.bot_status AS ENUM ('pending', 'discovering', 'discovered', 'indexing', 'ready', 'failed');
@@ -205,6 +194,11 @@ VALUES
     'pro', 'Pro', 5, 5000, 'Advanced plan for high-usage teams',
     '{"VND": {"monthly": 499000, "yearly": 4990000}, "USD": {"monthly": 29, "yearly": 290}}'::jsonb,
     true
+  ),
+  (
+    'enterprise', 'Enterprise', 50, 50000, 'Tự cấu hình số lượng bot và credits (thanh toán & áp dụng ngay)',
+    '{"VND": {"monthly": 2900000, "yearly": 31320000}, "USD": {"monthly": 125, "yearly": 1350}}'::jsonb,
+    true
   )
 ON CONFLICT (code) DO UPDATE
 SET
@@ -243,6 +237,7 @@ CREATE TABLE public.bots (
 	is_banned boolean NOT NULL DEFAULT false,
 	allowed_domains text[] NOT NULL DEFAULT '{}'::text[], -- Domains allowed to embed this bot widget. Maximum 5 normalized hostnames.
 	personality_id uuid NULL, -- FK to ai_personalities, controls bot personality
+	pwa_updated_at timestamptz DEFAULT now() NOT NULL, -- Auto-updated only when name or avatar_url changes (for PWA versioning)
 	CONSTRAINT bots_pkey PRIMARY KEY (id),
 	CONSTRAINT bots_slug_key UNIQUE (slug),
 	CONSTRAINT bots_allowed_domains_max_5 CHECK (cardinality(allowed_domains) <= 5)
@@ -256,6 +251,24 @@ create trigger update_bots_updated_at before
 update
     on
     public.bots for each row execute function update_updated_at_column();
+
+CREATE OR REPLACE FUNCTION public.update_pwa_updated_at_column()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF OLD.name IS DISTINCT FROM NEW.name OR OLD.avatar_url IS DISTINCT FROM NEW.avatar_url THEN
+    NEW.pwa_updated_at = now();
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE TRIGGER update_bots_pwa_updated_at
+  BEFORE UPDATE ON public.bots
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_pwa_updated_at_column();
 
 
 
@@ -284,6 +297,33 @@ CREATE TABLE public.ai_skills (
 	CONSTRAINT ai_skills_pkey PRIMARY KEY (id),
 	CONSTRAINT ai_skills_name_key UNIQUE (name)
 );
+
+-- public.bot_leads definition
+
+CREATE TABLE public.bot_leads (
+	id uuid DEFAULT gen_random_uuid() NOT NULL,
+	bot_id uuid NOT NULL,
+	visitor_session_id text NOT NULL,
+	unanswered_question text NOT NULL,
+	customer_name text NOT NULL,
+	customer_email text NOT NULL,
+	customer_phone text NULL,
+	note text NULL,
+	status text DEFAULT 'pending'::text NOT NULL,
+	chat_history jsonb NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	updated_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT bot_leads_pkey PRIMARY KEY (id),
+	CONSTRAINT bot_leads_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.bots(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_bot_leads_bot_id ON public.bot_leads (bot_id);
+CREATE INDEX idx_bot_leads_status ON public.bot_leads (status);
+CREATE INDEX idx_bot_leads_bot_created ON public.bot_leads (bot_id, created_at DESC);
+
+create trigger update_bot_leads_updated_at before
+update
+    on
+    public.bot_leads for each row execute function update_updated_at_column();
 
 -- public.bot_skills definition
 
@@ -446,6 +486,8 @@ CREATE TABLE public.subscriptions (
 	current_period_end timestamptz DEFAULT now() + '1 mon'::interval NOT NULL,
 	next_credit_reset_at timestamptz DEFAULT now() + '1 mon'::interval NOT NULL,
 	needs_bot_selection bool DEFAULT false NOT NULL,
+	bots_limit_override int4 NULL,
+	monthly_credits_override int4 NULL,
 	created_at timestamptz DEFAULT now() NOT NULL,
 	updated_at timestamptz DEFAULT now() NOT NULL,
 	CONSTRAINT subscriptions_pkey PRIMARY KEY (id),
@@ -461,15 +503,18 @@ update
 
 -- public.wallets definition
 
+-- Wallets are keyed by workspace_id (each workspace has its own wallet).
+-- user_id was removed: credits are workspace-scoped only.
+
 CREATE TABLE public.wallets (
-	user_id uuid NOT NULL,
+	workspace_id uuid NOT NULL,
 	subscription_credits int4 DEFAULT 1000 NOT NULL,
 	payg_credits int4 DEFAULT 0 NOT NULL,
 	total_credits int4 GENERATED ALWAYS AS (subscription_credits + payg_credits) STORED,
 	updated_at timestamptz DEFAULT now() NOT NULL,
 	is_payg_enabled bool DEFAULT false,
-	CONSTRAINT wallets_pkey PRIMARY KEY (user_id),
-	CONSTRAINT wallets_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+	CONSTRAINT wallets_pkey PRIMARY KEY (workspace_id),
+	CONSTRAINT wallets_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE
 );
 
 create trigger update_wallets_updated_at before
@@ -504,19 +549,66 @@ update
     on
     public.payments for each row execute function update_updated_at_column();
 
+-- public.invoices definition
+
+CREATE TABLE IF NOT EXISTS public.invoices (
+	id uuid DEFAULT gen_random_uuid() NOT NULL,
+	payment_id uuid NOT NULL,
+	user_id uuid NOT NULL,
+	company_name text NOT NULL,
+	company_tax_code text NOT NULL,
+	company_address text NOT NULL,
+	recipient_email text NOT NULL,
+	status public.invoice_status DEFAULT 'pending' NOT NULL,
+	line_items jsonb DEFAULT '[]'::jsonb NOT NULL,
+	provider public.invoice_provider DEFAULT 'easyinvoice' NOT NULL,
+	provider_ref_id text NULL,
+	provider_pattern text NULL,
+	provider_serial text NULL,
+	provider_invoice_no text NULL,
+	provider_lookup_code text NULL,
+	link_view text NULL,
+	tax_authority_status text NULL,
+	tax_authority_error text NULL,
+	error_message text NULL,
+	retry_count integer DEFAULT 0 NOT NULL,
+	issued_at timestamptz NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	updated_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT invoices_pkey PRIMARY KEY (id),
+	CONSTRAINT invoices_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.payments(id) ON DELETE RESTRICT,
+	CONSTRAINT invoices_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
+	CONSTRAINT invoices_tax_code_format CHECK (company_tax_code ~ '^[0-9]{10}(-[0-9]{3})?$')
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_payment_id ON public.invoices (payment_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON public.invoices (user_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices (status);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_payment_id_active
+  ON public.invoices (payment_id)
+  WHERE status NOT IN ('cancelled', 'replaced');
+
+create trigger update_invoices_updated_at before
+update
+    on
+    public.invoices for each row execute function update_updated_at_column();
+
 -- public.credit_transactions definition
 
 CREATE TABLE public.credit_transactions (
 	id uuid DEFAULT gen_random_uuid() NOT NULL,
-	user_id uuid NOT NULL,
+	user_id uuid NULL,
 	payment_id uuid NULL,
+	workspace_id uuid NULL,
 	amount int4 NOT NULL,
 	transaction_type public.transaction_type NOT NULL,
 	description text NULL,
 	created_at timestamptz DEFAULT now() NOT NULL,
 	CONSTRAINT credit_transactions_pkey PRIMARY KEY (id),
 	CONSTRAINT credit_transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
-	CONSTRAINT credit_transactions_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.payments(id) ON DELETE SET NULL
+	CONSTRAINT credit_transactions_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.payments(id) ON DELETE SET NULL,
+	CONSTRAINT credit_transactions_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_created_at
   ON public.credit_transactions (user_id, created_at DESC);
@@ -524,6 +616,8 @@ CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_type_created_at
   ON public.credit_transactions (user_id, transaction_type, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_credit_transactions_payment_id
   ON public.credit_transactions (payment_id);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_workspace
+  ON public.credit_transactions (workspace_id);
 
 -- public.jobs definition
 
@@ -659,11 +753,6 @@ CREATE TABLE public.posts (
 	CONSTRAINT posts_status_check CHECK (status = ANY (ARRAY['draft'::text, 'published'::text]))
 );
 
-create trigger update_posts_updated_at before
-update
-    on
-    public.posts for each row execute function update_updated_at_column();
-
 -- public.post_categories definition
 
 CREATE TABLE public.post_categories (
@@ -752,6 +841,8 @@ ALTER TABLE public.shopify_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_personalities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_skills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bot_skills ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bot_leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 
 -- 1. PLANS (Public Read-only)
 CREATE POLICY "plans_select_all" ON public.plans FOR SELECT USING (true);
@@ -766,13 +857,21 @@ CREATE POLICY "bots_select_public_pwa_branding"
   USING (is_public = true AND slug IS NOT NULL);
 
 REVOKE SELECT ON TABLE public.bots FROM anon;
-GRANT SELECT (slug, name, widget_settings, avatar_url) ON TABLE public.bots TO anon;
+GRANT SELECT (slug, name, widget_settings, avatar_url, pwa_updated_at) ON TABLE public.bots TO anon;
 
 -- 3. DỮ LIỆU TÀI CHÍNH (Chỉ Read-only từ Client, Update qua Backend Service Role)
 CREATE POLICY "subscriptions_select_own" ON public.subscriptions FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "wallets_select_own" ON public.wallets FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "wallets_select_workspace_member" ON public.wallets FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.workspace_members
+    WHERE workspace_members.workspace_id = wallets.workspace_id
+      AND workspace_members.user_id = auth.uid()
+      AND workspace_members.status = 'active'
+  )
+);
 CREATE POLICY "payments_select_own" ON public.payments FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "credit_transactions_select_own" ON public.credit_transactions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "invoices_select_own" ON public.invoices FOR SELECT USING (auth.uid() = user_id);
 
 -- 4. DỮ LIỆU LIÊN KẾT (Cần xác thực qua bot_id)
 -- Người dùng chỉ được CRUD dữ liệu nếu họ là chủ của Bot đó
@@ -841,6 +940,10 @@ CREATE POLICY "Allow service role all operations on posts" ON public.posts
 CREATE POLICY "Allow public read post_categories" ON public.post_categories FOR SELECT TO public USING (true);
 CREATE POLICY "Allow service role all operations on post_categories" ON public.post_categories FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+-- 10. INVOICES (Read-only from client, mutations via service_role)
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.invoices FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.invoices FROM anon;
+
 -- 9. AI CUSTOMIZATION TABLES
 
 -- Catalog: authenticated users can read personalities
@@ -855,3 +958,447 @@ CREATE POLICY "ai_skills_select_authenticated" ON public.ai_skills
 CREATE POLICY "bot_skills_all_own" ON public.bot_skills FOR ALL USING (
   EXISTS (SELECT 1 FROM public.bots WHERE bots.id = bot_skills.bot_id AND bots.user_id = auth.uid())
 );
+
+-- Bot Leads: bot owners manage their own leads
+CREATE POLICY "bot_leads_own" ON public.bot_leads FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.bots WHERE bots.id = bot_leads.bot_id AND bots.user_id = auth.uid())
+);
+
+-- ============================================
+-- WORKSPACE FEATURE: Migration 01 — Core Tables
+-- ============================================
+
+-- Migration: Workspace Core Tables Creation
+-- Task 1.1: Core Tables (Workspaces, Members, Roles, Invitations)
+
+-- 1. Create Custom Enums
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'workspace_status') THEN
+        CREATE TYPE workspace_status AS ENUM ('active', 'suspended', 'deleted');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'member_status') THEN
+        CREATE TYPE member_status AS ENUM ('pending', 'active', 'suspended', 'removed');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invitation_status') THEN
+        CREATE TYPE invitation_status AS ENUM ('pending', 'accepted', 'expired', 'revoked');
+    END IF;
+END $$;
+
+-- 2. Create Workspaces Table
+CREATE TABLE IF NOT EXISTS public.workspaces (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    owner_id UUID NOT NULL REFERENCES auth.users(id),
+    status workspace_status DEFAULT 'active',
+    settings JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT valid_slug CHECK (slug ~ '^[a-z0-9-]+$')
+);
+
+-- 3. Create Workspace Roles Table
+CREATE TABLE IF NOT EXISTS public.workspace_roles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    permissions JSONB NOT NULL,
+    hierarchy INT NOT NULL,
+    is_system BOOLEAN DEFAULT true
+);
+
+-- 4. Create Workspace Members Table
+CREATE TABLE IF NOT EXISTS public.workspace_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    role_id TEXT NOT NULL REFERENCES public.workspace_roles(id) DEFAULT 'member',
+    invited_by UUID REFERENCES auth.users(id),
+    invited_at TIMESTAMPTZ DEFAULT now(),
+    accepted_at TIMESTAMPTZ,
+    status member_status DEFAULT 'pending',
+    CONSTRAINT unique_workspace_user UNIQUE (workspace_id, user_id)
+);
+
+-- 5. Create Workspace Invitations Table
+CREATE TABLE IF NOT EXISTS public.workspace_invitations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    role_id TEXT NOT NULL REFERENCES public.workspace_roles(id) DEFAULT 'member',
+    invited_by UUID NOT NULL REFERENCES auth.users(id),
+    token TEXT NOT NULL UNIQUE,
+    token_expires_at TIMESTAMPTZ NOT NULL,
+    status invitation_status DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    accepted_at TIMESTAMPTZ,
+    accepted_by UUID REFERENCES auth.users(id)
+);
+
+-- 6. Seed System Roles
+INSERT INTO public.workspace_roles (id, name, description, permissions, hierarchy, is_system)
+VALUES
+    ('owner', 'Workspace Owner', 'Full control over workspace, billing, members, and deletion', '{"billing": true, "invite": true, "remove": true, "settings": true, "knowledge": true, "bot_create": true, "workspace_delete": true}'::jsonb, 100, true),
+    ('admin', 'Workspace Admin', 'Can manage settings, members, knowledge, and bots. Cannot delete workspace or manage billing', '{"billing": false, "invite": true, "remove": true, "settings": true, "knowledge": true, "bot_create": true, "workspace_delete": false}'::jsonb, 80, true),
+    ('member', 'Workspace Member', 'Can access and contribute to knowledge base and use bots', '{"billing": false, "invite": false, "remove": false, "settings": false, "knowledge": true, "bot_create": false, "workspace_delete": false}'::jsonb, 50, true),
+    ('viewer', 'Workspace Viewer', 'Read-only access to workspace assets', '{"billing": false, "invite": false, "remove": false, "settings": false, "knowledge": false, "bot_create": false, "workspace_delete": false}'::jsonb, 10, true)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    permissions = EXCLUDED.permissions,
+    hierarchy = EXCLUDED.hierarchy,
+    is_system = EXCLUDED.is_system;
+
+-- Indexing for fast lookups
+CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON public.workspaces(owner_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON public.workspace_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_members_workspace ON public.workspace_members(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_invitations_token ON public.workspace_invitations(token);
+CREATE INDEX IF NOT EXISTS idx_workspace_invitations_email ON public.workspace_invitations(email);
+
+-- ============================================
+-- WORKSPACE FEATURE: Migration 02 — Triggers & Quota Enforcement
+-- ============================================
+
+-- Migration: Workspace Triggers & Quota Enforcement
+-- Task 1.2: Database Triggers & Limit Enforcement
+
+-- 1. Enforce Max 5 Active Workspaces Per User
+CREATE OR REPLACE FUNCTION public.enforce_max_workspaces_per_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'active' THEN
+    IF (
+      SELECT COUNT(*) FROM public.workspace_members
+      WHERE user_id = NEW.user_id AND status = 'active'
+    ) >= 5 THEN
+      RAISE EXCEPTION 'User cannot belong to more than 5 workspaces';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_enforce_max_workspaces ON public.workspace_members;
+CREATE TRIGGER trg_enforce_max_workspaces
+  BEFORE INSERT OR UPDATE ON public.workspace_members
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_max_workspaces_per_user();
+
+-- 2. Auto-generate Invitation Token & Expiration Date
+CREATE OR REPLACE FUNCTION public.generate_invitation_token()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.token IS NULL OR NEW.token = '' THEN
+    NEW.token := encode(gen_random_bytes(32), 'hex');
+  END IF;
+  IF NEW.token_expires_at IS NULL THEN
+    NEW.token_expires_at := now() + INTERVAL '7 days';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_generate_invitation_token ON public.workspace_invitations;
+CREATE TRIGGER trg_generate_invitation_token
+  BEFORE INSERT ON public.workspace_invitations
+  FOR EACH ROW
+  EXECUTE FUNCTION public.generate_invitation_token();
+
+-- 3. Enforce Rate Limit: Max 10 Invitations per Workspace per Day
+CREATE OR REPLACE FUNCTION public.enforce_invite_rate_limit()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (
+    SELECT COUNT(*) FROM public.workspace_invitations
+    WHERE workspace_id = NEW.workspace_id
+      AND created_at >= (now() - INTERVAL '24 hours')
+  ) >= 10 THEN
+    RAISE EXCEPTION 'Rate limit exceeded: max 10 invitations per workspace per day';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_enforce_invite_rate_limit ON public.workspace_invitations;
+CREATE TRIGGER trg_enforce_invite_rate_limit
+  BEFORE INSERT ON public.workspace_invitations
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_invite_rate_limit();
+
+-- ============================================
+-- WORKSPACE FEATURE: Migration 03 — Schema Modifications
+-- ============================================
+
+-- Migration: Knowledge, Webhook, and Multi-Tenant Schema Modifications
+-- Task 1.3: Knowledge, Webhook, and Helper Schema Modification
+
+-- 1. Extend Existing Tables with workspace_id
+ALTER TABLE public.bots
+  ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+ALTER TABLE public.payments
+  ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
+ALTER TABLE public.invoices
+  ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
+ALTER TABLE public.credit_transactions
+  ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+ALTER TABLE public.usage_logs
+  ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
+-- Create Indexes for fast lookup
+CREATE INDEX IF NOT EXISTS idx_bots_workspace ON public.bots(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_payments_workspace ON public.payments(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_workspace ON public.invoices(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_workspace ON public.credit_transactions(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_usage_logs_workspace ON public.usage_logs(workspace_id);
+
+-- 2. Extend Plans Table
+ALTER TABLE public.plans
+  ADD COLUMN IF NOT EXISTS max_members INT DEFAULT 5,
+  ADD COLUMN IF NOT EXISTS max_shared_knowledge_items INT, -- NULL = unlimited
+  ADD COLUMN IF NOT EXISTS max_webhooks INT DEFAULT 10,
+  ADD COLUMN IF NOT EXISTS max_bot_private_knowledge INT DEFAULT 500;
+
+-- Update Plans Limit Configuration
+UPDATE public.plans SET max_members = 1, max_shared_knowledge_items = NULL, max_webhooks = 2, max_bot_private_knowledge = 100 WHERE code = 'free';
+UPDATE public.plans SET max_members = 5, max_shared_knowledge_items = 1000, max_webhooks = 5, max_bot_private_knowledge = 500 WHERE code = 'standard';
+UPDATE public.plans SET max_members = 20, max_shared_knowledge_items = 5000, max_webhooks = 10, max_bot_private_knowledge = 2000 WHERE code = 'pro';
+
+-- 3. Create Shared Workspace Knowledge Table
+CREATE TABLE IF NOT EXISTS public.workspace_knowledge (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source_type TEXT DEFAULT 'file',
+    metadata JSONB DEFAULT '{}'::jsonb,
+    embedding vector(1536),
+    status TEXT DEFAULT 'active',
+    created_by UUID REFERENCES auth.users(id),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_knowledge_workspace ON public.workspace_knowledge(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_knowledge_embedding ON public.workspace_knowledge USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- Trigger for Shared Workspace Knowledge Limits
+CREATE OR REPLACE FUNCTION public.enforce_workspace_knowledge_limit()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_plan_limit INT;
+  v_current_count INT;
+BEGIN
+  SELECT p.max_shared_knowledge_items INTO v_plan_limit
+  FROM public.subscriptions s
+  JOIN public.plans p ON s.plan_id = p.id
+  WHERE s.workspace_id = NEW.workspace_id AND s.status = 'active';
+
+  -- NULL means unlimited
+  IF v_plan_limit IS NOT NULL THEN
+    SELECT COUNT(*) INTO v_current_count
+    FROM public.workspace_knowledge
+    WHERE workspace_id = NEW.workspace_id;
+
+    IF v_current_count >= v_plan_limit THEN
+      RAISE EXCEPTION 'Workspace knowledge limit reached (% items max)', v_plan_limit;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_enforce_workspace_knowledge_limit ON public.workspace_knowledge;
+CREATE TRIGGER trg_enforce_workspace_knowledge_limit
+  BEFORE INSERT ON public.workspace_knowledge
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_workspace_knowledge_limit();
+
+-- 4. Create Bot Private Knowledge Table
+CREATE TABLE IF NOT EXISTS public.bot_knowledge (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    bot_id UUID NOT NULL REFERENCES public.bots(id) ON DELETE CASCADE,
+    workspace_id UUID REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source_type TEXT DEFAULT 'file',
+    metadata JSONB DEFAULT '{}'::jsonb,
+    embedding vector(1536),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bot_knowledge_bot ON public.bot_knowledge(bot_id);
+CREATE INDEX IF NOT EXISTS idx_bot_knowledge_workspace ON public.bot_knowledge(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_bot_knowledge_embedding ON public.bot_knowledge USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- 5. Create Workspace Webhooks Table
+CREATE TABLE IF NOT EXISTS public.workspace_webhooks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    secret TEXT NOT NULL,
+    events TEXT[] NOT NULL DEFAULT '{}',
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_webhooks_workspace ON public.workspace_webhooks(workspace_id);
+
+-- Trigger for Max Webhooks Limit (Max 10 per workspace)
+CREATE OR REPLACE FUNCTION public.enforce_max_webhooks_limit()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_count INT;
+BEGIN
+  IF NEW.is_active = true THEN
+    SELECT COUNT(*) INTO v_count
+    FROM public.workspace_webhooks
+    WHERE workspace_id = NEW.workspace_id AND is_active = true;
+
+    IF v_count >= 10 THEN
+      RAISE EXCEPTION 'Maximum limit of 10 active webhooks reached per workspace';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_enforce_max_webhooks_limit ON public.workspace_webhooks;
+CREATE TRIGGER trg_enforce_max_webhooks_limit
+  BEFORE INSERT OR UPDATE ON public.workspace_webhooks
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_max_webhooks_limit();
+
+-- ============================================
+-- WORKSPACE FEATURE: Migration 04 — Workspace Member RLS
+-- ============================================
+
+-- Migration: Enable SELECT RLS policies for active Workspace Members on Core Workspace Assets
+-- (workspaces, subscriptions, wallets, bots, pages)
+
+-- 1. Subscriptions: Allow active workspace members to SELECT workspace subscription
+CREATE POLICY "subscriptions_select_workspace_member"
+ON public.subscriptions FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.workspace_members
+    WHERE workspace_members.workspace_id = subscriptions.workspace_id
+      AND workspace_members.user_id = auth.uid()
+      AND workspace_members.status = 'active'
+  )
+);
+
+-- 2. Wallets: Allow active workspace members to SELECT workspace wallet
+CREATE POLICY "wallets_select_workspace_member"
+ON public.wallets FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.workspace_members
+    WHERE workspace_members.workspace_id = wallets.workspace_id
+      AND workspace_members.user_id = auth.uid()
+      AND workspace_members.status = 'active'
+  )
+);
+
+-- 3. Bots: Allow active workspace members to SELECT workspace bots
+CREATE POLICY "bots_select_workspace_member"
+ON public.bots FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.workspace_members
+    WHERE workspace_members.workspace_id = bots.workspace_id
+      AND workspace_members.user_id = auth.uid()
+      AND workspace_members.status = 'active'
+  )
+);
+
+-- 4. Pages: Allow active workspace members to SELECT workspace bot pages
+CREATE POLICY "pages_select_workspace_member"
+ON public.pages FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.bots
+    JOIN public.workspace_members ON workspace_members.workspace_id = bots.workspace_id
+    WHERE bots.id = pages.bot_id
+      AND workspace_members.user_id = auth.uid()
+      AND workspace_members.status = 'active'
+  )
+);
+
+-- 5. Storage Objects: Allow active workspace members to upload/manage knowledge_files in storage.objects
+CREATE POLICY "storage_objects_select_workspace_member"
+ON storage.objects FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.bots
+    JOIN public.workspace_members ON workspace_members.workspace_id = bots.workspace_id
+    WHERE bots.id::text = (storage.foldername(name))[1]
+      AND workspace_members.user_id = auth.uid()
+      AND workspace_members.status = 'active'
+  )
+);
+
+CREATE POLICY "storage_objects_insert_workspace_member"
+ON storage.objects FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.bots
+    JOIN public.workspace_members ON workspace_members.workspace_id = bots.workspace_id
+    WHERE bots.id::text = (storage.foldername(name))[1]
+      AND workspace_members.user_id = auth.uid()
+      AND workspace_members.status = 'active'
+  )
+);
+
+CREATE POLICY "storage_objects_update_workspace_member"
+ON storage.objects FOR UPDATE USING (
+  EXISTS (
+    SELECT 1 FROM public.bots
+    JOIN public.workspace_members ON workspace_members.workspace_id = bots.workspace_id
+    WHERE bots.id::text = (storage.foldername(name))[1]
+      AND workspace_members.user_id = auth.uid()
+      AND workspace_members.status = 'active'
+  )
+);
+
+CREATE POLICY "storage_objects_delete_workspace_member"
+ON storage.objects FOR DELETE USING (
+  EXISTS (
+    SELECT 1 FROM public.bots
+    JOIN public.workspace_members ON workspace_members.workspace_id = bots.workspace_id
+    WHERE bots.id::text = (storage.foldername(name))[1]
+      AND workspace_members.user_id = auth.uid()
+      AND workspace_members.status = 'active'
+  )
+);
+
+-- ============================================
+-- WORKSPACE FEATURE: Migration 06 — Workspace Billing Fix
+-- ============================================
+
+-- Migration: Add workspace_id column & backfill for subscriptions and wallets tables
+-- Task B1: Billing multi-tenancy schema & backfill fix
+
+-- 1. Ensure workspace_id on subscriptions (wallets already has workspace_id as PK)
+ALTER TABLE public.subscriptions
+  ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+-- Wallets table now uses workspace_id as PRIMARY KEY (no user_id column).
+-- The ALTER TABLE below is a no-op if run after the wallets table creation above.
+ALTER TABLE public.wallets
+  ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+-- 2. Indexes and Unique Constraints
+CREATE INDEX IF NOT EXISTS idx_subscriptions_workspace ON public.subscriptions(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_wallets_workspace ON public.wallets(workspace_id);
+
+-- Unique constraint on subscriptions.workspace_id (one active subscription per workspace)
+CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_workspace_id_key
+  ON public.subscriptions (workspace_id);
+
+-- 3. Backfill workspace_id for existing subscriptions (wallets are created per-workspace,
+-- so no backfill needed for wallets; user_id column was removed).
+UPDATE public.subscriptions s
+SET workspace_id = w.id
+FROM public.workspaces w
+WHERE s.workspace_id IS NULL AND w.owner_id = s.user_id;

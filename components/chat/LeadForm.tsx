@@ -13,6 +13,7 @@ interface LeadFormProps {
   originalQuestion: string;
   primaryColor: string;
   headerTextColor: string;
+  isStandalone?: boolean;
   onSuccess: () => void;
   onClose?: () => void;
 }
@@ -26,6 +27,7 @@ export function LeadForm({
   originalQuestion,
   primaryColor,
   headerTextColor,
+  isStandalone = true,
   onSuccess,
   onClose,
 }: LeadFormProps) {
@@ -62,6 +64,7 @@ export function LeadForm({
           "Content-Type": "application/json",
           "x-bot-id": botId,
           "x-visitor-id": visitorId,
+          ...(isStandalone ? { "x-standalone-chat": "true" } : {}),
         },
         body: JSON.stringify({
           botId,

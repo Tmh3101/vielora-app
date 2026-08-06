@@ -1,0 +1,127 @@
+-- ============================================================================
+-- Unify workspace knowledge embedding pipeline with bot knowledge
+-- - documents gains workspace_id (workspace chunks live in the same table)
+-- - drop obsolete vector(1536) embedding columns (chunks carry embeddings now)
+-- - hybrid_search supports workspace-scoped retrieval
+-- ============================================================================
+
+-- 1. documents: allow workspace-scoped chunks (bot_id becomes nullable)
+ALTER TABLE public.documents ALTER COLUMN bot_id DROP NOT NULL;
+
+ALTER TABLE public.documents
+  ADD COLUMN IF NOT EXISTS workspace_id uuid REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS documents_workspace_id_idx ON public.documents USING btree (workspace_id);
+
+-- 2. Drop obsolete 1536-dim embedding columns (chunks now live in documents, 768-dim)
+ALTER TABLE public.workspace_knowledge DROP COLUMN IF EXISTS embedding;
+ALTER TABLE public.bot_knowledge DROP COLUMN IF EXISTS embedding;
+
+DROP INDEX IF EXISTS idx_workspace_knowledge_embedding;
+DROP INDEX IF EXISTS idx_bot_knowledge_embedding;
+
+-- 3. hybrid_search: retrieve from bot chunks AND workspace chunks
+DROP FUNCTION IF EXISTS public.hybrid_search(text, vector, integer, double precision, double precision, uuid);
+CREATE OR REPLACE FUNCTION public.hybrid_search(
+  query_text text,
+  query_embedding vector,
+  match_count integer DEFAULT 5,
+  full_text_weight double precision DEFAULT 1.0,
+  semantic_weight double precision DEFAULT 1.0,
+  p_bot_id uuid DEFAULT NULL::uuid,
+  p_workspace_id uuid DEFAULT NULL::uuid
+) RETURNS TABLE(
+  id uuid,
+  bot_id uuid,
+  workspace_id uuid,
+  content text,
+  metadata jsonb,
+  similarity double precision,
+  source_type text,
+  resolved_url text
+) LANGUAGE plpgsql
+AS $function$
+declare
+  rrf_k constant integer := 20;
+  fts_query tsquery;
+begin
+  begin
+    fts_query := replace(
+      websearch_to_tsquery('simple', query_text)::text,
+      ' & ',
+      ' | '
+    )::tsquery;
+  exception when others then
+    fts_query := null;
+  end;
+
+  return query
+  with full_text_results as (
+    select
+      d.id,
+      row_number() over (order by ts_rank_cd(d.fts, fts_query) desc) as rank_ix
+    from public.documents d
+    where
+      (
+        (p_bot_id is not null and d.bot_id = p_bot_id)
+        or (p_workspace_id is not null and d.workspace_id = p_workspace_id)
+      )
+      and fts_query is not null
+      and d.fts @@ fts_query
+    limit 20
+  ),
+  semantic_results as (
+    select
+      d.id,
+      1 - (d.embedding <=> query_embedding) as semantic_similarity,
+      row_number() over (order by d.embedding <=> query_embedding) as rank_ix
+    from public.documents d
+    where
+      (
+        (p_bot_id is not null and d.bot_id = p_bot_id)
+        or (p_workspace_id is not null and d.workspace_id = p_workspace_id)
+      )
+      and d.embedding is not null
+    limit 20
+  ),
+  rrf_results as (
+    select
+      coalesce(ft.id, sem.id) as id,
+      sem.semantic_similarity,
+      (
+        coalesce(full_text_weight * (1.0 / (rrf_k + ft.rank_ix)), 0.0) +
+        coalesce(semantic_weight * (1.0 / (rrf_k + sem.rank_ix)), 0.0)
+      ) as rrf_score
+    from full_text_results ft
+    full outer join semantic_results sem on ft.id = sem.id
+  ),
+  top_matches as (
+    select
+      rrf.id,
+      rrf.semantic_similarity,
+      rrf.rrf_score
+    from rrf_results rrf
+    order by rrf.rrf_score desc
+    limit match_count
+  )
+  select
+    d.id,
+    d.bot_id,
+    d.workspace_id,
+    d.content,
+    d.metadata,
+    coalesce(tm.semantic_similarity, 0.0) as similarity,
+    coalesce(
+      p.source_type,
+      case
+        when d.metadata->>'source_type' = 'manual' then 'manual_text'
+        else d.metadata->>'source_type'
+      end,
+      'website'
+    ) as source_type,
+    p.url as resolved_url
+  from top_matches tm
+  join public.documents d on d.id = tm.id
+  left join public.pages p on d.bot_id = p.bot_id and (d.metadata->>'url') = p.url;
+end;
+$function$;

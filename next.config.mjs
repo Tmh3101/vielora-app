@@ -31,6 +31,7 @@ const nextConfig = {
       "clone-deep",
       "merge-deep",
     ],
+    optimizePackageImports: ["framer-motion", "lucide-react"],
   },
 
   webpack: (config, { isServer }) => {

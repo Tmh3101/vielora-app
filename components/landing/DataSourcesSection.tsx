@@ -37,7 +37,6 @@ export default function DataSourcesSection() {
   return (
     <section ref={sectionRef} className="relative overflow-hidden bg-card/50 pt-20 lg:pt-28">
       <div className="absolute inset-0 bg-card" />
-      <div className="bg-grain pointer-events-none absolute inset-0 opacity-[0.04]" />
       <div className="dot-pattern pointer-events-none absolute inset-0 opacity-[0.18]" />
 
       <div
@@ -83,46 +82,6 @@ export default function DataSourcesSection() {
       <div
         className="pointer-events-none absolute inset-0"
         style={{
-          opacity: 0.15,
-
-          backgroundImage: `
-        linear-gradient(
-          to right,
-          hsl(var(--primary) / .4) 2px,
-          transparent 2px
-        ),
-        linear-gradient(
-          to bottom,
-          hsl(var(--primary) / .4) 2px,
-          transparent 2px
-        )
-      `,
-
-          backgroundSize: "240px 240px",
-
-          WebkitMaskImage: `
-        linear-gradient(
-          to top,
-          black 0%,
-          rgba(0,0,0,.15) 70%,
-          transparent 100%
-        )
-      `,
-
-          maskImage: `
-        linear-gradient(
-          to top,
-          black 0%,
-          rgba(0,0,0,.15) 70%,
-          transparent 100%
-        )
-      `,
-        }}
-      />
-
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
           background: `
         radial-gradient(
           ellipse at center,
@@ -134,9 +93,7 @@ export default function DataSourcesSection() {
         }}
       />
 
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-primary/[0.02] to-transparent" />
       <div className="orb orb-primary -right-32 -top-32 h-64 w-64 opacity-45" />
-      <div className="orb orb-primary -bottom-24 -left-24 h-48 w-48 opacity-35" />
 
       <motion.div
         className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"
@@ -156,7 +113,7 @@ export default function DataSourcesSection() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.1 }}
+            transition={{ duration: 0.5, delay: 0.05 }}
             className="text-lg text-muted-foreground"
           >
             Thu thập và xử lý dữ liệu từ website, blog, tin tức đến tài liệu, bảng tính một cách tự

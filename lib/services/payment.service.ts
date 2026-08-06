@@ -6,6 +6,8 @@ import {
   EPaymentType,
   ESubscriptionStatus,
   EPaymentCurrency,
+  EInvoiceStatus,
+  EPaymentProvider,
 } from "@/types/enums";
 import {
   sendPaymentConfirmationEmail,
@@ -41,7 +43,7 @@ export async function handlePaymentSuccess(
 ): Promise<ServiceResult> {
   const { data: payment, error: paymentError } = await client
     .from("payments")
-    .select("id, user_id, amount, status, payment_type, metadata, plan_id")
+    .select("id, user_id, workspace_id, amount, status, payment_type, metadata, plan_id")
     .eq("id", paymentId)
     .maybeSingle();
 
@@ -89,22 +91,28 @@ export async function handlePaymentSuccess(
     }
 
     // Fetch wallet
-    const { data: wallet, error: walletError } = await client
+    if (!payment.workspace_id) {
+      throw new Error(`Payment ${paymentId} has no workspace`);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: wallet, error: walletError } = await (client as any)
       .from("wallets")
       .select("payg_credits, total_credits")
-      .eq("user_id", payment.user_id)
+      .eq("workspace_id", payment.workspace_id)
       .maybeSingle();
 
     if (walletError) throw new Error(`Failed to fetch wallet: ${walletError.message}`);
-    if (!wallet) throw new Error(`Wallet not found for user ${payment.user_id}`);
+    if (!wallet) throw new Error(`Wallet not found for workspace ${payment.workspace_id}`);
 
     const newPaygCredits = wallet.payg_credits + creditsAdded;
 
     // Update wallet
-    const { error: updateWalletError } = await client
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateWalletError } = await (client as any)
       .from("wallets")
       .update({ payg_credits: newPaygCredits })
-      .eq("user_id", payment.user_id);
+      .eq("workspace_id", payment.workspace_id);
 
     if (updateWalletError) {
       throw new Error(`Failed to update wallet credits: ${updateWalletError.message}`);
@@ -113,6 +121,7 @@ export async function handlePaymentSuccess(
     // Insert transaction
     const transaction: CreditTransactionInsert = {
       user_id: payment.user_id,
+      workspace_id: payment.workspace_id ?? null,
       payment_id: payment.id,
       amount: creditsAdded,
       transaction_type: "payg_purchase",
@@ -138,6 +147,28 @@ export async function handlePaymentSuccess(
         creditsAdded,
         newTotalCredits: (wallet.total_credits || 0) + creditsAdded,
       });
+    }
+
+    // Trigger invoice generation for PAYG payments
+    try {
+      const { data: invoice } = await client
+        .from("invoices")
+        .select("id")
+        .eq("payment_id", paymentId)
+        .eq("status", EInvoiceStatus.Pending)
+        .maybeSingle();
+
+      if (invoice) {
+        const { addInvoiceJob } = await import("@/lib/services/server/invoice-queue");
+        await addInvoiceJob({ invoiceId: invoice.id }).catch((err) => {
+          console.error(
+            `[InvoiceTrigger] Failed to add invoice job for ${invoice.id}:`,
+            err.message
+          );
+        });
+      }
+    } catch {
+      // Invoice trigger is non-critical, silently ignore errors
     }
 
     return { success: true, message: "PAYG processed successfully" };
@@ -172,10 +203,13 @@ export async function handlePaymentSuccess(
       ? PaymentAction.Renew
       : PaymentAction.Upgrade;
 
-  const { data: subscription, error: subscriptionError } = await client
+  const billingWorkspaceId = payment.workspace_id ?? null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: subscriptionRow, error: subscriptionError } = await (client as any)
     .from("subscriptions")
-    .select("id, current_period_start, current_period_end")
-    .eq("user_id", payment.user_id)
+    .select("id, user_id, workspace_id, current_period_start, current_period_end")
+    .eq(billingWorkspaceId ? "workspace_id" : "user_id", billingWorkspaceId ?? payment.user_id)
     .order("current_period_end", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -184,8 +218,170 @@ export async function handlePaymentSuccess(
     throw new Error(`Failed to fetch subscription: ${subscriptionError.message}`);
   }
 
-  if (!subscription) {
-    throw new Error(`Subscription not found for user ${payment.user_id}`);
+  let activeSubscription = subscriptionRow as {
+    id: string;
+    user_id: string;
+    workspace_id: string | null;
+    current_period_start: string;
+    current_period_end: string;
+  } | null;
+
+  if (!activeSubscription && billingWorkspaceId) {
+    // Legacy fallback: user-level subscription not attached to any workspace yet
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: userSub } = await (client as any)
+      .from("subscriptions")
+      .select("id, user_id, workspace_id, current_period_start, current_period_end")
+      .eq("user_id", payment.user_id)
+      .order("current_period_end", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const legacySub = userSub as typeof activeSubscription;
+    if (legacySub?.workspace_id && legacySub.workspace_id !== billingWorkspaceId) {
+      throw new Error(
+        `Subscription is already bound to another workspace ${legacySub.workspace_id}`
+      );
+    }
+    if (legacySub) {
+      if (!legacySub.workspace_id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (client as any)
+          .from("subscriptions")
+          .update({ workspace_id: billingWorkspaceId })
+          .eq("id", legacySub.id);
+        legacySub.workspace_id = billingWorkspaceId;
+      }
+      activeSubscription = legacySub;
+    }
+  }
+
+  if (!activeSubscription) {
+    // No subscription yet — create one attached to the billing scope
+    const initialStart = new Date();
+    const initialEnd = new Date(initialStart);
+    initialEnd.setMonth(initialEnd.getMonth() + 1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: createdSub, error: createSubError } = await (client as any)
+      .from("subscriptions")
+      .insert({
+        user_id: payment.user_id,
+        workspace_id: billingWorkspaceId,
+        plan_id: payment.plan_id,
+        status: ESubscriptionStatus.Active,
+        billing_cycle: cycle,
+        current_period_start: initialStart.toISOString(),
+        current_period_end: initialEnd.toISOString(),
+        next_credit_reset_at: initialEnd.toISOString(),
+        needs_bot_selection: true,
+      })
+      .select("id, user_id, workspace_id, current_period_start, current_period_end")
+      .single();
+
+    if (createSubError || !createdSub) {
+      throw new Error(`Failed to create subscription: ${createSubError?.message ?? "unknown"}`);
+    }
+    activeSubscription = createdSub;
+  }
+
+  const subscription = activeSubscription;
+
+  const isIncrementalUpgrade = Boolean(metadataObj?.isIncrementalUpgrade);
+
+  if (isIncrementalUpgrade && subscription && subscription.workspace_id) {
+    const deltaBots = Number(metadataObj?.deltaBots || 0);
+    const deltaCredits = Number(metadataObj?.deltaCredits || 0);
+
+    // Fetch existing overrides
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: currentSubData } = await (client as any)
+      .from("subscriptions")
+      .select("bots_limit_override, monthly_credits_override")
+      .eq("id", subscription.id)
+      .single();
+
+    const currentBots = currentSubData?.bots_limit_override ?? plan.bots_limit;
+    const currentMonthlyCredits = currentSubData?.monthly_credits_override ?? plan.monthly_credits;
+
+    const newBotsLimit = currentBots + deltaBots;
+    const newMonthlyCredits = currentMonthlyCredits + deltaCredits;
+
+    const { error: subUpdateErr } = await client
+      .from("subscriptions")
+      .update({
+        bots_limit_override: newBotsLimit,
+        monthly_credits_override: newMonthlyCredits,
+        status: ESubscriptionStatus.Active,
+      })
+      .eq("id", subscription.id);
+
+    if (subUpdateErr) {
+      throw new Error(
+        `Failed to update subscription for incremental upgrade: ${subUpdateErr.message}`
+      );
+    }
+
+    // Add deltaCredits to wallet's subscription_credits
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: currentWallet } = await (client as any)
+      .from("wallets")
+      .select("subscription_credits")
+      .eq("workspace_id", subscription.workspace_id)
+      .maybeSingle();
+
+    const currentWalletSubCredits = currentWallet?.subscription_credits ?? 0;
+    const updatedWalletSubCredits = currentWalletSubCredits + deltaCredits;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: walletUpdateErr } = await (client as any)
+      .from("wallets")
+      .update({ subscription_credits: updatedWalletSubCredits })
+      .eq("workspace_id", subscription.workspace_id);
+
+    if (walletUpdateErr) {
+      throw new Error(
+        `Failed to update wallet for incremental upgrade: ${walletUpdateErr.message}`
+      );
+    }
+
+    const transaction: CreditTransactionInsert = {
+      user_id: payment.user_id,
+      workspace_id: subscription.workspace_id,
+      payment_id: payment.id,
+      amount: deltaCredits,
+      transaction_type: "subscription_renewal",
+      description: `Nâng cấp bổ sung gói Enterprise (+${deltaBots} bots, +${deltaCredits.toLocaleString("vi-VN")} credits)`,
+    };
+
+    const { error: txErr } = await client.from("credit_transactions").insert(transaction);
+    if (txErr) {
+      throw new Error(`Failed to insert credit transaction: ${txErr.message}`);
+    }
+
+    // Send payment confirmation email
+    const userInfo = await getUserEmailById(client, payment.user_id);
+    if (userInfo) {
+      const formatDate = (iso: string) =>
+        new Date(iso).toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        });
+
+      await sendPaymentConfirmationEmail(userInfo.email, userInfo.fullName, {
+        planName: plan.name,
+        billingCycle: cycle,
+        amount: payment.amount as number,
+        currency: (metadataObj?.currency as string) ?? EPaymentCurrency.VND,
+        txnId: payment.id.slice(0, 8).toUpperCase(),
+        botsLimit: newBotsLimit,
+        monthlyCredits: newMonthlyCredits,
+        periodStart: formatDate(subscription.current_period_start),
+        periodEnd: formatDate(subscription.current_period_end),
+      }).catch(console.error);
+    }
+
+    return { success: true, message: "Incremental Enterprise upgrade processed successfully" };
   }
 
   let periodStartDate: Date;
@@ -231,17 +427,40 @@ export async function handlePaymentSuccess(
     }
   }
 
+  const customBots = metadataObj?.bots ? Number(metadataObj.bots) : null;
+  const customCredits = metadataObj?.credits ? Number(metadataObj.credits) : null;
+  const effectiveCredits = customCredits ?? plan.monthly_credits;
+  const effectiveBotsLimit = customBots ?? plan.bots_limit;
+
   // Bắt đầu cập nhật thông tin
-  const updatePayload: TablesUpdate<"subscriptions"> = {
+  const updatePayload: TablesUpdate<"subscriptions"> & {
+    bots_limit_override?: number | null;
+    monthly_credits_override?: number | null;
+  } = {
     status: ESubscriptionStatus.Active,
     plan_id: plan.id,
     billing_cycle: cycle,
     current_period_start: periodStartIso,
     current_period_end: periodEndIso,
+    bots_limit_override: customBots,
+    monthly_credits_override: customCredits,
   };
 
   if (nextCreditResetAt) {
     updatePayload.next_credit_reset_at = nextCreditResetAt.toISOString();
+  }
+
+  // Check bot count against effective bots limit
+  if (subscription.workspace_id) {
+    const { count: activeBotsCount } = await client
+      .from("bots")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", subscription.workspace_id)
+      .eq("is_stopped", false);
+
+    if ((activeBotsCount || 0) > effectiveBotsLimit) {
+      updatePayload.needs_bot_selection = true;
+    }
   }
 
   const { error: subscriptionUpdateError } = await client
@@ -255,10 +474,11 @@ export async function handlePaymentSuccess(
 
   // Chỉ reset credit nếu là upgrade hoặc renew gói đã hết hạn
   if (shouldResetCredits) {
-    const { error: walletError } = await client
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: walletError } = await (client as any)
       .from("wallets")
-      .update({ subscription_credits: plan.monthly_credits })
-      .eq("user_id", payment.user_id);
+      .update({ subscription_credits: effectiveCredits })
+      .eq("workspace_id", subscription.workspace_id);
 
     if (walletError) {
       // Revert is ideally done with transactions, but since we use REST, we just throw error here
@@ -268,8 +488,9 @@ export async function handlePaymentSuccess(
 
   const transaction: CreditTransactionInsert = {
     user_id: payment.user_id,
+    workspace_id: subscription.workspace_id ?? null,
     payment_id: payment.id,
-    amount: plan.monthly_credits,
+    amount: effectiveCredits,
     transaction_type: "subscription_renewal",
     description:
       action === PaymentAction.Renew
@@ -305,6 +526,25 @@ export async function handlePaymentSuccess(
       periodStart: formatDate(periodStartIso),
       periodEnd: formatDate(periodEndIso),
     });
+  }
+
+  // Trigger invoice generation if requested
+  try {
+    const { data: invoice } = await client
+      .from("invoices")
+      .select("id")
+      .eq("payment_id", paymentId)
+      .eq("status", EInvoiceStatus.Pending)
+      .maybeSingle();
+
+    if (invoice) {
+      const { addInvoiceJob } = await import("@/lib/services/server/invoice-queue");
+      await addInvoiceJob({ invoiceId: invoice.id }).catch((err) => {
+        console.error(`[InvoiceTrigger] Failed to add invoice job for ${invoice.id}:`, err.message);
+      });
+    }
+  } catch {
+    // Invoice trigger is non-critical, silently ignore errors
   }
 
   return { success: true, message: "Payment processed successfully" };
@@ -430,14 +670,18 @@ export async function updatePaymentProviderTxnId(
  */
 export async function getPendingPayOSPaymentsByUser(
   client: ServiceClient,
-  userId: string
+  userId: string,
+  workspaceId?: string | null
 ): Promise<Pick<PaymentRow, "id" | "provider_transaction_id">[]> {
-  const { data, error } = await client
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const query = (client as any)
     .from("payments")
     .select("id, provider_transaction_id")
     .eq("user_id", userId)
     .eq("status", EPaymentStatus.Pending)
-    .eq("provider", "payos");
+    .eq("provider", EPaymentProvider.PayOS);
+
+  const { data, error } = workspaceId ? await query.eq("workspace_id", workspaceId) : await query;
 
   if (error) throw new Error(error.message);
   return (data ?? []) as Pick<PaymentRow, "id" | "provider_transaction_id">[];
@@ -448,12 +692,16 @@ export async function getPendingPayOSPaymentsByUser(
  */
 export async function calculateCreditBasedProration(
   client: ServiceClient,
-  userId: string
+  userId: string,
+  workspaceId?: string | null
 ): Promise<number> {
-  const { data: sub, error: subError } = await client
+  if (!workspaceId) return 0;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: sub, error: subError } = await (client as any)
     .from("subscriptions")
     .select("*, plans(monthly_credits, pricing)")
-    .eq("user_id", userId)
+    .eq("workspace_id", workspaceId)
     .eq("status", ESubscriptionStatus.Active)
     .order("current_period_end", { ascending: false })
     .limit(1)
@@ -462,26 +710,41 @@ export async function calculateCreditBasedProration(
   if (subError || !sub || !sub.plans) return 0;
 
   const planData = Array.isArray(sub.plans) ? sub.plans[0] : sub.plans;
-  if (!planData || planData.monthly_credits <= 0) return 0; // free plan
+  const effectiveMonthlyCredits = sub.monthly_credits_override ?? planData?.monthly_credits ?? 0;
+  if (!planData || effectiveMonthlyCredits <= 0) return 0; // free plan
 
   const now = new Date();
   const periodEnd = new Date(sub.current_period_end);
   if (now >= periodEnd) return 0;
 
-  const { data: wallet } = await client
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: wallet } = await (client as any)
     .from("wallets")
     .select("subscription_credits")
-    .eq("user_id", userId)
+    .eq("workspace_id", workspaceId)
     .maybeSingle();
 
   const currentCredits = wallet?.subscription_credits ?? 0;
 
-  const pricing = planData.pricing as Record<string, Record<string, number>> | null;
-  const pricePaid = pricing?.VND?.[sub.billing_cycle || ESubscriptionCycle.Monthly] ?? 0;
+  let pricePaid = 0;
+  if (planData.code === "enterprise") {
+    const { calculateEnterprisePrice, ENTERPRISE_PRICE } =
+      await import("@/config/pricing-enterprise");
+    const bots = sub.bots_limit_override ?? ENTERPRISE_PRICE.bots.min;
+    const credits = sub.monthly_credits_override ?? ENTERPRISE_PRICE.monthlyCredits.min;
+    pricePaid = calculateEnterprisePrice(
+      bots,
+      credits,
+      sub.billing_cycle || ESubscriptionCycle.Monthly
+    );
+  } else {
+    const pricing = planData.pricing as Record<string, Record<string, number>> | null;
+    pricePaid = pricing?.VND?.[sub.billing_cycle || ESubscriptionCycle.Monthly] ?? 0;
+  }
   if (pricePaid <= 0) return 0;
 
   const isYearly = sub.billing_cycle === ESubscriptionCycle.Yearly;
-  const totalCreditsPeriod = planData.monthly_credits * (isYearly ? 12 : 1);
+  const totalCreditsPeriod = effectiveMonthlyCredits * (isYearly ? 12 : 1);
 
   let fullMonthsLeft = 0;
   if (sub.next_credit_reset_at) {
@@ -501,7 +764,7 @@ export async function calculateCreditBasedProration(
     }
   }
 
-  const remainingCredits = fullMonthsLeft * planData.monthly_credits + Math.max(0, currentCredits);
+  const remainingCredits = fullMonthsLeft * effectiveMonthlyCredits + Math.max(0, currentCredits);
 
   const discount = Math.floor((remainingCredits / totalCreditsPeriod) * pricePaid);
   return discount;

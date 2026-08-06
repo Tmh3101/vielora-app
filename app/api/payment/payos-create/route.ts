@@ -7,10 +7,13 @@ import {
   EPaymentProvider,
   EPaymentCurrency,
   ESubscriptionStatus,
+  EInvoiceStatus,
+  EInvoiceProvider,
+  ESubscriptionPlan,
   PlanPrice,
 } from "@/types";
 import { getPlanByCodeServer } from "@/lib/services/plan.service";
-import { getSubscriptionByUserIdServer } from "@/lib/services/subscription.service";
+import { getSubscriptionByWorkspaceId } from "@/lib/services/subscription.service";
 import {
   getPendingPayOSPaymentsByUser,
   updatePaymentStatus,
@@ -32,6 +35,7 @@ import {
   getPaymentAmount,
 } from "@/lib/helpers/payos-helpers";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
+import { validateInvoiceFields } from "@/lib/utils/invoice-validation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,9 +43,47 @@ export async function POST(request: NextRequest) {
     if (isAuthError(authResult)) return authResult;
     const { user, supabase } = authResult;
 
-    const { planCode, billingCycle, action = PaymentAction.Upgrade } = await request.json();
+    const body = await request.json();
+    const {
+      planCode,
+      billingCycle,
+      action = PaymentAction.Upgrade,
+      requestInvoice = false,
+      invoice,
+      workspaceId: bodyWorkspaceId,
+    } = body;
+
+    const workspaceId: string | null =
+      bodyWorkspaceId ||
+      request.headers.get("x-workspace-id") ||
+      request.cookies.get("active_workspace_id")?.value ||
+      null;
+
     if (!planCode || !billingCycle) {
       return NextResponse.json({ error: "Missing planCode or billingCycle" }, { status: 400 });
+    }
+
+    let invoiceData:
+      | {
+          companyName: string;
+          companyTaxCode: string;
+          companyAddress: string;
+          recipientEmail: string;
+        }
+      | undefined;
+
+    if (requestInvoice) {
+      const validation = validateInvoiceFields(invoice ?? {});
+      if (!validation.valid || !validation.data) {
+        return NextResponse.json(
+          {
+            error: "Thông tin xuất hóa đơn không hợp lệ",
+            fieldErrors: validation.errors,
+          },
+          { status: 400 }
+        );
+      }
+      invoiceData = validation.data;
     }
 
     if (!Object.values(ESubscriptionCycle).includes(billingCycle)) {
@@ -56,19 +98,112 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Plan not found" }, { status: 404 });
     }
 
-    // Get price from plan pricing
-    const pricing = plan.pricing as unknown as PlanPrice | null;
-    let amount = pricing?.[billingCycle]?.VND;
+    const customBots = body.botsLimit ?? body.bots_limit;
+    const customCredits = body.monthlyCredits ?? body.monthly_credits;
+    const deltaBotsInput = body.deltaBots ?? body.delta_bots;
+    const deltaCreditsInput = body.deltaCredits ?? body.delta_credits;
+    const isIncrementalUpgrade = Boolean(
+      body.isIncrementalUpgrade || deltaBotsInput || deltaCreditsInput
+    );
 
-    if (!amount || amount <= 0) {
+    let selectedBots: number | null = null;
+    let selectedCredits: number | null = null;
+    let amount: number | undefined;
+    let deltaBots = 0;
+    let deltaCredits = 0;
+    let remainingMonths = 1;
+
+    const currentSub = workspaceId
+      ? await getSubscriptionByWorkspaceId(supabase, workspaceId)
+      : null;
+
+    if (plan.code === ESubscriptionPlan.Enterprise) {
+      const {
+        calculateEnterprisePrice,
+        calculateEnterpriseUpgradePrice,
+        ENTERPRISE_PRICE,
+        clampValue,
+      } = await import("@/config/pricing-enterprise");
+      const { calculateRemainingMonths } = await import("@/lib/helpers/payment-helpers");
+
+      const isCurrentSubEnterprise =
+        currentSub &&
+        currentSub.status === ESubscriptionStatus.Active &&
+        currentSub.plan_id === plan.id;
+
+      if (isCurrentSubEnterprise && action === PaymentAction.Renew) {
+        // Enforce same cycle renewal
+        if (currentSub.billing_cycle && billingCycle !== currentSub.billing_cycle) {
+          const expectedCycleLabel =
+            currentSub.billing_cycle === ESubscriptionCycle.Monthly ? "Tháng" : "Năm";
+          return NextResponse.json(
+            {
+              error: `Không thể gia hạn khác chu kỳ. Gói hiện tại của bạn là chu kỳ ${expectedCycleLabel}.`,
+            },
+            { status: 400 }
+          );
+        }
+        selectedBots = currentSub.bots_limit_override ?? ENTERPRISE_PRICE.bots.min;
+        selectedCredits =
+          currentSub.monthly_credits_override ?? ENTERPRISE_PRICE.monthlyCredits.min;
+        amount = calculateEnterprisePrice(
+          selectedBots,
+          selectedCredits,
+          billingCycle as ESubscriptionCycle
+        );
+      } else if (isCurrentSubEnterprise && isIncrementalUpgrade) {
+        deltaBots = Math.max(0, Number(deltaBotsInput || 0));
+        deltaCredits = Math.max(0, Number(deltaCreditsInput || 0));
+        if (deltaBots <= 0 && deltaCredits <= 0) {
+          return NextResponse.json(
+            { error: "Vui lòng chọn số lượng bot hoặc credit cần nâng cấp bổ sung." },
+            { status: 400 }
+          );
+        }
+        const activeCycle = (currentSub.billing_cycle as ESubscriptionCycle) || billingCycle;
+        remainingMonths = calculateRemainingMonths(currentSub.current_period_end);
+        amount = calculateEnterpriseUpgradePrice(
+          deltaBots,
+          deltaCredits,
+          activeCycle,
+          remainingMonths
+        );
+      } else {
+        // First-time Enterprise registration or normal plan change
+        selectedBots = clampValue(
+          Number(customBots || ENTERPRISE_PRICE.bots.min),
+          ENTERPRISE_PRICE.bots.min,
+          ENTERPRISE_PRICE.bots.max
+        );
+        selectedCredits = clampValue(
+          Number(customCredits || ENTERPRISE_PRICE.monthlyCredits.min),
+          ENTERPRISE_PRICE.monthlyCredits.min,
+          ENTERPRISE_PRICE.monthlyCredits.max
+        );
+        amount = calculateEnterprisePrice(
+          selectedBots,
+          selectedCredits,
+          billingCycle as ESubscriptionCycle
+        );
+      }
+    } else {
+      // Get price from plan pricing
+      const pricing = plan.pricing as unknown as PlanPrice | null;
+      amount = pricing?.VND?.[billingCycle];
+    }
+
+    if (amount === undefined || amount < 0) {
       return NextResponse.json(
-        { error: "This plan is free. No payment required." },
+        { error: "Plan price invalid. Cannot create payment." },
         { status: 400 }
       );
     }
 
-    const currentSub = await getSubscriptionByUserIdServer(supabase, user.id);
-    if (currentSub?.plan_id === plan.id && action !== PaymentAction.Renew) {
+    if (
+      currentSub?.plan_id === plan.id &&
+      action !== PaymentAction.Renew &&
+      plan.code !== ESubscriptionPlan.Enterprise
+    ) {
       return NextResponse.json({ error: "You are already on this plan" }, { status: 400 });
     }
 
@@ -105,15 +240,16 @@ export async function POST(request: NextRequest) {
     let prorationDiscount = 0;
     if (
       action === PaymentAction.Upgrade &&
+      !isIncrementalUpgrade &&
       currentSub &&
       currentSub.status === ESubscriptionStatus.Active
     ) {
-      prorationDiscount = await calculateCreditBasedProration(supabase, user.id);
+      prorationDiscount = await calculateCreditBasedProration(supabase, user.id, workspaceId);
       amount = amount - prorationDiscount;
     }
 
     // Cancel all existing pending PayOS payments for this user
-    const pendingPayments = await getPendingPayOSPaymentsByUser(supabase, user.id);
+    const pendingPayments = await getPendingPayOSPaymentsByUser(supabase, user.id, workspaceId);
     if (pendingPayments.length > 0) {
       for (const pending of pendingPayments) {
         if (pending.provider_transaction_id) {
@@ -141,6 +277,7 @@ export async function POST(request: NextRequest) {
     const orderCode = generateOrderCode();
     const payment = await createPaymentRecord(supabase, {
       user_id: user.id,
+      workspace_id: workspaceId,
       amount: Math.max(0, amount),
       currency: EPaymentCurrency.VND,
       status: EPaymentStatus.Pending,
@@ -157,10 +294,61 @@ export async function POST(request: NextRequest) {
         planName: plan.name,
         action: action,
         prorationDiscount,
+        requestInvoice: Boolean(invoiceData),
+        ...(isIncrementalUpgrade
+          ? { isIncrementalUpgrade: true, deltaBots, deltaCredits, remainingMonths }
+          : {}),
+        ...(selectedBots ? { bots: selectedBots } : {}),
+        ...(selectedCredits ? { credits: selectedCredits } : {}),
       },
     });
 
     console.log("Created payment record:", payment);
+
+    if (invoiceData) {
+      console.log("[InvoiceCreate] Creating invoice row for payment:", payment.id, {
+        company: invoiceData.companyName,
+        taxCode: invoiceData.companyTaxCode,
+        email: invoiceData.recipientEmail,
+      });
+
+      const { error: invoiceInsertError } = await supabase.from("invoices").insert({
+        payment_id: payment.id,
+        user_id: user.id,
+        company_name: invoiceData.companyName,
+        company_tax_code: invoiceData.companyTaxCode,
+        company_address: invoiceData.companyAddress,
+        recipient_email: invoiceData.recipientEmail,
+        status: EInvoiceStatus.Pending,
+        provider: EInvoiceProvider.EasyInvoice,
+        line_items: [
+          {
+            name: `Bản quyền phần mềm Vielora - Gói ${plan.name}`,
+            code: `SUB_${plan.code.toUpperCase()}`,
+            quantity: 1,
+            unit: "Gói",
+            amount: Math.max(0, amount),
+            billingCycle,
+            action,
+          },
+        ],
+      });
+
+      if (invoiceInsertError) {
+        console.error(
+          "[InvoiceCreate] Insert FAILED:",
+          invoiceInsertError.message,
+          invoiceInsertError.code
+        );
+        await updatePaymentStatus(supabase, payment.id, EPaymentStatus.Failed);
+        return NextResponse.json(
+          { error: "Không thể tạo yêu cầu xuất hóa đơn. Vui lòng thử lại." },
+          { status: 500 }
+        );
+      }
+
+      console.log("[InvoiceCreate] Invoice row created successfully for payment:", payment.id);
+    }
     if (amount <= PAYOS_MIN_AMOUNT_VND && action === PaymentAction.Upgrade) {
       await handlePaymentSuccess(supabase, payment.id);
       const successUrl = getPayOSSuccessUrl(payment.id);
@@ -176,7 +364,7 @@ export async function POST(request: NextRequest) {
       orderCode,
       amount: getPaymentAmount(amount),
       description:
-        `Nang cap goi ${plan.name} - ${billingCycle === ESubscriptionCycle.Monthly ? "thang" : "nam"}`.substring(
+        `Mua goi ${plan.name} - ${billingCycle === ESubscriptionCycle.Monthly ? "thang" : "nam"}`.substring(
           0,
           25
         ),

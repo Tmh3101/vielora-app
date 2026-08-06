@@ -3,18 +3,26 @@ import { randomUUID } from "node:crypto";
 import { getRedisConnectionOptions } from "@/lib/config/redis";
 import { createJobRecord } from "@/lib/services/job.service";
 import { createAdminClient } from "@/lib/supabase/server";
-import type { CrawlJobConfig, DiscoverJobData, IndexerJobData, PageCrawlerJobData } from "@/types";
+import type {
+  CrawlJobConfig,
+  DiscoverJobData,
+  IndexerJobData,
+  PageCrawlerJobData,
+  WorkspaceKnowledgeJobData,
+} from "@/types";
 import {
   DISCOVER_QUEUE_NAME,
   INDEXER_QUEUE_NAME,
   JobName,
   PAGE_CRAWLER_QUEUE_NAME,
+  WORKSPACE_KNOWLEDGE_QUEUE_NAME,
 } from "@/lib/constants/job";
 import { DEFAULT_JOB_OPTIONS } from "@/config/scraper";
 
 let discoverQueue: Queue<DiscoverJobData> | null = null;
 let indexerQueue: Queue<IndexerJobData> | null = null;
 let pageCrawlerQueue: Queue<PageCrawlerJobData> | null = null;
+let workspaceKnowledgeQueue: Queue<WorkspaceKnowledgeJobData> | null = null;
 
 export function getDiscoverQueue(): Queue<DiscoverJobData> {
   if (!discoverQueue) {
@@ -47,6 +55,17 @@ export function getPageCrawlerQueue(): Queue<PageCrawlerJobData> {
   }
 
   return pageCrawlerQueue;
+}
+
+export function getWorkspaceKnowledgeQueue(): Queue<WorkspaceKnowledgeJobData> {
+  if (!workspaceKnowledgeQueue) {
+    workspaceKnowledgeQueue = new Queue<WorkspaceKnowledgeJobData>(WORKSPACE_KNOWLEDGE_QUEUE_NAME, {
+      connection: getRedisConnectionOptions(),
+      defaultJobOptions: DEFAULT_JOB_OPTIONS,
+    });
+  }
+
+  return workspaceKnowledgeQueue;
 }
 
 export async function addDiscoverJob(params: {
@@ -146,7 +165,11 @@ export async function addIndexerJob(params: {
     params.botId
   );
 
-  await queue.add(`index:${params.pageId}:${requestId}`, jobData, { jobId });
+  await queue.add(`index:${params.pageId}:${requestId}`, jobData, {
+    jobId,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 10000 },
+  });
 
   return jobId;
 }
@@ -160,7 +183,7 @@ export async function addIndexerJobs(
   type BulkItem = {
     name: string;
     data: IndexerJobData;
-    opts: { jobId: string };
+    opts: { jobId: string; attempts: number; backoff: { type: string; delay: number } };
     safeJobId: string;
     jobData: IndexerJobData;
   };
@@ -173,7 +196,7 @@ export async function addIndexerJobs(
     return {
       name: `index:${job.pageId}:${requestId}`,
       data: jobData,
-      opts: { jobId: safeJobId },
+      opts: { jobId: safeJobId, attempts: 3, backoff: { type: "exponential", delay: 10000 } },
       safeJobId,
       jobData,
     };
@@ -198,15 +221,47 @@ export async function addIndexerJobs(
   return indexerJobIds;
 }
 
+export async function addWorkspaceKnowledgeJob(
+  itemId: string,
+  workspaceId: string
+): Promise<string> {
+  const requestId = randomUUID();
+  const queue = getWorkspaceKnowledgeQueue();
+  const jobId = randomUUID();
+  const jobData: WorkspaceKnowledgeJobData = {
+    itemId,
+    workspaceId,
+    requestId,
+  };
+
+  // Dual-insert: DB record first, then BullMQ job
+  await createJobRecord(
+    createAdminClient(),
+    jobId,
+    JobName.WORKSPACE_KNOWLEDGE,
+    jobData as unknown as Record<string, unknown>
+  );
+
+  await queue.add(`workspace-knowledge:${itemId}:${requestId}`, jobData, {
+    jobId,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 10000 },
+  });
+
+  return jobId;
+}
+
 export async function getQueueStatus(): Promise<{
   discover: { waiting: number; active: number; completed: number; failed: number };
   pageCrawler: { waiting: number; active: number; completed: number; failed: number };
   indexer: { waiting: number; active: number; completed: number; failed: number };
+  workspaceKnowledge: { waiting: number; active: number; completed: number; failed: number };
 }> {
-  const [discover, pageCrawler, indexer] = await Promise.all([
+  const [discover, pageCrawler, indexer, workspaceKnowledge] = await Promise.all([
     getDiscoverQueue(),
     getPageCrawlerQueue(),
     getIndexerQueue(),
+    getWorkspaceKnowledgeQueue(),
   ]);
 
   const [
@@ -222,6 +277,10 @@ export async function getQueueStatus(): Promise<{
     iActive,
     iCompleted,
     iFailed,
+    wkWaiting,
+    wkActive,
+    wkCompleted,
+    wkFailed,
   ] = await Promise.all([
     discover.getWaitingCount(),
     discover.getActiveCount(),
@@ -235,19 +294,35 @@ export async function getQueueStatus(): Promise<{
     indexer.getActiveCount(),
     indexer.getCompletedCount(),
     indexer.getFailedCount(),
+    workspaceKnowledge.getWaitingCount(),
+    workspaceKnowledge.getActiveCount(),
+    workspaceKnowledge.getCompletedCount(),
+    workspaceKnowledge.getFailedCount(),
   ]);
 
   return {
     discover: { waiting: dWaiting, active: dActive, completed: dCompleted, failed: dFailed },
     pageCrawler: { waiting: pWaiting, active: pActive, completed: pCompleted, failed: pFailed },
     indexer: { waiting: iWaiting, active: iActive, completed: iCompleted, failed: iFailed },
+    workspaceKnowledge: {
+      waiting: wkWaiting,
+      active: wkActive,
+      completed: wkCompleted,
+      failed: wkFailed,
+    },
   };
 }
 
 export async function closeQueue(): Promise<void> {
-  await Promise.all([discoverQueue?.close(), pageCrawlerQueue?.close(), indexerQueue?.close()]);
+  await Promise.all([
+    discoverQueue?.close(),
+    pageCrawlerQueue?.close(),
+    indexerQueue?.close(),
+    workspaceKnowledgeQueue?.close(),
+  ]);
 
   discoverQueue = null;
   pageCrawlerQueue = null;
   indexerQueue = null;
+  workspaceKnowledgeQueue = null;
 }

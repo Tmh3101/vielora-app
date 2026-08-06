@@ -1,0 +1,1 @@
+export const VOICE_RECORDING_DURATION = 30;

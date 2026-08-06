@@ -10,7 +10,11 @@ import {
   SelectionResponse,
 } from "@/types";
 import { CREDIT_PER_PAGE } from "@/config";
-import { deductCredits, refundCredits, CreditDeductionResult } from "@/lib/services/credit.service";
+import {
+  deductBotCredits,
+  refundBotCredits,
+  CreditDeductionResult,
+} from "@/lib/services/credit.service";
 import { getBotByIdServer, updateBotStatusServer } from "@/lib/services/bot.service";
 import { clearBotCache } from "@/lib/services/server/bot-cache.service";
 import { getPagesByBotIdServer, updatePagesStatusServer } from "@/lib/services/page.service";
@@ -83,8 +87,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<SelectionResp
     let indexerJobIds: string[] = [];
 
     if (requiredCredits > 0) {
-      deductionResult = await deductCredits(supabase, {
-        userId: bot.user_id,
+      deductionResult = await deductBotCredits(supabase, bot, {
         creditAmount: requiredCredits,
         transactionType: ETransactionType.IndexPages,
         transactionDescription: `Deducted ${requiredCredits} credits to index ${selectedPageIds.length} pages for bot ${botId} (${CREDIT_PER_PAGE} credit/page)`,
@@ -127,8 +130,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<SelectionResp
       const deductedFromPayg = deductionResult.deductedFromPayg || 0;
 
       if (requiredCredits > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
-        await refundCredits(supabase, {
-          userId: bot.user_id,
+        await refundBotCredits(supabase, bot, {
           deductedFromSubscription,
           deductedFromPayg,
           transactionType: ETransactionType.IndexPagesRefund,

@@ -105,6 +105,7 @@ export const GENERATION_CONFIG = {
 export const MAX_CHAT_INPUT = 200;
 
 // Batch and retry configuration for embedding generation
-export const BATCH_SIZE = 100;
+export const BATCH_SIZE = 50;
+export const BATCH_DELAY_MS = 2000;
 export const MAX_RETRIES = 5;
 export const INITIAL_BACKOFF_MS = 2000;

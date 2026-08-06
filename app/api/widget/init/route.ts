@@ -14,8 +14,9 @@ import {
   getConversationMessages,
   endConversation,
 } from "@/lib/services/conversations.service";
-import { getWalletByUserId, getMonthlyBotMessageCount } from "@/lib/services/wallet.service";
-import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
+import { getWorkspaceCreditSummary } from "@/lib/services/credit.service";
+import { getMonthlyBotMessageCount } from "@/lib/services/wallet.service";
+import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { getBotStatusInfo, isMissingBotError } from "@/lib/helpers";
 import { CONVERSATION_MAX_AGE, WIDGET_FALLBACK } from "@/config/widget";
 import { getBotByIdCached } from "@/lib/services/server/bot-cache.service";
@@ -159,14 +160,21 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const [wallet, messagesUsed, userPlanCode, conversation] = await Promise.all([
-      getWalletByUserId(supabase, bot.user_id),
+    const [creditSummary, messagesUsed, userPlanCode, conversation] = await Promise.all([
+      bot.workspace_id
+        ? getWorkspaceCreditSummary(supabase, bot.workspace_id)
+        : Promise.resolve(null),
       getMonthlyBotMessageCount(supabase, botId, EUsageAction.ChatMessage, startOfMonth),
-      getUserActivePlanCodeServer(supabase, bot.user_id),
+      getBotActivePlanCode(supabase, bot),
       visitorId ? findActiveConversation(supabase, botId, visitorId) : Promise.resolve(null),
     ]);
 
-    const messagesLimit = wallet?.total_credits || 1000;
+    const messagesLimit =
+      (creditSummary as { totalCredits?: number; totalRemainingCredits?: number } | null)
+        ?.totalCredits ??
+      (creditSummary as { totalCredits?: number; totalRemainingCredits?: number } | null)
+        ?.totalRemainingCredits ??
+      0;
     const quotaExceeded = messagesUsed >= messagesLimit;
     const statusInfo = getBotStatusInfo(bot.status, bot.is_stopped);
     const widgetSettings = bot.widget_settings as {
@@ -219,6 +227,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
           avatarUrl: bot.avatar_url || null,
           status: bot.status,
           domain: bot.domain,
+          subscriptionPlan: userPlanCode || ESubscriptionPlan.Free,
           quotaExceeded,
           messagesRemaining: Math.max(0, messagesLimit - messagesUsed),
           isAvailable: statusInfo.isAvailable,
@@ -244,6 +253,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
             ...(canUseSuggestedQuestions && {
               suggestedQuestions: widgetSettings?.suggestedQuestions || [],
             }),
+            // Pass plan configurations to control STT UI on clients
+            subscriptionPlan: userPlanCode || ESubscriptionPlan.Free,
             // Icon settings
             chatIconType: widgetSettings?.chatIconType || EWidgetIconType.Preset,
             chatIconPreset: widgetSettings?.chatIconPreset || "messagecircle",

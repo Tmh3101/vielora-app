@@ -3,6 +3,23 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function DashboardLoading() {
   return (
     <div className="min-h-screen bg-background">
+      <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-64 flex-col space-y-4 border-r border-border/50 bg-card/50 p-4 backdrop-blur-sm lg:flex">
+        <div className="flex items-center gap-3 p-2">
+          <Skeleton className="h-8 w-8 rounded-lg" />
+          <Skeleton className="h-6 w-32" />
+        </div>
+        <div className="flex-1 space-y-2 pt-4">
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+        </div>
+        <div className="space-y-3 border-t border-border/50 pt-4">
+          <Skeleton className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-12 w-full rounded-xl" />
+        </div>
+      </aside>
+
       <main className="lg:pl-64">
         <div className="container mx-auto space-y-8 px-4 py-8 sm:px-6 lg:px-8">
           <section className="rounded-2xl border border-border/60 p-6">

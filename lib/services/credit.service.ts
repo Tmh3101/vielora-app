@@ -1,7 +1,7 @@
 import type { ServiceClient } from "@/lib/services/types";
 import type { Tables } from "@/lib/supabase/types";
 import { ETransactionType } from "@/types";
-import { sendLowCreditsWarningEmail, getUserEmailById } from "@/lib/services/email.service";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type CreditPackageRow = Tables<"credit_packages">;
 
@@ -31,245 +31,6 @@ export interface CreditDeductionResult {
   deductedFromPayg?: number;
 }
 
-export interface DeductCreditsParams {
-  userId: string;
-  creditAmount: number;
-  transactionType: ETransactionType;
-  transactionDescription: string;
-}
-
-/**
- * Trừ credits từ wallet của user với optimistic locking và retry.
- *
- * Flow:
- * 1. Kiểm tra total_credits đủ không
- * 2. Kiểm tra subscription_credits đủ hoặc is_payg_enabled
- * 3. Ưu tiên trừ từ subscription_credits trước, còn thiếu trừ từ payg_credits
- * 4. Sử dụng optimistic locking để tránh race condition
- * 5. Ghi credit_transaction record
- *
- * @returns CreditDeductionResult với số credits đã trừ từ mỗi nguồn
- */
-export async function deductCredits(
-  client: ServiceClient,
-  params: DeductCreditsParams
-): Promise<CreditDeductionResult> {
-  const { userId, creditAmount, transactionType, transactionDescription } = params;
-
-  if (creditAmount <= 0) {
-    return { success: true, deductedFromSubscription: 0, deductedFromPayg: 0 };
-  }
-
-  for (let attempt = 1; attempt <= MAX_DEDUCTION_RETRIES; attempt += 1) {
-    // Fetch current wallet state
-    const { data: wallet, error: walletError } = await client
-      .from("wallets")
-      .select("subscription_credits,payg_credits,total_credits,is_payg_enabled")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (walletError) {
-      return { success: false, message: walletError.message };
-    }
-
-    if (!wallet) {
-      return { success: false, message: "Wallet not found" };
-    }
-
-    // Check if total credits are sufficient
-    if (wallet.total_credits < creditAmount) {
-      return { success: false, message: "Insufficient credits." };
-    }
-
-    // Calculate deduction split
-    const deductedFromSubscription = Math.min(wallet.subscription_credits, creditAmount);
-    const deductedFromPayg = creditAmount - deductedFromSubscription;
-    const nextSubscriptionCredits = wallet.subscription_credits - deductedFromSubscription;
-    const nextPaygCredits = wallet.payg_credits - deductedFromPayg;
-
-    // Optimistic locking update
-    const { data: updatedWallet, error: updateWalletError } = await client
-      .from("wallets")
-      .update({
-        subscription_credits: nextSubscriptionCredits,
-        payg_credits: nextPaygCredits,
-      })
-      .eq("user_id", userId)
-      .eq("subscription_credits", wallet.subscription_credits)
-      .eq("payg_credits", wallet.payg_credits)
-      .select("user_id")
-      .maybeSingle();
-
-    if (updateWalletError) {
-      return { success: false, message: updateWalletError.message };
-    }
-
-    // If no row was updated, another transaction modified the wallet - retry
-    if (!updatedWallet) {
-      if (attempt === MAX_DEDUCTION_RETRIES) {
-        return { success: false, message: "Unable to deduct credits. Please try again." };
-      }
-      continue;
-    }
-
-    // Insert credit transaction record
-    const { error: transactionError } = await client.from("credit_transactions").insert({
-      user_id: userId,
-      amount: -creditAmount,
-      transaction_type: transactionType,
-      description: transactionDescription,
-    });
-
-    if (transactionError) {
-      console.error("Critical: deducted credits but failed to insert credit transaction", {
-        userId,
-        creditAmount,
-        transactionType,
-        error: transactionError.message,
-      });
-      return { success: false, message: transactionError.message };
-    }
-
-    // Check and trigger low credits warning
-    try {
-      const { data: sub } = await client
-        .from("subscriptions")
-        .select("plans!inner(monthly_credits)")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      const plansData = sub?.plans as unknown as { monthly_credits: number } | null | undefined;
-      const monthlyCredits = plansData?.monthly_credits || 0;
-      const currentTotal = nextSubscriptionCredits + nextPaygCredits;
-
-      if (monthlyCredits > 0) {
-        await checkAndSendLowCreditsWarning(
-          client,
-          userId,
-          wallet.total_credits,
-          currentTotal,
-          monthlyCredits
-        );
-      }
-    } catch (err) {
-      console.error("Failed to process low credits warning:", err);
-    }
-
-    return {
-      success: true,
-      deductedFromSubscription,
-      deductedFromPayg,
-    };
-  }
-
-  return { success: false, message: "Unable to deduct credits. Please try again." };
-}
-
-/**
- * Check and send low credits warning if credits drop below 10% threshold.
- * Only triggers when crossing the threshold (previous > 10%, current <= 10%).
- */
-export async function checkAndSendLowCreditsWarning(
-  client: ServiceClient,
-  userId: string,
-  previousTotal: number,
-  currentTotal: number,
-  monthlyCredits: number
-): Promise<void> {
-  if (monthlyCredits <= 0) return;
-
-  const threshold = Math.ceil(monthlyCredits * 0.1);
-  const wasAbove = previousTotal > threshold;
-  const isBelow = currentTotal <= threshold;
-
-  // Only send when crossing the threshold
-  if (!wasAbove || !isBelow) return;
-
-  const userInfo = await getUserEmailById(client, userId);
-  if (!userInfo) return;
-
-  const usagePercent = Math.min(
-    100,
-    Math.round(((monthlyCredits - currentTotal) / monthlyCredits) * 100)
-  );
-
-  // Fetch next reset date
-  const { data: sub } = await client
-    .from("subscriptions")
-    .select("next_credit_reset_at")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  const nextResetDate = sub?.next_credit_reset_at
-    ? new Date(sub.next_credit_reset_at).toLocaleDateString("vi-VN")
-    : "N/A";
-
-  await sendLowCreditsWarningEmail(userInfo.email, userInfo.fullName, {
-    remainingCredits: currentTotal,
-    totalMonthlyCredits: monthlyCredits,
-    usagePercent,
-    nextResetDate,
-  });
-}
-
-export interface RefundCreditsParams {
-  userId: string;
-  deductedFromSubscription: number;
-  deductedFromPayg: number;
-  transactionType: ETransactionType;
-  transactionDescription: string;
-}
-
-/**
- * Hoàn trả credits cho user khi có lỗi xảy ra sau khi đã trừ credits.
- */
-export async function refundCredits(
-  client: ServiceClient,
-  params: RefundCreditsParams
-): Promise<void> {
-  const {
-    userId,
-    deductedFromSubscription,
-    deductedFromPayg,
-    transactionType,
-    transactionDescription,
-  } = params;
-
-  const refundAmount = deductedFromSubscription + deductedFromPayg;
-  if (refundAmount <= 0) return;
-
-  try {
-    const { data: wallet } = await client
-      .from("wallets")
-      .select("subscription_credits,payg_credits")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (wallet) {
-      await client
-        .from("wallets")
-        .update({
-          subscription_credits: wallet.subscription_credits + deductedFromSubscription,
-          payg_credits: wallet.payg_credits + deductedFromPayg,
-        })
-        .eq("user_id", userId);
-    }
-
-    await client.from("credit_transactions").insert({
-      user_id: userId,
-      amount: refundAmount,
-      transaction_type: transactionType,
-      description: transactionDescription,
-    });
-  } catch (error) {
-    console.error("Failed to refund credits:", {
-      userId,
-      refundAmount,
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
-}
-
 export interface CreditSummary {
   /** Tổng credits được cấp trong tháng (từ plan) */
   totalCreditsThisMonth: number;
@@ -289,102 +50,58 @@ export interface CreditSummary {
   usagePercent: number;
 }
 
-function addMonths(date: Date, months: number): Date {
-  const result = new Date(date);
-  const dayOfMonth = result.getDate();
-  result.setMonth(result.getMonth() + months);
-  // If the day of the month changed, it means we overflowed (e.g., Jan 31 -> March 3).
-  // Setting the date to 0 moves it to the last day of the intended month.
-  if (result.getDate() !== dayOfMonth) {
-    result.setDate(0);
-  }
-  return result;
-}
+// Workspace-scoped credit methods
+// ============================================================
 
-function isValidDate(date: Date): boolean {
-  return !Number.isNaN(date.getTime());
-}
-
-interface CreditUsageWindowParams {
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
-  nextCreditResetAt: string;
-}
-
-function getCreditUsageWindow(
-  params: CreditUsageWindowParams,
-  now = new Date()
-): { startIso: string; endIso: string } {
-  const periodStart = new Date(params.currentPeriodStart);
-  const periodEnd = new Date(params.currentPeriodEnd);
-  const nextCreditResetAt = new Date(params.nextCreditResetAt);
-
-  let windowEnd = isValidDate(nextCreditResetAt)
-    ? nextCreditResetAt
-    : addMonths(isValidDate(periodStart) ? periodStart : now, 1);
-
-  if (isValidDate(periodEnd) && windowEnd > periodEnd) {
-    windowEnd = periodEnd;
-  }
-
-  while (windowEnd <= now && (!isValidDate(periodEnd) || windowEnd < periodEnd)) {
-    const nextWindowEnd = addMonths(windowEnd, 1);
-
-    if (nextWindowEnd <= windowEnd) {
-      break;
-    }
-
-    windowEnd = isValidDate(periodEnd) && nextWindowEnd > periodEnd ? periodEnd : nextWindowEnd;
-  }
-
-  let windowStart = addMonths(windowEnd, -1);
-
-  if (isValidDate(periodStart) && windowStart < periodStart) {
-    windowStart = periodStart;
-  }
-
-  return {
-    startIso: windowStart.toISOString(),
-    endIso: windowEnd.toISOString(),
-  };
+export interface WorkspaceCreditSummary {
+  totalCredits: number;
+  subscriptionCredits: number;
+  paygCredits: number;
+  isPaygEnabled: boolean;
+  creditsUsedThisMonth: number;
 }
 
 /**
- * Lấy thông tin tổng hợp về credits của user trong tháng hiện tại.
- *
- * Thời gian tính toán: dựa theo cửa sổ reset credit tháng hiện tại.
- * Với gói yearly, billing period kéo dài một năm nhưng credit vẫn reset theo tháng.
- *
- * @param userId - UUID của user cần truy vấn
- * @returns CreditSummary hoặc null nếu không tìm thấy subscription/wallet
+ * Lấy thông tin tổng quan credits theo workspaceId.
  */
-export async function getCreditSummary(
+export async function getWorkspaceCreditSummary(
   client: ServiceClient,
-  userId: string
-): Promise<CreditSummary | null> {
-  // 1. Lấy subscription + plan
-  const { data: subscription, error: subError } = await client
-    .from("subscriptions")
-    .select("current_period_start, current_period_end, next_credit_reset_at, plan_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (subError) {
-    throw new Error(`Failed to fetch subscription: ${subError.message}`);
-  }
-
-  if (!subscription?.plan_id) {
+  workspaceId: string
+): Promise<WorkspaceCreditSummary | null> {
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/credits`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          return json.data;
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching workspace credits via API:", err);
+    }
+    // Don't fall through to direct query on browser — RLS will block admin users
     return null;
   }
 
-  const creditWindow = getCreditUsageWindow({
-    currentPeriodStart: subscription.current_period_start,
-    currentPeriodEnd: subscription.current_period_end,
-    nextCreditResetAt: subscription.next_credit_reset_at,
-  });
+  const activeClient = createAdminClient();
 
-  // 2. Lấy tất cả credit transactions liên quan đến usage trong kỳ
-  const indexCategoryTypes = [
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: wallet, error } = await (activeClient as any)
+    .from("wallets")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+
+  if (error || !wallet) return null;
+
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  // Tính credits đã dùng trong tháng từ credit_transactions theo workspace
+  // (index + chat, trừ refund) — nhất quán với deductWorkspaceCredits/refundWorkspaceCredits
+  const indexTypes = [
     ETransactionType.IndexPages,
     ETransactionType.IndexPagesRefund,
     ETransactionType.AddKnowledge,
@@ -392,79 +109,251 @@ export async function getCreditSummary(
     ETransactionType.UpdateKnowledge,
     ETransactionType.UpdateKnowledgeRefund,
   ];
+  const chatTypes = [ETransactionType.ChatMessage, ETransactionType.ChatMessageRefund];
+  const usageTypes = [...indexTypes, ...chatTypes];
 
-  const chatCategoryTypes = [ETransactionType.ChatMessage, ETransactionType.ChatMessageRefund];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: usageTx, error: usageError } = await (activeClient as any)
+    .from("credit_transactions")
+    .select("amount, transaction_type")
+    .eq("workspace_id", workspaceId)
+    .in("transaction_type", usageTypes)
+    .gte("created_at", startOfMonth.toISOString());
 
-  const relevantTypes = [...indexCategoryTypes, ...chatCategoryTypes];
-
-  const [
-    { data: plan, error: planError },
-    { data: transactions, error: txError },
-    { data: wallet, error: walletError },
-  ] = await Promise.all([
-    client.from("plans").select("monthly_credits").eq("id", subscription.plan_id).maybeSingle(),
-    client
-      .from("credit_transactions")
-      .select("amount, transaction_type")
-      .eq("user_id", userId)
-      .in("transaction_type", relevantTypes)
-      .gte("created_at", creditWindow.startIso)
-      .lt("created_at", creditWindow.endIso),
-    client
-      .from("wallets")
-      .select("subscription_credits, payg_credits, total_credits")
-      .eq("user_id", userId)
-      .maybeSingle(),
-  ]);
-
-  if (planError) {
-    throw new Error(`Failed to fetch plan: ${planError.message}`);
+  if (usageError) {
+    console.error("Failed to fetch usage transactions:", usageError.message);
   }
 
-  if (txError) {
-    throw new Error(`Failed to fetch credit transactions: ${txError.message}`);
-  }
-
-  if (walletError) {
-    throw new Error(`Failed to fetch wallet: ${walletError.message}`);
-  }
-
-  const totalCreditsThisMonth = plan?.monthly_credits ?? 0;
-
-  // 3. Phân loại và tính toán credits đã dùng
-  let indexCreditsNet = 0;
-  let chatCreditsNet = 0;
-
-  (transactions ?? []).forEach((tx) => {
-    if (indexCategoryTypes.includes(tx.transaction_type as ETransactionType)) {
-      indexCreditsNet += tx.amount;
-    } else if (chatCategoryTypes.includes(tx.transaction_type as ETransactionType)) {
-      chatCreditsNet += tx.amount;
-    }
-  });
-
-  // amount là số âm khi trừ credits, nên dùng - để ra số dương đã sử dụng
-  const indexCreditsUsedThisMonth = Math.max(0, -indexCreditsNet);
-  const messageCreditsUsedThisMonth = Math.max(0, -chatCreditsNet);
-  const creditsUsedThisMonth = indexCreditsUsedThisMonth + messageCreditsUsedThisMonth;
-
-  const subscriptionCredits = wallet?.subscription_credits ?? 0;
-  const paygCredits = wallet?.payg_credits ?? 0;
-  const totalRemainingCredits = wallet?.total_credits ?? subscriptionCredits + paygCredits;
-
-  const usagePercent =
-    totalCreditsThisMonth > 0
-      ? Math.min(100, Math.round((creditsUsedThisMonth / totalCreditsThisMonth) * 100))
-      : 0;
+  // amount âm khi trừ credits → dùng - để ra số dương đã sử dụng
+  const netUsed = (usageTx ?? []).reduce(
+    (acc: number, tx: { amount: number }) => acc + tx.amount,
+    0
+  );
+  const creditsUsedThisMonth = Math.max(0, -netUsed);
 
   return {
-    totalCreditsThisMonth,
+    totalCredits: wallet.total_credits ?? 0,
+    subscriptionCredits: wallet.subscription_credits ?? 0,
+    paygCredits: wallet.payg_credits ?? 0,
+    isPaygEnabled: wallet.is_payg_enabled ?? false,
     creditsUsedThisMonth,
-    indexCreditsUsedThisMonth,
-    messageCreditsUsedThisMonth,
-    subscriptionCredits,
-    paygCredits,
-    totalRemainingCredits,
-    usagePercent,
   };
+}
+
+/**
+ * Lấy số lượng tin nhắn trong tháng theo workspaceId.
+ */
+export async function getWorkspaceMonthlyMessageCount(
+  client: ServiceClient,
+  workspaceId: string,
+  action: string,
+  startOfMonth: Date
+): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count } = await (client as any)
+    .from("usage_logs")
+    .select("*", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId)
+    .eq("action", action)
+    .gte("created_at", startOfMonth.toISOString());
+
+  return count ?? 0;
+}
+
+export interface DeductWorkspaceCreditsParams {
+  workspaceId: string;
+  creditAmount: number;
+  transactionType: ETransactionType;
+  transactionDescription: string;
+}
+
+export async function deductWorkspaceCredits(
+  client: ServiceClient,
+  params: DeductWorkspaceCreditsParams
+): Promise<CreditDeductionResult> {
+  const { workspaceId, creditAmount, transactionType, transactionDescription } = params;
+
+  if (creditAmount <= 0) {
+    return { success: true, deductedFromSubscription: 0, deductedFromPayg: 0 };
+  }
+
+  const adminClient = createAdminClient();
+
+  for (let attempt = 1; attempt <= MAX_DEDUCTION_RETRIES; attempt += 1) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: wallet, error: walletError } = await (adminClient as any)
+      .from("wallets")
+      .select("subscription_credits,payg_credits,total_credits,is_payg_enabled")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    if (walletError) {
+      return { success: false, message: walletError.message };
+    }
+
+    if (!wallet) {
+      return { success: false, message: "Workspace wallet not found" };
+    }
+
+    if (wallet.total_credits < creditAmount) {
+      return { success: false, message: "Insufficient workspace credits." };
+    }
+
+    const deductedFromSubscription = Math.min(wallet.subscription_credits, creditAmount);
+    const deductedFromPayg = creditAmount - deductedFromSubscription;
+    const nextSubscriptionCredits = wallet.subscription_credits - deductedFromSubscription;
+    const nextPaygCredits = wallet.payg_credits - deductedFromPayg;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: updatedWallet, error: updateWalletError } = await (adminClient as any)
+      .from("wallets")
+      .update({
+        subscription_credits: nextSubscriptionCredits,
+        payg_credits: nextPaygCredits,
+      })
+      .eq("workspace_id", workspaceId)
+      .eq("subscription_credits", wallet.subscription_credits)
+      .eq("payg_credits", wallet.payg_credits)
+      .select("workspace_id")
+      .maybeSingle();
+
+    if (updateWalletError) {
+      return { success: false, message: updateWalletError.message };
+    }
+
+    if (!updatedWallet) {
+      if (attempt === MAX_DEDUCTION_RETRIES) {
+        return { success: false, message: "Unable to deduct workspace credits. Please try again." };
+      }
+      continue;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: transactionError } = await (adminClient as any)
+      .from("credit_transactions")
+      .insert({
+        workspace_id: workspaceId,
+        amount: -creditAmount,
+        transaction_type: transactionType,
+        description: transactionDescription,
+      });
+
+    if (transactionError) {
+      console.error("Failed to insert workspace credit transaction:", transactionError);
+    }
+
+    return {
+      success: true,
+      deductedFromSubscription,
+      deductedFromPayg,
+    };
+  }
+
+  return { success: false, message: "Failed to deduct workspace credits after retries." };
+}
+
+export interface RefundWorkspaceCreditsParams {
+  workspaceId: string;
+  deductedFromSubscription: number;
+  deductedFromPayg: number;
+  transactionType: ETransactionType;
+  transactionDescription: string;
+}
+
+export async function refundWorkspaceCredits(
+  client: ServiceClient,
+  params: RefundWorkspaceCreditsParams
+): Promise<void> {
+  const {
+    workspaceId,
+    deductedFromSubscription,
+    deductedFromPayg,
+    transactionType,
+    transactionDescription,
+  } = params;
+
+  const totalRefund = deductedFromSubscription + deductedFromPayg;
+  if (totalRefund <= 0) return;
+
+  const adminClient = createAdminClient();
+
+  for (let attempt = 1; attempt <= MAX_DEDUCTION_RETRIES; attempt += 1) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: wallet, error: walletError } = await (adminClient as any)
+      .from("wallets")
+      .select("subscription_credits,payg_credits")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    if (walletError || !wallet) return;
+
+    const nextSubscriptionCredits = wallet.subscription_credits + deductedFromSubscription;
+    const nextPaygCredits = wallet.payg_credits + deductedFromPayg;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: updatedWallet } = await (adminClient as any)
+      .from("wallets")
+      .update({
+        subscription_credits: nextSubscriptionCredits,
+        payg_credits: nextPaygCredits,
+      })
+      .eq("workspace_id", workspaceId)
+      .eq("subscription_credits", wallet.subscription_credits)
+      .eq("payg_credits", wallet.payg_credits)
+      .select("workspace_id")
+      .maybeSingle();
+
+    if (updatedWallet) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (adminClient as any).from("credit_transactions").insert({
+        workspace_id: workspaceId,
+        amount: totalRefund,
+        transaction_type: transactionType,
+        description: transactionDescription,
+      });
+      return;
+    }
+  }
+}
+
+export async function deductBotCredits(
+  client: ServiceClient,
+  bot: { user_id: string; workspace_id?: string | null },
+  params: {
+    creditAmount: number;
+    transactionType: ETransactionType;
+    transactionDescription: string;
+  }
+): Promise<CreditDeductionResult> {
+  if (bot.workspace_id) {
+    return deductWorkspaceCredits(client, {
+      workspaceId: bot.workspace_id,
+      creditAmount: params.creditAmount,
+      transactionType: params.transactionType,
+      transactionDescription: params.transactionDescription,
+    });
+  }
+  return { success: false, message: "Bot has no workspace, cannot deduct credits." };
+}
+
+export async function refundBotCredits(
+  client: ServiceClient,
+  bot: { user_id: string; workspace_id?: string | null },
+  params: {
+    deductedFromSubscription: number;
+    deductedFromPayg: number;
+    transactionType: ETransactionType;
+    transactionDescription: string;
+  }
+): Promise<void> {
+  if (bot.workspace_id) {
+    return refundWorkspaceCredits(client, {
+      workspaceId: bot.workspace_id,
+      deductedFromSubscription: params.deductedFromSubscription,
+      deductedFromPayg: params.deductedFromPayg,
+      transactionType: params.transactionType,
+      transactionDescription: params.transactionDescription,
+    });
+  }
+  console.warn("Cannot refund credits: bot has no workspace", { botId: bot.user_id });
 }

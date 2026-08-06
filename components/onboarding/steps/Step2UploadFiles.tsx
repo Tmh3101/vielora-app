@@ -6,8 +6,13 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowRight, Loader2, Upload } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { addOnboardingKnowledgeFile } from "@/lib/services/bot.service";
-import { getCreditSummary } from "@/lib/services/credit.service";
+import {
+  getWorkspaceCreditSummary,
+  type CreditSummary,
+  type WorkspaceCreditSummary,
+} from "@/lib/services/credit.service";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { useToast } from "@/hooks/use-toast";
 import { KnowledgeFileDropzone } from "@/components/shared/KnowledgeFileDropzone";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -32,6 +37,7 @@ interface FileUploadState {
 export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const { activeWorkspace } = useWorkspace();
   const { toast } = useToast();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -39,14 +45,38 @@ export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const creditSummaryQuery = useQuery({
-    queryKey: [ONBOARDING_CREDIT_SUMMARY_KEY, user?.id],
-    queryFn: () => getCreditSummary(supabase, user!.id),
-    enabled: !!user,
+  const creditSummaryQuery = useQuery<WorkspaceCreditSummary | CreditSummary | null>({
+    queryKey: [ONBOARDING_CREDIT_SUMMARY_KEY, botId, activeWorkspace?.id || user?.id],
+    queryFn: async (): Promise<WorkspaceCreditSummary | CreditSummary | null> => {
+      let wsId = activeWorkspace?.id;
+
+      if (!wsId && botId) {
+        const { data: bot } = await supabase
+          .from("bots")
+          .select("workspace_id")
+          .eq("id", botId)
+          .maybeSingle();
+        const foundWsId = (bot as { workspace_id?: string | null } | null)?.workspace_id;
+        if (foundWsId) {
+          wsId = foundWsId;
+        }
+      }
+
+      if (wsId) {
+        return getWorkspaceCreditSummary(supabase, wsId);
+      }
+
+      return null;
+    },
+    enabled: !!(botId || activeWorkspace?.id || user?.id),
     retry: 1,
   });
 
-  const totalCredits = creditSummaryQuery.data?.totalRemainingCredits ?? 0;
+  const totalCredits = creditSummaryQuery.data
+    ? "totalRemainingCredits" in creditSummaryQuery.data
+      ? creditSummaryQuery.data.totalRemainingCredits
+      : creditSummaryQuery.data.totalCredits
+    : 0;
   const maxSelectableFilesByCredit = Math.floor(totalCredits / CREDIT_PER_PAGE);
   const selectedCreditsCost = selectedFiles.length * CREDIT_PER_PAGE;
 

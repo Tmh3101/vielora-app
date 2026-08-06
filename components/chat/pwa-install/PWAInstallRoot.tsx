@@ -9,10 +9,12 @@ import {
   getIOSBrowser,
   getAndroidBrowser,
 } from "@/lib/helpers/pwa-helpers";
+import { useIOSPWAUpdatePrompt } from "@/hooks/public-bot/useIOSPWAUpdatePrompt";
 import { EAndroidBrowser, EIOSBrowser } from "@/types/enums";
 import { toast } from "@/components/ui/sonner";
 import { PWAInstallIOSSheet } from "./PWAInstallIOSSheet";
 import { PWAInstallAndroidSheet } from "./PWAInstallAndroidSheet";
+import { PWAUpdateSheet } from "./PWAUpdateSheet";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -34,6 +36,7 @@ export interface PWAInstallRootProps {
   appName: string;
   primaryColor: string;
   headerForeground: string;
+  pwaVersion?: string;
   children: ReactNode;
 }
 
@@ -41,6 +44,7 @@ export function PWAInstallRoot({
   appName,
   primaryColor,
   headerForeground,
+  pwaVersion = "1",
   children,
 }: PWAInstallRootProps) {
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
@@ -51,6 +55,9 @@ export function PWAInstallRoot({
   const [iosBrowser, setIosBrowser] = useState<EIOSBrowser>(EIOSBrowser.Safari);
   const [isAndroidSheetOpen, setIsAndroidSheetOpen] = useState(false);
   const [androidBrowser, setAndroidBrowser] = useState<EAndroidBrowser>(EAndroidBrowser.Chrome);
+
+  const { showPrompt: showIOSUpdatePrompt, handleDismiss: dismissIOSUpdate } =
+    useIOSPWAUpdatePrompt(pwaVersion);
 
   useEffect(() => {
     if (isStandaloneMode()) {
@@ -70,6 +77,14 @@ export function PWAInstallRoot({
     return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
   }, []);
 
+  const markDismissed = useCallback((key: string) => {
+    try {
+      localStorage.setItem(key, Date.now().toString());
+    } catch {
+      // localStorage full hoặc disabled — silent ignore
+    }
+  }, []);
+
   const handleInstallClick = useCallback(async () => {
     if (isIOS()) {
       setIosBrowser(getIOSBrowser() ?? EIOSBrowser.Other);
@@ -87,6 +102,7 @@ export function PWAInstallRoot({
           toast.error("Không thể mở hộp thoại cài đặt. Vui lòng thử lại sau.");
         } finally {
           deferredPromptRef.current = null;
+          markDismissed("pwa_install_dismissed_at");
         }
         return;
       }
@@ -97,7 +113,7 @@ export function PWAInstallRoot({
     }
 
     toast("Trình duyệt của bạn chưa hỗ trợ cài đặt ứng dụng.");
-  }, []);
+  }, [markDismissed]);
 
   const contextValue: PWAInstallContextValue = {
     appName,
@@ -114,14 +130,21 @@ export function PWAInstallRoot({
         appName={appName}
         browser={iosBrowser}
         open={isIOSSheetOpen}
-        onClose={() => setIsIOSSheetOpen(false)}
+        onClose={() => {
+          setIsIOSSheetOpen(false);
+          markDismissed("pwa_install_sheet_dismissed_at");
+        }}
       />
       <PWAInstallAndroidSheet
         appName={appName}
         browser={androidBrowser}
         open={isAndroidSheetOpen}
-        onClose={() => setIsAndroidSheetOpen(false)}
+        onClose={() => {
+          setIsAndroidSheetOpen(false);
+          markDismissed("pwa_install_sheet_dismissed_at");
+        }}
       />
+      <PWAUpdateSheet appName={appName} open={showIOSUpdatePrompt} onClose={dismissIOSUpdate} />
     </PWAInstallContext.Provider>
   );
 }

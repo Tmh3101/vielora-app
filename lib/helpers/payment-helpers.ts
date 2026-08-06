@@ -50,3 +50,11 @@ export function getPaymentStatusMeta(status: PaymentHistoryItem["status"]) {
       };
   }
 }
+
+export function calculateRemainingMonths(periodEndIso: string, now: Date = new Date()): number {
+  const end = new Date(periodEndIso);
+  if (isNaN(end.getTime()) || end <= now) return 1;
+  const diffMs = end.getTime() - now.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  return Math.max(1, Math.ceil(diffDays / 30));
+}

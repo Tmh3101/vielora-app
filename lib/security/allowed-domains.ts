@@ -6,7 +6,8 @@ export interface AllowedDomainsValidationResult {
   error?: string;
 }
 
-function parseHostname(value: string): string | null {
+function parseHostname(value?: string | null): string | null {
+  if (!value || typeof value !== "string") return null;
   const trimmed = value.trim().toLowerCase();
   if (!trimmed || trimmed.includes("*")) return null;
 
@@ -18,7 +19,8 @@ function parseHostname(value: string): string | null {
   }
 }
 
-export function normalizeAllowedDomain(value: string): string | null {
+export function normalizeAllowedDomain(value?: string | null): string | null {
+  if (!value || typeof value !== "string") return null;
   const hostname = parseHostname(value);
   if (!hostname) return null;
 

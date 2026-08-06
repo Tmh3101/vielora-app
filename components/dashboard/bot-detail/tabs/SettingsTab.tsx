@@ -6,7 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, RefreshCw, Square, Copy, Plus, Trash2 } from "lucide-react";
+import {
+  Loader2,
+  RefreshCw,
+  Square,
+  Copy,
+  Plus,
+  Trash2,
+  Power,
+  Globe,
+  ShieldAlert,
+  Share2,
+  Key,
+} from "lucide-react";
 import { MAX_ALLOWED_DOMAINS } from "@/lib/security/allowed-domains";
 import type { Tables } from "@/lib/supabase/types";
 import { useToast } from "@/hooks/use-toast";
@@ -98,20 +110,26 @@ export function SettingsTab({
 
   return (
     <div className="space-y-6">
+      {/* Bot ID bar */}
       <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="flex flex-1 items-stretch overflow-hidden rounded-md border">
-          <div className="flex items-center bg-muted px-3 py-2">
-            <span className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm">
-              Bot ID :
+        <div className="shadow-xs flex flex-1 items-stretch overflow-hidden rounded-xl border border-border/40 bg-card/60 backdrop-blur-md">
+          <div className="flex items-center border-r border-border/40 bg-muted/40 px-3.5 py-2.5">
+            <Key className="mr-2 h-4 w-4 text-primary" />
+            <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">
+              Bot ID
             </span>
           </div>
-          <Input value={bot.id} readOnly className="border-0 focus-visible:ring-0" />
+          <Input
+            value={bot.id}
+            readOnly
+            className="border-0 bg-transparent font-mono text-xs focus-visible:ring-0"
+          />
         </div>
         <Button
           variant="outline"
           size="icon"
           aria-label="Sao chép Bot ID"
-          className="shrink-0 hover:bg-primary"
+          className="h-10 w-10 shrink-0 rounded-xl border-border/40 bg-card/60 transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
           onClick={() => {
             navigator.clipboard.writeText(bot.id);
             toast({ title: "Đã sao chép Bot ID!" });
@@ -121,24 +139,37 @@ export function SettingsTab({
         </Button>
       </div>
 
-      <Card className="glass">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <CardHeader>
-            <CardTitle>Điều khiển Bot</CardTitle>
-            <CardDescription>Khởi động hoặc dừng hoạt động của bot</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-4 p-6">
+      {/* Điều khiển Bot */}
+      <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
+        <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+              <Power className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-semibold">Trạng thái Bot</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                Khởi động hoặc tạm dừng hoạt động phản hồi của chatbot
+              </CardDescription>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
             {bot.is_stopped ? (
-              <Button variant="default" onClick={() => void onStartBot()} disabled={isSaving}>
+              <Button
+                variant="default"
+                onClick={() => void onStartBot()}
+                disabled={isSaving}
+                className="shadow-xs rounded-xl px-5 font-semibold"
+              >
                 {isSaving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Đang khởi động...
+                    Đang kích hoạt...
                   </>
                 ) : (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    Khởi động Bot
+                    Khởi động
                   </>
                 )}
               </Button>
@@ -148,22 +179,33 @@ export function SettingsTab({
                   variant="destructive"
                   onClick={() => setStopModalOpen(true)}
                   disabled={isStoppingBot}
+                  className="shadow-xs rounded-xl px-5 font-semibold"
                 >
-                  <Square className="mr-2 h-4 w-4" />
-                  Dừng Bot
+                  <Square className="mr-2 h-4 w-4 fill-current" />
+                  Tạm dừng
                 </Button>
               )
             )}
-          </CardContent>
+          </div>
         </div>
       </Card>
 
-      <Card className="glass">
-        <CardHeader>
-          <CardTitle>Trang Chat Độc Lập</CardTitle>
-          <CardDescription>Chia sẻ chatbot qua đường link công khai</CardDescription>
+      {/* Trang Chat Độc Lập */}
+      <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
+        <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+              <Share2 className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-semibold">Trang chat độc lập</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                Chia sẻ chatbot qua đường link công khai trực tiếp
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-5 sm:p-6">
           <StandaloneChatSharePanel
             botName={bot.name}
             avatarUrl={bot.avatar_url}
@@ -179,21 +221,28 @@ export function SettingsTab({
         </CardContent>
       </Card>
 
-      <Card className="glass">
-        <CardHeader>
-          <CardTitle>Domain được phép</CardTitle>
-          <CardDescription>
-            Chỉ các domain trong danh sách này được phép hiển thị widget chatbot
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">
-                {allowedDomains.filter((domain) => domain.trim()).length}/{MAX_ALLOWED_DOMAINS}
-              </span>
+      {/* Domain được phép */}
+      <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
+        <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                <Globe className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold">Domain được phép tích hợp</CardTitle>
+                <CardDescription className="text-xs text-muted-foreground">
+                  Chỉ tên miền thuộc danh sách này mới có thể nạp và hiển thị Widget Chat
+                </CardDescription>
+              </div>
             </div>
-
+            <span className="rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+              {allowedDomains.filter((domain) => domain.trim()).length}/{MAX_ALLOWED_DOMAINS}
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 p-5 sm:p-6">
+          <div className="space-y-3">
             <div className="space-y-2">
               {allowedDomains.map((domain, index) => (
                 <div key={index} className="flex items-center gap-2">
@@ -204,6 +253,7 @@ export function SettingsTab({
                     value={domain}
                     aria-invalid={!!allowedDomainsError}
                     onChange={(e) => handleAllowedDomainChange(index, e.target.value)}
+                    className="rounded-xl border-border/60 bg-background/50 text-sm focus-visible:ring-primary/20"
                   />
                   <Button
                     type="button"
@@ -212,7 +262,7 @@ export function SettingsTab({
                     aria-label="Xóa domain"
                     disabled={isSavingAllowedDomains}
                     onClick={() => handleRemoveAllowedDomain(index)}
-                    className="hover:border hover:border-destructive hover:bg-white hover:text-destructive"
+                    className="h-10 w-10 shrink-0 rounded-xl border-border/60 bg-background/50 transition-all hover:border-destructive/60 hover:bg-destructive/10 hover:text-destructive"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -221,48 +271,59 @@ export function SettingsTab({
             </div>
 
             {allowedDomainsError ? (
-              <p className="text-[0.8rem] text-destructive">{allowedDomainsError}</p>
+              <p className="text-xs text-destructive">{allowedDomainsError}</p>
             ) : null}
 
-            <p className="text-[0.8rem] text-muted-foreground">
-              Có thể nhập domain hoặc URL đầy đủ. Hệ thống sẽ tự chuẩn hóa về hostname. Domain cha
-              không tự cho phép subdomain.
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Nhập tên miền (vd: domain.com). Hệ thống sẽ tự động loại bỏ protocol http/https.
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 border-t border-border/40 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <Button
               type="button"
               variant="outline"
+              size="sm"
               disabled={allowedDomains.length >= MAX_ALLOWED_DOMAINS || isSavingAllowedDomains}
               onClick={handleAddAllowedDomain}
-              className="border-white bg-white hover:border hover:border-primary hover:bg-white hover:text-primary"
+              className="rounded-xl border-border/60 bg-background/50 text-xs font-medium transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:scale-[0.98] disabled:opacity-50"
             >
-              <Plus className="mr-1 h-4 w-4" />
+              <Plus className="mr-1.5 h-4 w-4" />
               Thêm domain
             </Button>
             <Button
               onClick={() => void onSaveAllowedDomains()}
               disabled={isSavingAllowedDomains || !isAllowedDomainsFormValid}
+              className="shadow-xs rounded-xl font-semibold"
             >
               {isSavingAllowedDomains && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Lưu thay đổi
+              Lưu danh sách Domain
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="glass">
-        <CardHeader>
-          <CardTitle>Giới hạn sử dụng</CardTitle>
-          <CardDescription>
-            Cấu hình giới hạn tin nhắn để kiểm soát chi phí và bảo vệ bot
-          </CardDescription>
+      {/* Giới hạn sử dụng */}
+      <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
+        <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-semibold">Giới hạn tần suất</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                Cấu hình giới hạn lượt phản hồi để kiểm soát dung lượng và tránh Spam
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="space-y-4 p-5 sm:p-6">
+          <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="rateLimitPerDay">Giới hạn tin nhắn / ngày</Label>
+              <Label htmlFor="rateLimitPerDay" className="text-xs font-medium">
+                Giới hạn tin nhắn / ngày
+              </Label>
               <Input
                 id="rateLimitPerDay"
                 type="text"
@@ -271,17 +332,19 @@ export function SettingsTab({
                 placeholder="Không giới hạn"
                 value={rateLimitPerDay}
                 onChange={(e) => handleRateLimitInputChange(e.target.value, setRateLimitPerDay)}
+                className="rounded-xl border-border/60 bg-background/50 text-sm focus-visible:ring-primary/20"
               />
               {rateLimitPerDayError ? (
-                <p className="text-[0.8rem] text-destructive">{rateLimitPerDayError}</p>
+                <p className="text-xs text-destructive">{rateLimitPerDayError}</p>
               ) : null}
-              <p className="text-[0.8rem] text-muted-foreground">
-                Tổng số tin nhắn bot có thể trả lời trong một ngày. Để trống nếu không muốn giới
-                hạn.
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Tổng số tin nhắn bot có thể phản hồi trong ngày.
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="rateLimitPerIp">Giới hạn tin nhắn / IP / ngày</Label>
+              <Label htmlFor="rateLimitPerIp" className="text-xs font-medium">
+                Giới hạn tin nhắn / IP / ngày
+              </Label>
               <Input
                 id="rateLimitPerIp"
                 type="text"
@@ -290,23 +353,24 @@ export function SettingsTab({
                 placeholder="Không giới hạn"
                 value={rateLimitPerIp}
                 onChange={(e) => handleRateLimitInputChange(e.target.value, setRateLimitPerIp)}
+                className="rounded-xl border-border/60 bg-background/50 text-sm focus-visible:ring-primary/20"
               />
               {rateLimitPerIpError ? (
-                <p className="text-[0.8rem] text-destructive">{rateLimitPerIpError}</p>
+                <p className="text-xs text-destructive">{rateLimitPerIpError}</p>
               ) : null}
-              <p className="text-[0.8rem] text-muted-foreground">
-                Số tin nhắn tối đa từ một người dùng (IP) trong một ngày. Để trống nếu không muốn
-                giới hạn.
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Số tin nhắn tối đa từ một IP người dùng trong ngày.
               </p>
             </div>
           </div>
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-end border-t border-border/40 pt-4">
             <Button
               onClick={() => void onSaveRateLimit()}
               disabled={isSavingRateLimit || !isRateLimitFormValid}
+              className="shadow-xs rounded-xl font-semibold"
             >
               {isSavingRateLimit && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Lưu thay đổi
+              Lưu cài đặt giới hạn
             </Button>
           </div>
         </CardContent>

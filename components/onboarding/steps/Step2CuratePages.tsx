@@ -6,9 +6,14 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { submitSelection } from "@/lib/services/bot.service";
-import { getCreditSummary } from "@/lib/services/credit.service";
+import {
+  getWorkspaceCreditSummary,
+  type CreditSummary,
+  type WorkspaceCreditSummary,
+} from "@/lib/services/credit.service";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { useDiscoverPipeline } from "@/hooks/onboarding/useDiscoverPipeline";
 import { CREDIT_PER_PAGE } from "@/config";
 import { EBotStatus } from "@/types";
@@ -35,8 +40,13 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { activeWorkspace } = useWorkspace();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const crawlScope = useOnboardingStore((state) => state.crawlScope);
+
+  const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
+  const [isSubmittingSelection, setIsSubmittingSelection] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const {
     botStatus,
@@ -50,14 +60,30 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
     progress,
   } = useDiscoverPipeline(botId);
 
-  const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
-  const [isSubmittingSelection, setIsSubmittingSelection] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const creditSummaryQuery = useQuery<WorkspaceCreditSummary | CreditSummary | null>({
+    queryKey: [ONBOARDING_CREDIT_SUMMARY_KEY, botId, activeWorkspace?.id || user?.id],
+    queryFn: async (): Promise<WorkspaceCreditSummary | CreditSummary | null> => {
+      let wsId = activeWorkspace?.id;
 
-  const creditSummaryQuery = useQuery({
-    queryKey: [ONBOARDING_CREDIT_SUMMARY_KEY, user?.id],
-    queryFn: () => getCreditSummary(supabase, user!.id),
-    enabled: !!user,
+      if (!wsId && botId) {
+        const { data: bot } = await supabase
+          .from("bots")
+          .select("workspace_id")
+          .eq("id", botId)
+          .maybeSingle();
+        const foundWsId = (bot as { workspace_id?: string | null } | null)?.workspace_id;
+        if (foundWsId) {
+          wsId = foundWsId;
+        }
+      }
+
+      if (wsId) {
+        return getWorkspaceCreditSummary(supabase, wsId);
+      }
+
+      return null;
+    },
+    enabled: !!(botId || activeWorkspace?.id || user?.id),
     retry: 1,
   });
 
@@ -66,7 +92,11 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
     return curationRows.every((row) => selectedPageIds.has(row.id));
   }, [curationRows, selectedPageIds]);
 
-  const totalCredits = creditSummaryQuery.data?.totalRemainingCredits ?? 0;
+  const totalCredits = creditSummaryQuery.data
+    ? "totalRemainingCredits" in creditSummaryQuery.data
+      ? creditSummaryQuery.data.totalRemainingCredits
+      : creditSummaryQuery.data.totalCredits
+    : 0;
   const maxSelectablePagesByCredit = Math.floor(totalCredits / CREDIT_PER_PAGE);
   const selectedCount = selectedPageIds.size;
   const selectedCreditsCost = selectedCount * CREDIT_PER_PAGE;

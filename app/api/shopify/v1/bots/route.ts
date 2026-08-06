@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsHeaders } from "@/lib/constants";
 import { authenticateShopifyRequest } from "@/lib/helpers/shopify-auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { getCreditSummary } from "@/lib/services/credit.service";
+import { getWorkspaceCreditSummary } from "@/lib/services/credit.service";
 import { getTotalConversationCount } from "@/lib/services/conversations.service";
 import { getIndexedPageCountsByBotIds } from "@/lib/services/page.service";
 import { getPlanById } from "@/lib/services/plan.service";
-import { getSubscriptionByUserId } from "@/lib/services/subscription.service";
+import { getSubscriptionByWorkspaceId } from "@/lib/services/subscription.service";
+import { WorkspaceService } from "@/lib/services/workspace.service";
 
 export const dynamic = "force-dynamic";
 
@@ -26,22 +27,25 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = createAdminClient();
+    const workspaceId = await WorkspaceService.getOrCreateDefaultWorkspace(auth.userId);
     const { data: bots, error } = await supabase
       .from("bots")
       .select("id, name, status, domain, avatar_url, is_stopped, last_crawl_at")
-      .eq("user_id", auth.userId)
+      .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
     const botList = bots ?? [];
     const botIds = botList.map((bot) => bot.id);
-    const subscription = await getSubscriptionByUserId(supabase, auth.userId);
+    const subscription = await getSubscriptionByWorkspaceId(supabase, workspaceId);
     const plan = subscription?.plan_id ? await getPlanById(supabase, subscription.plan_id) : null;
     const [indexedPagesByBot, totalConversations, creditSummary] = await Promise.all([
       botIds.length > 0 ? getIndexedPageCountsByBotIds(supabase, botIds) : Promise.resolve({}),
       botIds.length > 0 ? getTotalConversationCount(supabase, botIds) : Promise.resolve(0),
-      subscription?.plan_id ? getCreditSummary(supabase, auth.userId) : Promise.resolve(null),
+      subscription?.plan_id
+        ? getWorkspaceCreditSummary(supabase, workspaceId)
+        : Promise.resolve(null),
     ]);
 
     return NextResponse.json(

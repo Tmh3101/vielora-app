@@ -13,6 +13,11 @@ import {
   deleteDocumentsByPageUrl,
   insertDocumentsServer,
 } from "@/lib/services/page.service";
+import {
+  getWorkspaceKnowledgeItemServer,
+  replaceWorkspaceKnowledgeChunks,
+  setWorkspaceKnowledgeStatus,
+} from "@/lib/services/workspace-knowledge.service";
 import { setBotStatusIfNotReadyServer } from "@/lib/services/bot.service";
 import {
   upsertPageContent,
@@ -27,8 +32,9 @@ import type {
   PageCrawlerJobData,
   RenderModeType,
   PageContent,
+  WorkspaceKnowledgeJobData,
 } from "@/types";
-import { EBotStatus, EPageStatus, ETransactionType } from "@/types";
+import { EBotStatus, EPageStatus, ETransactionType, EPageSourceType } from "@/types";
 import {
   RenderMode as RenderModeEnum,
   DISCOVERED_PAGE_STATUSES,
@@ -38,7 +44,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/server";
 import type { TablesInsert } from "@/lib/supabase/types";
 import { hashContent, fetchSitemapUrls, isSoft404, getJobProgressStreamId } from "@/lib/helpers";
-import { refundCredits } from "@/lib/services/credit.service";
+import { refundWorkspaceCredits } from "@/lib/services/credit.service";
 import { createChunks, embedChunks } from "@/lib/rag-processor";
 import { CREDIT_PER_PAGE, MAX_PAGES, MAX_DEPTH, MIN_CHUNK_SIZE } from "@/config";
 import { sleep } from "@/lib/utils/sleep";
@@ -62,6 +68,28 @@ const getDiscoverPendingKey = (discoverJobId: string): string =>
 const getDiscoverSeenKey = (discoverJobId: string): string =>
   `${DISCOVER_SEEN_KEY_PREFIX}:${discoverJobId}`;
 
+const refundKnowledgeCredits = async (
+  supabase: ReturnType<typeof createAdminClient>,
+  refund: NonNullable<PageCrawlerJobData["creditRefund"]>,
+  botId: string,
+  reason: string
+): Promise<void> => {
+  const description = `Refunded ${
+    refund.creditAmount || CREDIT_PER_PAGE
+  } credits due to ${reason} while adding URL knowledge for bot ${botId}`;
+  if (!refund.workspaceId) {
+    console.warn("Cannot refund credits: job has no workspace", { botId });
+    return;
+  }
+  await refundWorkspaceCredits(supabase, {
+    workspaceId: refund.workspaceId,
+    deductedFromSubscription: refund.deductedFromSubscription,
+    deductedFromPayg: refund.deductedFromPayg,
+    transactionType: ETransactionType.AddKnowledgeRefund,
+    transactionDescription: description,
+  });
+};
+
 const refundSingleUrlKnowledgeCredits = async (
   supabase: ReturnType<typeof createAdminClient>,
   jobData: PageCrawlerJobData
@@ -69,13 +97,7 @@ const refundSingleUrlKnowledgeCredits = async (
   const refund = jobData.creditRefund;
   if (!refund) return;
 
-  await refundCredits(supabase, {
-    userId: refund.userId,
-    deductedFromSubscription: refund.deductedFromSubscription,
-    deductedFromPayg: refund.deductedFromPayg,
-    transactionType: ETransactionType.AddKnowledgeRefund,
-    transactionDescription: `Refunded ${refund.creditAmount || CREDIT_PER_PAGE} credits due to an error while adding URL knowledge for bot ${jobData.botId}`,
-  });
+  await refundKnowledgeCredits(supabase, refund, jobData.botId, "an error");
 };
 
 const failSingleUrlKnowledgeJob = async (
@@ -444,15 +466,7 @@ export const processIndexerJob = async (job: Job<IndexerJobData>): Promise<void>
       error_message: "Missing content",
     });
     if (job.data.creditRefund) {
-      await refundCredits(supabase, {
-        userId: job.data.creditRefund.userId,
-        deductedFromSubscription: job.data.creditRefund.deductedFromSubscription,
-        deductedFromPayg: job.data.creditRefund.deductedFromPayg,
-        transactionType: ETransactionType.AddKnowledgeRefund,
-        transactionDescription: `Refunded ${
-          job.data.creditRefund.creditAmount || CREDIT_PER_PAGE
-        } credits due to missing content while adding URL knowledge for bot ${botId}`,
-      });
+      await refundKnowledgeCredits(supabase, job.data.creditRefund, botId, "missing content");
     }
     debouncedFinalizeBotIfDone(botId);
     return;
@@ -498,18 +512,60 @@ export const processIndexerJob = async (job: Job<IndexerJobData>): Promise<void>
       error_message: errorMessage,
     });
     if (job.data.creditRefund) {
-      await refundCredits(supabase, {
-        userId: job.data.creditRefund.userId,
-        deductedFromSubscription: job.data.creditRefund.deductedFromSubscription,
-        deductedFromPayg: job.data.creditRefund.deductedFromPayg,
-        transactionType: ETransactionType.AddKnowledgeRefund,
-        transactionDescription: `Refunded ${
-          job.data.creditRefund.creditAmount || CREDIT_PER_PAGE
-        } credits due to an indexing error while adding URL knowledge for bot ${botId}`,
-      });
+      await refundKnowledgeCredits(supabase, job.data.creditRefund, botId, "an indexing error");
     }
     void job.updateProgress({ percent: 100, currentUrl: page.url });
   }
 
   debouncedFinalizeBotIfDone(botId);
+};
+
+export const processWorkspaceKnowledgeJob = async (
+  job: Job<WorkspaceKnowledgeJobData>
+): Promise<void> => {
+  const { itemId, workspaceId } = job.data;
+  const supabase = createAdminClient();
+
+  const item = await getWorkspaceKnowledgeItemServer(supabase, itemId, workspaceId);
+
+  if (!item) {
+    return;
+  }
+
+  void job.updateProgress({ percent: 0, currentUrl: item.title });
+
+  try {
+    const pageContent: PageContent = {
+      url:
+        item.source_type === EPageSourceType.SingleUrl
+          ? (item.metadata?.url as string) || item.id
+          : `file://${item.id}`,
+      title: item.title || item.id,
+      content: item.content,
+    };
+    const chunks = createChunks([pageContent]);
+    const embedded = await embedChunks(chunks);
+
+    // Replace chunks for this item (idempotent re-index on edit)
+    await replaceWorkspaceKnowledgeChunks(
+      supabase,
+      workspaceId,
+      itemId,
+      item.source_type,
+      embedded
+    );
+
+    await setWorkspaceKnowledgeStatus(supabase, itemId, workspaceId, "active");
+
+    void job.updateProgress({ percent: 100, currentUrl: item.title });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to index knowledge";
+    console.error(`[WorkspaceKnowledgeWorker] Failed to index item ${itemId}:`, error);
+
+    await setWorkspaceKnowledgeStatus(supabase, itemId, workspaceId, "failed", {
+      ...(item.metadata || {}),
+      error_message: errorMessage,
+    });
+    void job.updateProgress({ percent: 100, currentUrl: item.title });
+  }
 };

@@ -23,9 +23,11 @@ export const SINGLE_URL_CRAWL_TIMEOUT_MS = 30_000;
 export const EDIT_KNOWLEDGE_ALLOWED_PLANS: ESubscriptionPlan[] = [
   ESubscriptionPlan.Standard,
   ESubscriptionPlan.Pro,
+  ESubscriptionPlan.Enterprise,
 ];
 
 export const SUGGESTED_QUESTIONS_ALLOWED_PLANS: ESubscriptionPlan[] = [
   ESubscriptionPlan.Standard,
   ESubscriptionPlan.Pro,
+  ESubscriptionPlan.Enterprise,
 ];

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { createServerClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
+import { WorkspaceProvider } from "@/hooks/useWorkspace";
 
 export const metadata: Metadata = {
   title: {
@@ -58,5 +59,5 @@ export default async function DashboardLayout({
     );
   }
 
-  return <>{children}</>;
+  return <WorkspaceProvider>{children}</WorkspaceProvider>;
 }

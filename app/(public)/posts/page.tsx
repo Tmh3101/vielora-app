@@ -5,8 +5,8 @@ import CTASection from "@/components/landing/CTASection";
 import { createServerClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Tag, ArrowRight, BookOpen } from "lucide-react";
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Pagination,
   PaginationContent,
@@ -273,6 +273,7 @@ export default async function BlogPage(props: {
                           fill
                           sizes="(min-width: 1024px) 352px, (min-width: 768px) 50vw, calc(100vw - 2rem)"
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
+                          unoptimized
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">

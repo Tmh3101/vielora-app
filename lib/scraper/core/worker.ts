@@ -8,7 +8,12 @@ import {
 } from "@/lib/services/job.service";
 import { normalizeWorkerProgress, publishProgress } from "@/lib/services/worker.service";
 import { EJobStatus } from "@/types";
-import { processDiscoverJob, processIndexerJob, processPageCrawlerJob } from "./job-processors";
+import {
+  processDiscoverJob,
+  processIndexerJob,
+  processPageCrawlerJob,
+  processWorkspaceKnowledgeJob,
+} from "./job-processors";
 import { BrowserManager } from "@/lib/scraper/core/browser-manager";
 import type {
   DiscoverJobData,
@@ -16,6 +21,7 @@ import type {
   PageCrawlerJobData,
   QueueJobData,
   WorkerResult,
+  WorkspaceKnowledgeJobData,
 } from "@/types";
 import { createAdminClient } from "@/lib/supabase/server";
 import { RATE_LIMITER_CONFIG } from "@/config/scraper";
@@ -26,12 +32,15 @@ import {
   DISCOVER_WORKER_CONCURRENCY,
   INDEXER_WORKER_CONCURRENCY,
   PAGE_CRAWLER_WORKER_CONCURRENCY,
+  WORKSPACE_KNOWLEDGE_QUEUE_NAME,
+  WORKSPACE_KNOWLEDGE_WORKER_CONCURRENCY,
 } from "@/lib/constants/job";
 import { getBotIndexStreamId, getJobProgressStreamId } from "@/lib/helpers";
 
 let discoverWorker: Worker<DiscoverJobData> | null = null;
 let pageCrawlerWorker: Worker<PageCrawlerJobData> | null = null;
 let indexerWorker: Worker<IndexerJobData> | null = null;
+let workspaceKnowledgeWorker: Worker<WorkspaceKnowledgeJobData> | null = null;
 let legacyCrawlerWorker: Worker<QueueJobData, WorkerResult> | null = null;
 
 export function startDiscoverWorker(): Worker<DiscoverJobData> {
@@ -188,15 +197,70 @@ export function startPageCrawlerWorker(): Worker<PageCrawlerJobData> {
   return pageCrawlerWorker;
 }
 
+export function startWorkspaceKnowledgeWorker(): Worker<WorkspaceKnowledgeJobData> {
+  if (workspaceKnowledgeWorker) return workspaceKnowledgeWorker;
+  const trackingClient = createAdminClient();
+
+  workspaceKnowledgeWorker = new Worker<WorkspaceKnowledgeJobData>(
+    WORKSPACE_KNOWLEDGE_QUEUE_NAME,
+    processWorkspaceKnowledgeJob,
+    {
+      connection: getRedisConnectionOptions(),
+      concurrency: WORKSPACE_KNOWLEDGE_WORKER_CONCURRENCY,
+      lockDuration: 120000,
+      stalledInterval: 600000,
+      maxStalledCount: 1,
+      drainDelay: 60,
+    }
+  );
+
+  workspaceKnowledgeWorker.on("error", (error) => {
+    console.error("[WorkspaceKnowledgeWorker] Error:", error.message);
+  });
+
+  workspaceKnowledgeWorker.on("active", (job) => {
+    void updateJobState(trackingClient, job.id!, EJobStatus.Active);
+  });
+
+  workspaceKnowledgeWorker.on("completed", (job) => {
+    if (job?.id) void updateJobState(trackingClient, job.id, EJobStatus.Completed);
+  });
+
+  workspaceKnowledgeWorker.on("failed", (job, err) => {
+    if (job?.id) void updateJobState(trackingClient, job.id, EJobStatus.Failed, err.message);
+  });
+
+  workspaceKnowledgeWorker.on("progress", (job, progress) => {
+    if (!job?.id) return;
+    const { percent, currentUrl } = normalizeWorkerProgress(progress);
+    void updateJobProgress(
+      trackingClient,
+      job.id,
+      percent,
+      currentUrl ? { current_url: currentUrl } : undefined
+    ).catch((error) => {
+      console.error(
+        `[WorkspaceKnowledgeWorker] Failed to update job progress for job ${job.id}:`,
+        error
+      );
+    });
+    publishProgress(getJobProgressStreamId(job.id), percent, currentUrl);
+  });
+
+  return workspaceKnowledgeWorker;
+}
+
 export function startWorkers(): {
   discover: Worker<DiscoverJobData>;
   pageCrawler: Worker<PageCrawlerJobData>;
   indexer: Worker<IndexerJobData>;
+  workspaceKnowledge: Worker<WorkspaceKnowledgeJobData>;
 } {
   return {
     discover: startDiscoverWorker(),
     pageCrawler: startPageCrawlerWorker(),
     indexer: startIndexerWorker(),
+    workspaceKnowledge: startWorkspaceKnowledgeWorker(),
   };
 }
 
@@ -218,6 +282,12 @@ export async function stopPageCrawlerWorker(): Promise<void> {
   pageCrawlerWorker = null;
 }
 
+export async function stopWorkspaceKnowledgeWorker(): Promise<void> {
+  if (!workspaceKnowledgeWorker) return;
+  await workspaceKnowledgeWorker.close();
+  workspaceKnowledgeWorker = null;
+}
+
 export async function stopWorker(): Promise<void> {
   if (!legacyCrawlerWorker) return;
   await legacyCrawlerWorker.close();
@@ -229,6 +299,7 @@ export async function stopWorkers(): Promise<void> {
     stopDiscoverWorker(),
     stopPageCrawlerWorker(),
     stopIndexerWorker(),
+    stopWorkspaceKnowledgeWorker(),
     stopWorker(),
   ]);
 }
@@ -258,6 +329,7 @@ export function isWorkerRunning(): boolean {
     (discoverWorker !== null && !discoverWorker.closing) ||
     (pageCrawlerWorker !== null && !pageCrawlerWorker.closing) ||
     (indexerWorker !== null && !indexerWorker.closing) ||
+    (workspaceKnowledgeWorker !== null && !workspaceKnowledgeWorker.closing) ||
     (legacyCrawlerWorker !== null && !legacyCrawlerWorker.closing)
   );
 }

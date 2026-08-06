@@ -235,22 +235,23 @@ function AuthPageContent() {
 
   /* ---- redirect after auth ---- */
   useEffect(() => {
+    const targetRedirect = searchParams.get("redirect") || "/dashboard";
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        router.push("/dashboard");
+        window.location.href = targetRedirect;
       }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        router.push("/dashboard");
+        window.location.href = targetRedirect;
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase, router]);
+  }, [supabase, router, searchParams]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

@@ -1,5 +1,6 @@
 import type { ServiceClient } from "@/lib/services/types";
 import type { Tables } from "@/lib/supabase/types";
+import { ESubscriptionPlan } from "@/types";
 
 export type PlanRow = Tables<"plans">;
 
@@ -34,15 +35,40 @@ export async function getActivePlans(
   client: ServiceClient,
   excludeEnterprise = false
 ): Promise<PlanRow[]> {
-  const { data, error } = await client
-    .from("plans")
-    .select("*")
-    .eq("is_active", true)
-    .order("monthly_credits", { ascending: true });
+  const { data, error } = await client.from("plans").select("*").eq("is_active", true);
 
   if (error) throw new Error(error.message);
-  const plans = data ?? [];
-  return excludeEnterprise ? plans.filter((p) => p.code !== "enterprise") : plans;
+  let plans = data ?? [];
+
+  // Fallback Enterprise plan if DB row doesn't exist yet
+  if (!excludeEnterprise && !plans.some((p) => p.code === ESubscriptionPlan.Enterprise)) {
+    plans.push({
+      id: "enterprise-plan-fallback-id",
+      code: ESubscriptionPlan.Enterprise,
+      name: "Enterprise",
+      description: "Gói tùy chỉnh linh hoạt cho doanh nghiệp lớn",
+      monthly_credits: 20000,
+      bots_limit: 10,
+      max_shared_knowledge_items: null,
+      pricing: { VND: { monthly: 1490000, yearly: 14900000 } },
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as PlanRow);
+  }
+
+  if (excludeEnterprise) {
+    plans = plans.filter((p) => p.code !== ESubscriptionPlan.Enterprise);
+  }
+
+  const planPriority: Record<string, number> = {
+    [ESubscriptionPlan.Free]: 1,
+    [ESubscriptionPlan.Standard]: 2,
+    [ESubscriptionPlan.Pro]: 3,
+    [ESubscriptionPlan.Enterprise]: 4,
+  };
+
+  return plans.sort((a, b) => (planPriority[a.code] ?? 99) - (planPriority[b.code] ?? 99));
 }
 
 /**

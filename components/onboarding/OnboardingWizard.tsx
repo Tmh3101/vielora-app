@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -49,7 +48,6 @@ interface RestoredBotRow {
 export function OnboardingWizard({ userId }: OnboardingWizardProps) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const queryClient = useQueryClient();
-  const router = useRouter();
   const { toast } = useToast();
   const step = useOnboardingStore((state) => state.step);
   const botId = useOnboardingStore((state) => state.botId);
@@ -62,7 +60,7 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
   const onboardingUrlRef = useRef<string>("");
 
   useEffect(() => {
-    if (!(step > 1 && !!botId)) return;
+    if (!(step > 1 && step < 4 && !!botId)) return;
 
     onboardingUrlRef.current = window.location.href;
 
@@ -142,11 +140,11 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
   };
 
   const handleExitNavigation = () => {
-    const active = effectiveStep > 1 && !!effectiveBotId;
+    const active = effectiveStep > 1 && effectiveStep < 4 && !!effectiveBotId;
     if (active) {
       setShowExitDialog(true);
     } else {
-      router.push("/dashboard");
+      window.location.assign("/dashboard");
     }
   };
 
@@ -165,7 +163,7 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
     }
     queryClient.removeQueries({ queryKey: [ONBOARDING_RESTORE_KEY, userId] });
     reset();
-    router.push("/dashboard");
+    window.location.assign("/dashboard");
   };
 
   const handleDialogCancel = () => {

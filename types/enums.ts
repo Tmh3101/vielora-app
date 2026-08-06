@@ -86,6 +86,20 @@ export enum ETransactionType {
   PaygPurchase = "payg_purchase",
 }
 
+export enum EInvoiceStatus {
+  Pending = "pending",
+  Issuing = "issuing",
+  Issued = "issued",
+  Failed = "failed",
+  Cancelled = "cancelled",
+  Replaced = "replaced",
+}
+
+export enum EInvoiceProvider {
+  EasyInvoice = "easyinvoice",
+  MisaMeInvoice = "misa_meinvoice",
+}
+
 export enum EPageSourceType {
   Website = "website",
   ManualText = "manual_text",
@@ -142,10 +156,6 @@ export enum EIOSBrowser {
 export enum EAndroidBrowser {
   Chrome = "chrome",
   Edge = "edge",
-  Opera = "opera",
-  Brave = "brave",
-  CocCoc = "coccoc",
-  Samsung = "samsung",
   Other = "other",
 }
 
@@ -159,4 +169,29 @@ export enum BannerState {
   Hidden = "hidden",
   Offline = "offline",
   Recovering = "recovering",
+}
+
+export enum EWorkspaceRole {
+  Owner = "owner",
+  Admin = "admin",
+}
+
+export enum EWorkspaceInviteStatus {
+  Pending = "pending",
+  Accepted = "accepted",
+  Expired = "expired",
+  Revoked = "revoked",
+}
+
+export enum EWorkspaceMemberStatus {
+  Pending = "pending",
+  Active = "active",
+  Suspended = "suspended",
+  Removed = "removed",
+}
+
+export enum EWorkspaceStatus {
+  Active = "active",
+  Suspended = "suspended",
+  Deleted = "deleted",
 }

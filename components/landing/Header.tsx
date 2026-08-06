@@ -136,7 +136,7 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
                     variant="ghost"
                     size="sm"
                     asChild
-                    className="h-8 border border-primary/30 text-xs text-muted-foreground text-primary/80 transition-all hover:border-primary hover:bg-white hover:text-primary"
+                    className="h-8 border border-primary/30 text-xs text-primary/80 transition-all hover:border-primary hover:bg-white hover:text-primary"
                   >
                     <Link href="/auth">Đăng nhập</Link>
                   </Button>
@@ -213,18 +213,27 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
               {!isLoading &&
                 (isLoggedIn ? (
                   <Button asChild size="sm" className="bg-gradient-primary h-8 w-full text-xs">
-                    <Link href="/dashboard">
+                    <Link href="/dashboard" onClick={() => setIsMenuOpen(false)}>
                       <LayoutDashboard className="mr-1.5 h-3.5 w-3.5" />
                       Dashboard
                     </Link>
                   </Button>
                 ) : (
                   <>
-                    <Button variant="outline" size="sm" asChild className="h-8 w-full text-xs">
-                      <Link href="/auth">Đăng nhập</Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      asChild
+                      className="h-8 w-full border border-primary/30 text-xs text-primary/80 transition-all hover:border-primary hover:bg-white hover:text-primary"
+                    >
+                      <Link href="/auth" onClick={() => setIsMenuOpen(false)}>
+                        Đăng nhập
+                      </Link>
                     </Button>
                     <Button asChild size="sm" className="bg-gradient-primary h-8 w-full text-xs">
-                      <Link href="/auth?mode=signup">Bắt đầu miễn phí</Link>
+                      <Link href="/auth?mode=signup" onClick={() => setIsMenuOpen(false)}>
+                        Bắt đầu miễn phí
+                      </Link>
                     </Button>
                   </>
                 ))}

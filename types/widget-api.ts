@@ -15,6 +15,7 @@ export type WidgetSettings = {
   chatIconUrl?: string | null;
   chatIconColor?: string;
   chatIconBgColor?: string;
+  subscriptionPlan?: string;
 };
 
 export type InitRequest = {
@@ -109,7 +110,10 @@ export interface BotInfo {
 }
 
 export interface ChatMessage {
+  id?: string;
   role: EMessageRole;
   content: string;
   isHistory?: boolean;
+  isVoice?: boolean;
+  isProcessing?: boolean;
 }

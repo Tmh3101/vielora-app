@@ -3,7 +3,8 @@ import { headers } from "next/headers";
 import Script from "next/script";
 import { createServerClient } from "@/lib/supabase/server";
 import { getPublicBotAppleTouchIconPath } from "@/lib/public-bot/apple-touch-icon";
-import { getPublicBotBranding, getPublicBotThemeColor } from "@/lib/public-bot/branding";
+import { getPublicBotThemeColor, getPublicBotPwaVersion } from "@/lib/helpers/pwa-helpers";
+import { getPublicBotBranding } from "@/lib/services/bot.service";
 
 export const dynamic = "force-dynamic";
 
@@ -20,14 +21,15 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { botSlug } = await params;
   const metadataBase = new URL(getRequestOrigin());
-  const manifestHref = `/public-bot/${botSlug}/manifest`;
-  const appleTouchIconPath = getPublicBotAppleTouchIconPath(botSlug);
 
   try {
     const supabase = await createServerClient();
     const bot = await getPublicBotBranding(supabase, botSlug);
+    const pwaVersion = getPublicBotPwaVersion(bot?.pwa_updated_at);
     const title = bot?.name?.trim() || botSlug;
     const themeColor = getPublicBotThemeColor(bot?.widget_settings ?? null);
+    const manifestHref = `/public-bot/${botSlug}/manifest`;
+    const appleTouchIconPath = getPublicBotAppleTouchIconPath(botSlug, pwaVersion);
 
     return {
       metadataBase,
@@ -55,6 +57,9 @@ export async function generateMetadata({
     };
   } catch (error) {
     console.error("Failed to build public bot metadata:", error);
+
+    const manifestHref = `/public-bot/${botSlug}/manifest`;
+    const appleTouchIconPath = getPublicBotAppleTouchIconPath(botSlug);
 
     return {
       metadataBase,

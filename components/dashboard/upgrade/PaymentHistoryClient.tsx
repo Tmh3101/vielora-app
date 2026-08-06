@@ -1,4 +1,4 @@
-import { Receipt } from "lucide-react";
+import { Download, Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -21,6 +21,8 @@ import {
 import type { PaymentHistoryItem } from "@/lib/services/payment-history.service";
 import { formatPaymentDate, getPaymentStatusMeta, getPaymentTypeLabel } from "@/lib/helpers";
 import { formatVND } from "@/lib/utils/currency";
+import { getInvoiceStatusMeta } from "@/lib/utils/invoice-validation";
+import { EInvoiceStatus } from "@/types/enums";
 
 interface PaymentHistoryClientProps {
   paymentHistory: PaymentHistoryItem[];
@@ -50,6 +52,41 @@ function getVisiblePages(currentPage: number, totalPages: number): Array<number 
     items.push(page);
     return items;
   }, []);
+}
+
+function InvoiceStatusCell({ payment }: { payment: PaymentHistoryItem }) {
+  if (!payment.invoice) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  const invoiceMeta = getInvoiceStatusMeta(payment.invoice.status);
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center justify-end gap-1.5">
+        <Badge
+          variant="outline"
+          className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium ${invoiceMeta.className}`}
+        >
+          {invoiceMeta.label}
+        </Badge>
+        {invoiceMeta.canDownload && (
+          <a
+            href={`/api/invoices/${payment.invoice.id}/download`}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+            title="Tải hóa đơn"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </a>
+        )}
+      </div>
+      {payment.invoice.status === EInvoiceStatus.Failed && payment.invoice.error_message && (
+        <p className="max-w-[200px] text-right text-[11px] text-red-600">
+          {payment.invoice.error_message}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function PaymentHistoryClient({
@@ -90,11 +127,13 @@ export function PaymentHistoryClient({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Ngày</TableHead>
-                      <TableHead>Loại</TableHead>
-                      <TableHead className="text-right">Số tiền</TableHead>
-                      <TableHead className="text-right">Credits cộng</TableHead>
-                      <TableHead className="text-right">Trạng thái</TableHead>
+                      <TableHead className="text-xs font-semibold">Ngày</TableHead>
+                      <TableHead className="text-xs font-semibold">Người thanh toán</TableHead>
+                      <TableHead className="text-xs font-semibold">Loại</TableHead>
+                      <TableHead className="text-right text-xs font-semibold">Số tiền</TableHead>
+                      <TableHead className="text-right text-xs font-semibold">Credits</TableHead>
+                      <TableHead className="text-right text-xs font-semibold">Trạng thái</TableHead>
+                      <TableHead className="text-right text-xs font-semibold">Hóa đơn</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -103,25 +142,42 @@ export function PaymentHistoryClient({
                       const StatusIcon = statusMeta.icon;
 
                       return (
-                        <TableRow key={payment.id}>
-                          <TableCell className="font-medium">
+                        <TableRow key={payment.id} className="py-2">
+                          <TableCell className="text-[11px] font-medium text-muted-foreground">
                             {formatPaymentDate(payment.created_at)}
                           </TableCell>
-                          <TableCell>{getPaymentTypeLabel(payment)}</TableCell>
-                          <TableCell className="text-right font-semibold">
+                          <TableCell>
+                            <div>
+                              <p className="text-xs font-semibold text-foreground">
+                                {payment.payerName || payment.payerEmail || "—"}
+                              </p>
+                              {payment.payerName && payment.payerEmail && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  {payment.payerEmail}
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs font-medium text-foreground">
+                            {getPaymentTypeLabel(payment)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-semibold text-foreground">
                             {formatVND(payment.amount)}
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-primary">
+                          <TableCell className="text-right text-xs font-semibold text-primary">
                             {formatCreditsAdded(payment.credits_added)}
                           </TableCell>
                           <TableCell className="text-right">
                             <Badge
                               variant="outline"
-                              className={`inline-flex items-center gap-1.5 ${statusMeta.className}`}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium ${statusMeta.className}`}
                             >
-                              <StatusIcon className="h-3.5 w-3.5" />
+                              <StatusIcon className="h-3 w-3" />
                               {statusMeta.label}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <InvoiceStatusCell payment={payment} />
                           </TableCell>
                         </TableRow>
                       );
@@ -134,6 +190,7 @@ export function PaymentHistoryClient({
                 {paymentHistory.map((payment) => {
                   const statusMeta = getPaymentStatusMeta(payment.status);
                   const StatusIcon = statusMeta.icon;
+                  const invoiceMeta = getInvoiceStatusMeta(payment.invoice?.status);
 
                   return (
                     <div key={payment.id} className="space-y-3 p-4">
@@ -155,17 +212,52 @@ export function PaymentHistoryClient({
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Người thanh toán</span>
+                        <span className="font-medium text-foreground">
+                          {payment.payerName || payment.payerEmail || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Số tiền</span>
                         <span className="font-semibold text-foreground">
                           {formatVND(payment.amount)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Credits cộng</span>
+                        <span className="text-muted-foreground">Credits</span>
                         <span className="font-semibold text-primary">
                           {formatCreditsAdded(payment.credits_added)}
                         </span>
                       </div>
+                      {payment.invoice && (
+                        <div className="space-y-2 rounded-lg border border-border/60 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm text-muted-foreground">Hóa đơn</span>
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className={`inline-flex items-center gap-1.5 ${invoiceMeta.className}`}
+                              >
+                                {invoiceMeta.label}
+                              </Badge>
+                              {invoiceMeta.canDownload && (
+                                <a
+                                  href={`/api/invoices/${payment.invoice.id}/download`}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                          {payment.invoice.status === EInvoiceStatus.Failed &&
+                            payment.invoice.error_message && (
+                              <p className="text-xs text-red-600">
+                                {payment.invoice.error_message}
+                              </p>
+                            )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

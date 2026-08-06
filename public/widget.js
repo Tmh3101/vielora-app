@@ -24,6 +24,9 @@
   var CHATBOT_UNAVAILABLE_MESSAGE = 'Chatbot không còn tồn tại hoặc đã bị xóa.';
   var INSUFFICIENT_CREDITS_ERROR_CODE = 'INSUFFICIENT_CREDITS';
   var INSUFFICIENT_CREDITS_MESSAGE = 'Bot hiện đã hết credits. Vui lòng quay lại sau.';
+  var VOICE_RECORDING_DURATION = 30000;
+
+  var PAID_PLANS = ['standard', 'pro', 'enterprise'];
 
   var state = {
     isInitialized: false,
@@ -44,7 +47,16 @@
     insufficientCreditsMessage: null,
     suggestedQuestionsShown: false,
     showLeadForm: false,
-    leadFormQuestion: null
+    leadFormQuestion: null,
+    subscriptionPlan: null,
+    isRecording: false,
+    audioChunks: [],
+    mediaRecorder: null,
+    recordingTimer: null,
+    recordingStartTime: null,
+    recordingTimerInterval: null,
+    voiceSupported: false,
+    isProcessingVoice: false
   };
 
   var UI = {
@@ -195,6 +207,7 @@
         state.statusMessage = data.data.statusMessage;
         state.botName = data.data.name || null;
         state.avatarUrl = data.data.avatarUrl || null;
+        state.subscriptionPlan = data.data.subscriptionPlan || data.data.settings?.subscriptionPlan || null;
 
         // Inject JSON-LD Schema for SEO
         injectVieloraContactSchema(data.data.botName);
@@ -273,6 +286,15 @@
     );
   }
 
+  function hasVoiceAccess() {
+    var plan = (state.subscriptionPlan || '').toLowerCase();
+    return PAID_PLANS.indexOf(plan) !== -1;
+  }
+
+  function isVoiceSupported() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  }
+
   function getBlockedChatMessage() {
     if (state.insufficientCredits) {
       return state.insufficientCreditsMessage || INSUFFICIENT_CREDITS_MESSAGE;
@@ -320,6 +342,32 @@
       send.style.opacity = state.isLoading || blocked ? '0.4' : '1';
     }
 
+    var mic = document.getElementById('chatbotai-mic');
+    if (mic) {
+      var voiceBlocked = blocked || state.isLoading || state.isRecording;
+      var isTyping = input && input.value.trim().length > 0;
+      // Hide mic when: blocked, recording, or user has typed text (but show during processing)
+      var micVisible = hasVoiceAccess() && isVoiceSupported() && !isTyping;
+      // Always show mic during voice processing (even if isLoading)
+      if (state.isProcessingVoice) {
+        micVisible = true;
+      }
+      mic.disabled = voiceBlocked && !state.isProcessingVoice;
+      mic.style.display = micVisible ? 'flex' : 'none';
+      mic.style.cursor = voiceBlocked && !state.isProcessingVoice ? 'not-allowed' : 'pointer';
+      mic.style.opacity = state.isProcessingVoice ? '1' : (voiceBlocked ? '0.4' : '1');
+      if (state.isRecording) {
+        mic.classList.add('recording');
+      } else {
+        mic.classList.remove('recording');
+      }
+      if (state.isProcessingVoice) {
+        mic.classList.add('voice-processing');
+      } else {
+        mic.classList.remove('voice-processing');
+      }
+    }
+
     var status = document.getElementById('chatbotai-status');
     if (status) {
       status.textContent = state.insufficientCredits
@@ -330,6 +378,262 @@
     updateRateLimitBanner();
     if (state.rateLimitExceeded || state.insufficientCredits) {
       setSuggestedQuestionsDisplay(false);
+    }
+  }
+
+  function getMicIconSVG(recording) {
+    if (recording) {
+      return '<svg id="chatbotai-mic-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect></svg>';
+    }
+    return '<svg id="chatbotai-mic-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + (config.settings.textColor || '#0f172a') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>';
+  }
+
+  function startVoiceRecording() {
+    if (state.isRecording || !isVoiceSupported()) return;
+
+    var micBtn = document.getElementById('chatbotai-mic');
+    var micIcon = document.getElementById('chatbotai-mic-icon');
+    if (!micBtn) return;
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(function (stream) {
+        state.isRecording = true;
+        state.audioChunks = [];
+        state.recordingStartTime = Date.now();
+        var recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+        var audioTracks = stream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          var track = audioTracks[0];
+          var handleTrackMuteOrEnd = function () {
+            appendBotMessageOnce('Microphone đã bị ngắt (do xung đột với quay màn hình hoặc ứng dụng khác).');
+            stopVoiceRecording();
+          };
+          track.onmute = handleTrackMuteOrEnd;
+          track.onended = handleTrackMuteOrEnd;
+        }
+
+        recorder.ondataavailable = function (e) {
+          if (e.data.size > 0) {
+            state.audioChunks.push(e.data);
+          }
+        };
+
+        recorder.onstop = function () {
+          state.isRecording = false;
+          clearRecordingTimer();
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          hideRecordingUI();
+          sendVoiceToAPI();
+        };
+
+        recorder.onerror = function () {
+          state.isRecording = false;
+          clearRecordingTimer();
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          hideRecordingUI();
+          appendBotMessageOnce('Lỗi thiết bị ghi âm trong quá trình thu.');
+          focusChatInput();
+        };
+
+        state.mediaRecorder = recorder;
+        recorder.start();
+
+        // Show recording indicator in input area
+        showRecordingUI();
+
+        // Auto-stop after 30 seconds
+        state.recordingTimer = setTimeout(function () {
+          if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+            state.mediaRecorder.stop();
+          }
+        }, VOICE_RECORDING_DURATION);
+      })
+      .catch(function (err) {
+        hideRecordingUI();
+        var errorName = err && err.name ? err.name : '';
+        if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+          appendBotMessageOnce('Vui lòng cấp quyền truy cập Microphone trong cài đặt trình duyệt để sử dụng tính năng này.');
+        } else if (errorName === 'NotReadableError' || errorName === 'TrackStartError' || errorName === 'AbortError') {
+          appendBotMessageOnce('Microphone đang được sử dụng bởi tính năng khác (như quay màn hình, cuộc gọi). Vui lòng dừng ứng dụng đang chiếm mic và thử lại.');
+        } else {
+          appendBotMessageOnce('Không thể khởi động thiết bị ghi âm. Vui lòng kiểm tra Microphone.');
+        }
+        focusChatInput();
+      });
+  }
+
+  function showRecordingUI() {
+    var indicator = document.getElementById('chatbotai-recording-indicator');
+    var input = document.getElementById('chatbotai-input');
+    var mic = document.getElementById('chatbotai-mic');
+    var send = document.getElementById('chatbotai-send');
+    if (indicator) { indicator.style.display = 'flex'; }
+    if (input) { input.style.display = 'none'; }
+    if (mic) { mic.style.display = 'none'; }
+    if (send) {
+      send.title = 'Dừng ghi âm';
+      send.disabled = false;
+      send.style.opacity = '1';
+      send.style.cursor = 'pointer';
+      send.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>';
+      send.onclick = function (e) {
+        if (e) e.preventDefault();
+        stopVoiceRecording();
+      };
+    }
+    state.recordingTimerInterval = setInterval(updateRecordingTimer, 500);
+    updateRecordingTimer();
+  }
+
+  function hideRecordingUI() {
+    var indicator = document.getElementById('chatbotai-recording-indicator');
+    var input = document.getElementById('chatbotai-input');
+    var mic = document.getElementById('chatbotai-mic');
+    var micIcon = document.getElementById('chatbotai-mic-icon');
+    var send = document.getElementById('chatbotai-send');
+    if (indicator) { indicator.style.display = 'none'; }
+    if (input) { input.style.display = ''; }
+    if (send) {
+      send.title = '';
+      send.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
+      send.onclick = function () { sendMessage(); };
+    }
+    if (mic) {
+      if (micIcon) {
+        micIcon.outerHTML = getMicIconSVG(false);
+      } else {
+        mic.innerHTML = getMicIconSVG(false);
+      }
+      mic.style.backgroundColor = 'white';
+      mic.style.borderColor = UI.inputBorder;
+      if (hasVoiceAccess() && isVoiceSupported()) {
+        mic.style.display = input && input.value.trim().length > 0 ? 'none' : 'flex';
+      }
+    }
+    clearRecordingTimer();
+  }
+
+  function updateRecordingTimer() {
+    var timerEl = document.getElementById('chatbotai-recording-timer');
+    if (!timerEl) return;
+    var elapsed = Math.floor((Date.now() - state.recordingStartTime) / 1000);
+    var maxSeconds = Math.floor(VOICE_RECORDING_DURATION / 1000);
+    var remaining = Math.max(0, maxSeconds - elapsed);
+    timerEl.textContent = remaining + 's';
+  }
+
+  function clearRecordingTimer() {
+    if (state.recordingTimerInterval) {
+      clearInterval(state.recordingTimerInterval);
+      state.recordingTimerInterval = null;
+    }
+  }
+
+  function stopVoiceRecording() {
+    if (!state.isRecording || !state.mediaRecorder) return;
+    if (state.recordingTimer) {
+      clearTimeout(state.recordingTimer);
+      state.recordingTimer = null;
+    }
+    if (state.mediaRecorder.state === 'recording') {
+      state.mediaRecorder.stop();
+    }
+  }
+
+  function focusChatInput() {
+    if (!state.isOpen || state.isLoading || isChatBlocked() || state.showLeadForm) return;
+    var input = document.getElementById('chatbotai-input');
+    if (input) {
+      setTimeout(function () {
+        input.focus();
+      }, 0);
+    }
+  }
+
+  function sendVoiceToAPI() {
+    if (state.audioChunks.length === 0) {
+      appendBotMessageOnce('Không ghi nhận được dữ liệu âm thanh từ Microphone.');
+      focusChatInput();
+      return;
+    }
+
+    var audioBlob = new Blob(state.audioChunks, { type: 'audio/webm' });
+    state.audioChunks = [];
+
+    if (audioBlob.size < 100) {
+      appendBotMessageOnce('Không thể ghi nhận âm thanh (Microphone không truyền dữ liệu hoặc đang bị ứng dụng khác chiếm dùng).');
+      focusChatInput();
+      return;
+    }
+
+    // Show user voice processing indicator in the chat
+    addMessage('', 'user', false, true);
+    state.isProcessingVoice = true;
+    state.isLoading = true;
+    syncChatInputState();
+
+    var formData = new FormData();
+    formData.append('file', audioBlob, 'voice.webm');
+
+    fetch(config.baseUrl + '/api/widget/voice', {
+      method: 'POST',
+      headers: {
+        'x-bot-id': config.botId,
+        'x-visitor-id': state.visitorId
+      },
+      body: formData
+    })
+    .then(function (response) { return response.json(); })
+    .then(function (data) {
+      state.isLoading = false;
+      state.isProcessingVoice = false;
+      syncChatInputState();
+
+      // Remove the processing indicator message
+      removeLastUserMessage();
+
+      if (data.success && data.text) {
+        var transcript = data.text;
+
+        // Auto-send the transcript as a chat message with voice flag
+        var input = document.getElementById('chatbotai-input');
+        if (input) {
+          input.value = transcript;
+          sendMessage(true);
+        }
+      } else {
+        var errorMsg = data.message || 'Không thể nhận dạng giọng nói. Vui lòng thử lại.';
+        if (data.code === 'INSUFFICIENT_CREDITS') {
+          state.insufficientCredits = true;
+          state.insufficientCreditsMessage = data.message || INSUFFICIENT_CREDITS_MESSAGE;
+          errorMsg = state.insufficientCreditsMessage;
+        } else if (data.code === 'RATE_LIMITED') {
+          errorMsg = 'Đã đạt giới hạn. Vui lòng thử lại sau.';
+        } else if (data.code === 'PLAN_RESTRICTED') {
+          errorMsg = 'Tính năng giọng nói không khả dụng trên gói hiện tại.';
+        }
+        appendBotMessageOnce(errorMsg);
+        focusChatInput();
+      }
+      syncChatInputState();
+    })
+    .catch(function () {
+      state.isLoading = false;
+      state.isProcessingVoice = false;
+      removeLastUserMessage();
+      appendBotMessageOnce('Mất kết nối mạng. Vui lòng kiểm tra lại.');
+      syncChatInputState();
+      focusChatInput();
+    });
+  }
+
+  function removeLastUserMessage() {
+    var messages = document.getElementById('chatbotai-messages');
+    if (!messages) return;
+    var lastMsg = messages.lastElementChild;
+    if (lastMsg && lastMsg.classList.contains('chatbotai-message') && lastMsg.classList.contains('user')) {
+      lastMsg.remove();
     }
   }
 
@@ -590,21 +894,48 @@
             ${getBlockedChatMessage()}
           </div>
           
-          <div id="chatbotai-input-container" style="padding: 2px 12px; display: flex; gap: 8px; background: white; border-radius: 0 0 16px 16px;">
+          <div id="chatbotai-input-container" style="padding: 6px 12px; display: flex; align-items: center; gap: 8px; background: white; border-radius: 0 0 16px 16px; box-sizing: border-box;">
             <input id="chatbotai-input" type="text" placeholder="Nhập tin nhắn..." ${isChatBlocked() ? 'disabled' : ''} maxlength="${MAX_CHAT_INPUT}" style="
-              flex: 1; padding: 8px 16px; border: 1px solid ${UI.inputBorder}; border-radius: 9999px; font-size: 14px; outline: none; transition: border-color 0.2s;
-              color: #0f172a !important; background: ${isChatBlocked() ? '#f1f5f9' : UI.inputBg} !important; opacity: ${isChatBlocked() ? '0.6' : '1'};
+              flex: 1; min-width: 0; padding: 8px 14px; border: 1px solid ${UI.inputBorder}; border-radius: 9999px; font-size: 14px; outline: none; transition: border-color 0.2s;
+              color: #0f172a !important; background: ${isChatBlocked() ? '#f1f5f9' : UI.inputBg} !important; opacity: ${isChatBlocked() ? '0.6' : '1'}; box-sizing: border-box;
             " />
-            <button id="chatbotai-send" ${isChatBlocked() ? 'disabled' : ''} style="
-              width: 40px; height: 40px; border-radius: 50%; background-color: ${config.settings.primaryColor}; border: none; cursor: ${isChatBlocked() ? 'not-allowed' : 'pointer'}; display: flex; align-items: center; justify-content: center;
-              transition: opacity 0.2s; opacity: ${isChatBlocked() ? '0.4' : '1'};
+            <div id="chatbotai-recording-indicator" style="display: none; flex: 1; min-width: 0; align-items: center; gap: 10px; padding: 0 14px; border: 1px solid ${config.settings.primaryColor}40; border-radius: 9999px; height: 38px; box-sizing: border-box;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: ${config.settings.primaryColor}; animation: chatbotai-pulse 1.2s ease-in-out infinite; flex-shrink: 0;"></span>
+              <div style="flex: 1; display: flex; align-items: center; gap: 3px; overflow: hidden; height: 16px;">
+                <span class="chatbotai-wave-bar" style="background:${config.settings.primaryColor}"></span>
+                <span class="chatbotai-wave-bar" style="background:${config.settings.primaryColor}"></span>
+                <span class="chatbotai-wave-bar" style="background:${config.settings.primaryColor}"></span>
+                <span class="chatbotai-wave-bar" style="background:${config.settings.primaryColor}"></span>
+                <span class="chatbotai-wave-bar" style="background:${config.settings.primaryColor}"></span>
+                <span class="chatbotai-wave-bar" style="background:${config.settings.primaryColor}"></span>
+                <span class="chatbotai-wave-bar" style="background:${config.settings.primaryColor}"></span>
+                <span class="chatbotai-wave-bar" style="background:${config.settings.primaryColor}"></span>
+              </div>
+              <span id="chatbotai-recording-timer" style="font-size: 13px; color: ${config.settings.primaryColor}; font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto;">0s</span>
+            </div>
+            <button id="chatbotai-mic" ${isChatBlocked() ? 'disabled' : ''} style="
+              width: 38px; height: 38px; min-width: 38px; min-height: 38px; border-radius: 50%; border: 1px solid ${UI.inputBorder};
+              background: white; cursor: ${isChatBlocked() ? 'not-allowed' : 'pointer'};
+              display: ${hasVoiceAccess() ? 'flex' : 'none'}; align-items: center; justify-content: center;
+              transition: all 0.2s; opacity: ${isChatBlocked() ? '0.4' : '1'};
+              flex-shrink: 0; box-sizing: border-box; padding: 0;
             ">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              <svg id="chatbotai-mic-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${config.settings.textColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="22"></line>
+              </svg>
+            </button>
+            <button id="chatbotai-send" ${isChatBlocked() ? 'disabled' : ''} style="
+              width: 38px; height: 38px; min-width: 38px; min-height: 38px; border-radius: 50%; background-color: ${config.settings.primaryColor}; border: none; cursor: ${isChatBlocked() ? 'not-allowed' : 'pointer'}; display: flex; align-items: center; justify-content: center;
+              transition: opacity 0.2s; opacity: ${isChatBlocked() ? '0.4' : '1'}; flex-shrink: 0; box-sizing: border-box; padding: 0;
+            ">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             </button>
           </div>
         </div>
         <div style="text-align: center; padding: 4px; font-size: 10px; color: #94a3b8; background: white;">
-          Powered by <a href="${config.baseUrl || '#'}" target="_blank" style="color: #9ca3af; text-decoration: none;">Vielora</a>
+          Powered by <a href="${config.baseUrl || '#'}" target="_blank" style="color: ${config.settings.primaryColor}; text-decoration: none;">Vielora</a>
         </div>
       </div>
     `;
@@ -668,6 +999,30 @@
       .chatbotai-typing span:nth-child(1) { animation-delay: -0.32s; }
       .chatbotai-typing span:nth-child(2) { animation-delay: -0.16s; }
       @keyframes chatbotai-bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+      .chatbotai-wave-bar { width: 2px; height: 16px; border-radius: 9999px; animation: chatbotai-wave 1s infinite ease-in-out; }
+      .chatbotai-wave-bar:nth-child(1) { animation-delay: 0.1s; }
+      .chatbotai-wave-bar:nth-child(2) { animation-delay: 0.2s; }
+      .chatbotai-wave-bar:nth-child(3) { animation-delay: 0.3s; }
+      .chatbotai-wave-bar:nth-child(4) { animation-delay: 0.4s; }
+      .chatbotai-wave-bar:nth-child(5) { animation-delay: 0.15s; }
+      .chatbotai-wave-bar:nth-child(6) { animation-delay: 0.25s; }
+      .chatbotai-wave-bar:nth-child(7) { animation-delay: 0.35s; }
+      .chatbotai-wave-bar:nth-child(8) { animation-delay: 0.45s; }
+      @keyframes chatbotai-wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+
+      #chatbotai-mic:hover { background: #f1f5f9 !important; }
+      #chatbotai-mic.recording { background: ${config.settings.primaryColor} !important; border-color: ${config.settings.primaryColor} !important; box-shadow: none !important; }
+      #chatbotai-mic.voice-processing { animation: none !important; }
+      .chatbotai-processing-mic { animation: chatbotai-mic-process 1.2s ease-in-out infinite; }
+      @keyframes chatbotai-mic-process { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.15); opacity: 0.6; } }
+      .chatbotai-message-wrapper { position: relative; }
+      .chatbotai-copy-btn { display: none !important; position: absolute; bottom: -22px; z-index: 10; align-items: center; justify-content: center; width: 26px; height: 22px; border: 1px solid #e5e7eb; border-radius: 5px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: pointer; color: #94a3b8; transition: all 0.15s; padding: 0; }
+      .chatbotai-copy-btn:hover { color: #475569; border-color: #cbd5e1; }
+      .chatbotai-message-wrapper:hover .chatbotai-copy-btn { display: flex !important; }
+      .chatbotai-message.user .chatbotai-copy-btn { right: 0; }
+      .chatbotai-message.bot .chatbotai-copy-btn { left: 0; }
+      .chatbotai-copy-btn.copied { color: #16a34a; border-color: #bbf7d0; }
     `;
     document.head.appendChild(style);
   }
@@ -793,9 +1148,25 @@
     input.addEventListener('keypress', function (e) {
       if (e.key === 'Enter') sendMessage();
     });
+
+    // Toggle mic visibility when user types / clears input
+    input.addEventListener('input', function () {
+      syncChatInputState();
+    });
+
+    var mic = document.getElementById('chatbotai-mic');
+    if (mic) {
+      mic.addEventListener('click', function () {
+        if (state.isRecording) {
+          stopVoiceRecording();
+        } else if (hasVoiceAccess() && isVoiceSupported()) {
+          startVoiceRecording();
+        }
+      });
+    }
   }
 
-  async function sendMessage() {
+  async function sendMessage(fromVoice) {
     var input = document.getElementById('chatbotai-input');
     var message = input.value.trim();
     if (!message || state.isLoading) return;
@@ -825,7 +1196,7 @@
     }
 
     input.value = '';
-    addMessage(message, 'user');
+    addMessage(message, 'user', fromVoice);
     showTyping();
     state.isLoading = true;
     syncChatInputState();
@@ -902,6 +1273,7 @@
     }
     state.isLoading = false;
     syncChatInputState();
+    focusChatInput();
   }
 
   function showLeadForm(originalQuestion) {
@@ -1064,8 +1436,11 @@ var note = document.getElementById('chatbotai-lead-note').value.trim();
     if (el) { el.textContent = ''; el.style.display = 'none'; }
   }
 
-  function addMessage(text, role) {
+  function addMessage(text, role, isVoice, isProcessing) {
     var messages = document.getElementById('chatbotai-messages');
+    var wrapper = document.createElement('div');
+    wrapper.className = 'chatbotai-message-wrapper';
+
     var div = document.createElement('div');
     div.className = 'chatbotai-message ' + role;
 
@@ -1073,11 +1448,45 @@ var note = document.getElementById('chatbotai-lead-note').value.trim();
     if (role === 'bot') {
       contentDiv.innerHTML = parseMarkdown(text);
     } else {
-      contentDiv.textContent = text;
+      if (isProcessing) {
+        // Processing state: mic icon + typing 3-dots animation, no text (padded to match normal bubble height)
+        contentDiv.innerHTML = '<span style="display:inline-flex;align-items:center;gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg><span class="chatbotai-typing" style="padding:0;background:transparent;display:inline-flex;gap:4px;"><span style="background:currentColor;opacity:0.85;width:6px;height:6px;"></span><span style="background:currentColor;opacity:0.85;width:6px;height:6px;"></span><span style="background:currentColor;opacity:0.85;width:6px;height:6px;"></span></span></span>';
+        contentDiv.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; padding: 10px 16px; opacity: 0.95;';
+      } else {
+        contentDiv.textContent = text;
+        // Voice-transcribed messages get a mic icon at top-right
+        if (isVoice) {
+          contentDiv.style.position = 'relative';
+          var micBadge = document.createElement('span');
+          var badgeColor = config.primaryColor || '#3B82F6';
+          micBadge.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="' + badgeColor + '" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>';
+          micBadge.style.cssText = 'position: absolute; top: -7px; right: -7px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1);';
+          contentDiv.appendChild(micBadge);
+          contentDiv.style.paddingRight = '20px';
+        }
+      }
     }
 
     div.appendChild(contentDiv);
-    messages.appendChild(div);
+    wrapper.appendChild(div);
+
+    var copyBtn = document.createElement('button');
+    copyBtn.className = 'chatbotai-copy-btn';
+    copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    copyBtn.onclick = function () {
+      var plainText = contentDiv.textContent || contentDiv.innerText;
+      navigator.clipboard.writeText(plainText).then(function () {
+        copyBtn.classList.add('copied');
+        copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+        setTimeout(function () {
+          copyBtn.classList.remove('copied');
+          copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+        }, 1500);
+      });
+    };
+    wrapper.appendChild(copyBtn);
+
+    messages.appendChild(wrapper);
 
     setTimeout(function () {
       messages.scrollTop = messages.scrollHeight;
@@ -1198,6 +1607,9 @@ var note = document.getElementById('chatbotai-lead-note').value.trim();
 
     state.messages.forEach(function (msg) {
       var role = msg.role === 'assistant' ? 'bot' : msg.role;
+      var wrapper = document.createElement('div');
+      wrapper.className = 'chatbotai-message-wrapper';
+
       var div = document.createElement('div');
       div.className = 'chatbotai-message ' + role;
 
@@ -1209,7 +1621,25 @@ var note = document.getElementById('chatbotai-lead-note').value.trim();
       }
 
       div.appendChild(contentDiv);
-      messagesContainer.appendChild(div);
+      wrapper.appendChild(div);
+
+      var copyBtn = document.createElement('button');
+      copyBtn.className = 'chatbotai-copy-btn';
+      copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+      copyBtn.onclick = function () {
+        var plainText = contentDiv.textContent || contentDiv.innerText;
+        navigator.clipboard.writeText(plainText).then(function () {
+          copyBtn.classList.add('copied');
+          copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+          setTimeout(function () {
+            copyBtn.classList.remove('copied');
+            copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+          }, 1500);
+        });
+      };
+      wrapper.appendChild(copyBtn);
+
+      messagesContainer.appendChild(wrapper);
     });
 
     setTimeout(function () {

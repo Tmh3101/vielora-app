@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsHeaders } from "@/lib/constants";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import { isPlanSufficient } from "@/lib/helpers/plan-helpers";
-import { getBotByIdServer } from "@/lib/services/bot.service";
-import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
+import { getBotByIdServer, canUserAccessBot } from "@/lib/services/bot.service";
+import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { getPersonalityById } from "@/lib/services/ai-personality.service";
 import { getSkillsByIds } from "@/lib/services/ai-skill.service";
 import { updateBotPersonality, syncBotSkills } from "@/lib/services/ai-config.service";
@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
     if (isAuthError(authResult)) return authResult;
     const { user, supabase } = authResult;
 
-    // Verify bot ownership
+    // Verify bot access (Owner or Workspace Member)
     const bot = await getBotByIdServer(supabase, botId);
     if (!bot) {
       return NextResponse.json(
@@ -36,7 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
         { status: 404, headers: corsHeaders }
       );
     }
-    if (bot.user_id !== user.id) {
+    if (!(await canUserAccessBot(supabase, bot, user.id))) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403, headers: corsHeaders }
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
     const { personalityId, skillIds }: { personalityId?: string | null; skillIds?: string[] } =
       body;
 
-    const planCode = await getUserActivePlanCodeServer(supabase, user.id);
+    const planCode = await getBotActivePlanCode(supabase, bot);
 
     if (!planCode || !isPlanSufficient(planCode, AI_CONFIG_REQUIRED_PLAN)) {
       return NextResponse.json(

@@ -3,14 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CheckCircle2, CreditCard, Crown, Package, Sparkles } from "lucide-react";
+import { CheckCircle2, CreditCard, Crown, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardDescription, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PricingToggle } from "@/components/shared/pricing/PricingToggle";
 import { PricingCard } from "@/components/shared/pricing/PricingCard";
-import { planCTA, planFeatures, planOrder } from "@/config/pricing";
+import { planCTA, planFeatures, planOrder, getPlanTheme } from "@/config/pricing";
 import { comparePlans } from "@/lib/utils/pricing";
 import type { Tables } from "@/lib/supabase/types";
 import { ESubscriptionPlan, ESubscriptionCycle } from "@/types";
@@ -18,33 +17,65 @@ import { PaymentAction } from "@/lib/constants";
 import { formatPaymentDate } from "@/lib/helpers/payment-helpers";
 import { formatVND } from "@/lib/utils/currency";
 
+import {
+  WorkspaceUpgradeSelector,
+  type WorkspaceSelectorItem,
+} from "@/components/dashboard/upgrade/WorkspaceUpgradeSelector";
+
 type PurchaseTab = "plans" | "credits";
 
 interface UpgradeClientProps {
+  userWorkspaces?: WorkspaceSelectorItem[];
   activePlans: Tables<"plans">[];
   currentSubscription: Tables<"subscriptions"> | null;
   currentPlan: Tables<"plans"> | null;
   initialPlanCode: string | null;
   initialBillingCycle: ESubscriptionCycle;
   creditPackages: Tables<"credit_packages">[];
+  workspaceId?: string | null;
+  workspaceWallet?: { total_credits: number } | null;
+  workspaceCreditSummary?: { subscriptionCredits: number; paygCredits: number } | null;
+}
+
+function setWorkspaceCookie(wsId: string) {
+  if (typeof document !== "undefined") {
+    document.cookie = `active_workspace_id=${wsId}; path=/; max-age=2592000; SameSite=Lax`;
+  }
 }
 
 export default function UpgradeClient({
+  userWorkspaces = [],
   activePlans,
   currentSubscription,
   currentPlan,
   initialPlanCode,
   initialBillingCycle,
   creditPackages = [],
+  workspaceId: initialWorkspaceId,
+  workspaceWallet,
+  workspaceCreditSummary,
 }: UpgradeClientProps) {
   const router = useRouter();
+  const currentWs =
+    userWorkspaces.find((w) => w.id === initialWorkspaceId) || userWorkspaces[0] || null;
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(currentWs?.slug ?? null);
   const [billingCycle, setBillingCycle] = useState<ESubscriptionCycle>(initialBillingCycle);
   const [purchaseTab, setPurchaseTab] = useState<PurchaseTab>("plans");
   const processingPlan: string | null = null;
 
+  const handleWorkspaceChange = (slug: string, wsId: string) => {
+    setSelectedSlug(slug);
+    setWorkspaceCookie(wsId);
+    window.location.href = `/${encodeURIComponent(slug)}/upgrade`;
+  };
+
   const handleChangePlan = (planCode: string) => {
+    const targetSlug = selectedSlug || currentWs?.slug || "dashboard";
+    const targetBase =
+      targetSlug === "dashboard" ? "/dashboard" : `/${encodeURIComponent(targetSlug)}`;
+
     if (planCode === ESubscriptionPlan.Enterprise) {
-      toast.info("Vui lòng liên hệ contact@vielora.vn để nâng cấp Enterprise");
+      router.push(`${targetBase}/upgrade/enterprise?cycle=${billingCycle}`);
       return;
     }
 
@@ -54,7 +85,7 @@ export default function UpgradeClient({
     }
 
     let action = PaymentAction.Upgrade;
-    if (planCode === currentPlan?.code) {
+    if (currentPlan && currentPlan.code === planCode) {
       if (currentSubscription?.billing_cycle !== billingCycle) {
         toast.error("Vui lòng chọn đúng chu kỳ để gia hạn");
         return;
@@ -62,7 +93,7 @@ export default function UpgradeClient({
       action = PaymentAction.Renew;
     }
 
-    router.push(`/dashboard/checkout?plan=${planCode}&cycle=${billingCycle}&action=${action}`);
+    router.push(`${targetBase}/checkout?plan=${planCode}&cycle=${billingCycle}&action=${action}`);
   };
 
   const now = new Date();
@@ -82,60 +113,91 @@ export default function UpgradeClient({
     }
   }
 
+  const planCode = (currentPlan?.code as ESubscriptionPlan | undefined) || ESubscriptionPlan.Free;
+
   return (
-    <div className="mx-auto max-w-5xl space-y-10">
-      <Card className="border-primary/50 bg-primary/5">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <Crown className="h-6 w-6 text-primary" />
+    <div className="mx-auto max-w-5xl space-y-8">
+      <div className="space-y-2">
+        <WorkspaceUpgradeSelector
+          workspaces={userWorkspaces}
+          selectedSlug={selectedSlug}
+          onSelectWorkspace={handleWorkspaceChange}
+        />
+
+        <Card
+          className={`relative overflow-hidden border backdrop-blur-md transition-all ${getPlanTheme(planCode).borderClass} ${getPlanTheme(planCode).bgGradientClass} shadow-sm`}
+        >
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-12 w-12 items-center justify-center rounded-2xl shadow-md ${
+                    planCode === ESubscriptionPlan.Pro
+                      ? "bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-violet-500/25"
+                      : planCode === ESubscriptionPlan.Standard
+                        ? "bg-gradient-to-br from-blue-500 to-cyan-600 text-white shadow-blue-500/25"
+                        : "bg-gradient-to-br from-slate-600 to-slate-800 text-white shadow-slate-500/20"
+                  }`}
+                >
+                  <Crown className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-muted-foreground">Gói hiện tại</span>
+                    <span
+                      className={`rounded-full px-3 py-0.5 text-xs font-bold uppercase tracking-wider border ${getPlanTheme(planCode).badgeClass}`}
+                    >
+                      {planCode.toUpperCase()}
+                    </span>
+                  </div>
+                  <CardDescription className="mt-1 text-xs sm:text-sm">
+                    {currentSubscription?.current_period_end &&
+                      planCode !== ESubscriptionPlan.Free && (
+                        <>Hết hạn: {formatPaymentDate(currentSubscription.current_period_end)}</>
+                      )}
+                  </CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  Gói hiện tại: {currentPlan?.name ?? "Free"}
-                  {currentPlan?.code !== ESubscriptionPlan.Free && (
-                    <Badge variant="secondary" className="ml-2 bg-primary">
-                      <Sparkles className="mr-1 h-3 w-3" />
-                      Premium
-                    </Badge>
-                  )}
-                </CardTitle>
-                <CardDescription>
-                  {currentSubscription?.current_period_end && (
-                    <>Hết hạn: {formatPaymentDate(currentSubscription.current_period_end)}</>
-                  )}
-                </CardDescription>
+              <div className="hidden text-right sm:block">
+                <p className="text-xs font-medium text-muted-foreground">Giới hạn hiện tại</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {currentSubscription?.bots_limit_override ?? currentPlan?.bots_limit ?? 1} bot tối
+                  đa
+                </p>
+                {workspaceWallet != null && (
+                  <div className="mt-2">
+                    <span className="inline-block rounded-full border border-border bg-muted/60 px-3 py-0.5 text-xs font-medium text-muted-foreground">
+                      Credits: {workspaceCreditSummary?.subscriptionCredits ?? 0} (subscription) +{" "}
+                      {workspaceCreditSummary?.paygCredits ?? 0} (PAYG)
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
-            <div className="hidden text-right sm:block">
-              <p className="text-sm text-muted-foreground">Giới hạn hiện tại</p>
-              <p className="text-sm">{currentPlan?.bots_limit ?? 1} bot tối đa</p>
-            </div>
-          </div>
-        </CardHeader>
-      </Card>
+          </CardHeader>
+        </Card>
+      </div>
 
       <Tabs
         value={purchaseTab}
         onValueChange={(value) => setPurchaseTab(value as PurchaseTab)}
         className="space-y-8"
       >
-        <div className="flex justify-center p-0">
-          <TabsList className="glass grid h-auto w-full max-w-xl grid-cols-2">
+        <div className="flex justify-center">
+          <TabsList className="inline-flex h-11 items-center justify-center rounded-xl bg-muted/60 p-1 text-muted-foreground shadow-inner">
             <TabsTrigger
               value="plans"
-              className="data-[state=active]:bg-gradient-primary flex min-h-10 items-center gap-2 whitespace-normal p-0 text-center text-sm leading-snug data-[state=active]:text-primary-foreground sm:text-base"
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-6 py-2 text-xs font-semibold transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
             >
-              <Package className="h-4 w-4 shrink-0" />
+              <Package className="h-4 w-4" />
               Gói dịch vụ
             </TabsTrigger>
             <TabsTrigger
               value="credits"
-              className="data-[state=active]:bg-gradient-primary flex min-h-10 items-center gap-2 whitespace-normal p-0 text-center text-sm leading-snug data-[state=active]:text-primary-foreground sm:text-base"
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-6 py-2 text-xs font-semibold transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
             >
-              <CreditCard className="h-4 w-4 shrink-0" />
-              Nạp Credit - Pay-as-you-go
+              <CreditCard className="h-4 w-4" />
+              Nạp Credits
             </TabsTrigger>
           </TabsList>
         </div>
@@ -153,13 +215,16 @@ export default function UpgradeClient({
               <PricingToggle billingCycle={billingCycle} setBillingCycle={setBillingCycle} />
             </div>
 
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
               {activePlans.map((plan) => {
-                const features = [
-                  `${plan.monthly_credits.toLocaleString()} credits/tháng`,
-                  `${plan.bots_limit} chatbot`,
-                  ...(planFeatures.dashboard[plan.code] ?? []),
-                ];
+                const isEnterprise = plan.code === ESubscriptionPlan.Enterprise;
+                const features = isEnterprise
+                  ? (planFeatures.dashboard[plan.code] ?? [])
+                  : [
+                      `${plan.monthly_credits.toLocaleString()} credits/tháng`,
+                      `${plan.bots_limit} chatbot`,
+                      ...(planFeatures.dashboard[plan.code] ?? []),
+                    ];
 
                 const { isCurrentPlan, isDowngrade, isUpgrade } = comparePlans(
                   currentPlan?.code ?? ESubscriptionPlan.Free,
@@ -175,18 +240,21 @@ export default function UpgradeClient({
                   isCurrentPlan && currentSubscription?.billing_cycle !== billingCycle;
                 const isRenewBlocked = isCurrentPlan && hasQueuedCycle;
 
-                const isBlocked =
-                  isDowngrade ||
-                  (isPaidPlan && isYearlyToMonthly) ||
-                  isSamePlanDifferentCycle ||
-                  isRenewBlocked ||
-                  plan.code === ESubscriptionPlan.Free;
+                const isBlocked = isEnterprise
+                  ? false
+                  : isDowngrade ||
+                    (isPaidPlan && isYearlyToMonthly) ||
+                    isSamePlanDifferentCycle ||
+                    isRenewBlocked ||
+                    plan.code === ESubscriptionPlan.Free;
 
                 const isPopular = plan.code === ESubscriptionPlan.Standard && !isCurrentPlan;
                 const isHighlighted = initialPlanCode === plan.code;
 
                 let cta = planCTA.dashboard[plan.code] ?? "Chọn gói";
-                if (isCurrentPlan) {
+                if (isEnterprise) {
+                  cta = isCurrentPlan ? "Thay đổi / Gia hạn gói" : "Cấu hình gói";
+                } else if (isCurrentPlan) {
                   if (isSamePlanDifferentCycle) {
                     cta = "Sai chu kỳ gia hạn";
                   } else if (hasQueuedCycle) {
@@ -197,9 +265,7 @@ export default function UpgradeClient({
                 } else if (isDowngrade) {
                   cta = "Chờ hết hạn để hạ cấp";
                 } else if (isPaidPlan && isUpgrade) {
-                  cta = isYearlyToMonthly
-                    ? "Không hỗ trợ nâng xuống Tháng"
-                    : "Nâng cấp (Có bù trừ)";
+                  cta = isYearlyToMonthly ? "Không hỗ trợ nâng xuống Tháng" : "Nâng cấp";
                 }
 
                 return (

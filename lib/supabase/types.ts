@@ -106,6 +106,7 @@ export type Database = {
           status: Database["public"]["Enums"]["bot_status"];
           updated_at: string;
           user_id: string;
+          workspace_id: string | null;
           verification_token: string | null;
           verified_at: string | null;
           widget_settings: Json | null;
@@ -129,6 +130,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["bot_status"];
           updated_at?: string;
           user_id: string;
+          workspace_id?: string | null;
           verification_token?: string | null;
           verified_at?: string | null;
           widget_settings?: Json | null;
@@ -152,6 +154,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["bot_status"];
           updated_at?: string;
           user_id?: string;
+          workspace_id?: string | null;
           verification_token?: string | null;
           verified_at?: string | null;
           widget_settings?: Json | null;
@@ -249,7 +252,8 @@ export type Database = {
           id: string;
           payment_id: string | null;
           transaction_type: Database["public"]["Enums"]["transaction_type"];
-          user_id: string;
+          user_id: string | null;
+          workspace_id: string | null;
         };
         Insert: {
           amount: number;
@@ -258,7 +262,8 @@ export type Database = {
           id?: string;
           payment_id?: string | null;
           transaction_type: Database["public"]["Enums"]["transaction_type"];
-          user_id: string;
+          user_id?: string | null;
+          workspace_id?: string | null;
         };
         Update: {
           amount?: number;
@@ -267,7 +272,8 @@ export type Database = {
           id?: string;
           payment_id?: string | null;
           transaction_type?: Database["public"]["Enums"]["transaction_type"];
-          user_id?: string;
+          user_id?: string | null;
+          workspace_id?: string | null;
         };
         Relationships: [
           {
@@ -328,31 +334,34 @@ export type Database = {
       };
       documents: {
         Row: {
-          bot_id: string;
+          bot_id: string | null;
           content: string;
           created_at: string;
           embedding: string | null;
           id: string;
           metadata: Json | null;
           updated_at: string;
+          workspace_id: string | null;
         };
         Insert: {
-          bot_id: string;
+          bot_id?: string | null;
           content: string;
           created_at?: string;
           embedding?: string | null;
           id?: string;
           metadata?: Json | null;
           updated_at?: string;
+          workspace_id?: string | null;
         };
         Update: {
-          bot_id?: string;
+          bot_id?: string | null;
           content?: string;
           created_at?: string;
           embedding?: string | null;
           id?: string;
           metadata?: Json | null;
           updated_at?: string;
+          workspace_id?: string | null;
         };
         Relationships: [
           {
@@ -360,6 +369,13 @@ export type Database = {
             columns: ["bot_id"];
             isOneToOne: false;
             referencedRelation: "bots";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "documents_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -533,6 +549,99 @@ export type Database = {
         };
         Relationships: [];
       };
+      invoices: {
+        Row: {
+          id: string;
+          payment_id: string;
+          user_id: string;
+          company_name: string;
+          company_tax_code: string;
+          company_address: string;
+          recipient_email: string;
+          status: string;
+          line_items: Json;
+          provider: string;
+          provider_ref_id: string | null;
+          provider_pattern: string | null;
+          provider_serial: string | null;
+          provider_invoice_no: string | null;
+          provider_lookup_code: string | null;
+          link_view: string | null;
+          tax_authority_status: string | null;
+          tax_authority_error: string | null;
+          error_message: string | null;
+          retry_count: number;
+          issued_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          payment_id: string;
+          user_id: string;
+          company_name: string;
+          company_tax_code: string;
+          company_address: string;
+          recipient_email: string;
+          status?: string;
+          line_items?: Json;
+          provider?: string;
+          provider_ref_id?: string | null;
+          provider_pattern?: string | null;
+          provider_serial?: string | null;
+          provider_invoice_no?: string | null;
+          provider_lookup_code?: string | null;
+          link_view?: string | null;
+          tax_authority_status?: string | null;
+          tax_authority_error?: string | null;
+          error_message?: string | null;
+          retry_count?: number;
+          issued_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          payment_id?: string;
+          user_id?: string;
+          company_name?: string;
+          company_tax_code?: string;
+          company_address?: string;
+          recipient_email?: string;
+          status?: string;
+          line_items?: Json;
+          provider?: string;
+          provider_ref_id?: string | null;
+          provider_pattern?: string | null;
+          provider_serial?: string | null;
+          provider_invoice_no?: string | null;
+          provider_lookup_code?: string | null;
+          link_view?: string | null;
+          tax_authority_status?: string | null;
+          tax_authority_error?: string | null;
+          error_message?: string | null;
+          retry_count?: number;
+          issued_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "invoices_payment_id_fkey";
+            columns: ["payment_id"];
+            isOneToOne: false;
+            referencedRelation: "payments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoices_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       payments: {
         Row: {
           amount: number;
@@ -547,6 +656,7 @@ export type Database = {
           status: Database["public"]["Enums"]["payment_status"] | null;
           updated_at: string;
           user_id: string;
+          workspace_id: string | null;
         };
         Insert: {
           amount: number;
@@ -561,6 +671,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["payment_status"] | null;
           updated_at?: string;
           user_id: string;
+          workspace_id?: string | null;
         };
         Update: {
           amount?: number;
@@ -575,6 +686,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["payment_status"] | null;
           updated_at?: string;
           user_id?: string;
+          workspace_id?: string | null;
         };
         Relationships: [
           {
@@ -583,6 +695,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "plans";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoices_payment_id_fkey";
+            columns: ["id"];
+            isOneToOne: false;
+            referencedRelation: "invoices";
+            referencedColumns: ["payment_id"];
           },
         ];
       };
@@ -700,45 +819,54 @@ export type Database = {
       subscriptions: {
         Row: {
           billing_cycle: Database["public"]["Enums"]["billing_cycle"] | null;
+          bots_limit_override: number | null;
           cancel_at_period_end: boolean | null;
           created_at: string;
           current_period_end: string;
           current_period_start: string;
           id: string;
+          monthly_credits_override: number | null;
           needs_bot_selection: boolean;
           next_credit_reset_at: string;
           plan_id: string;
           status: string | null;
           updated_at: string;
           user_id: string;
+          workspace_id: string | null;
         };
         Insert: {
           billing_cycle?: Database["public"]["Enums"]["billing_cycle"] | null;
+          bots_limit_override?: number | null;
           cancel_at_period_end?: boolean | null;
           created_at?: string;
           current_period_end?: string;
           current_period_start?: string;
           id?: string;
+          monthly_credits_override?: number | null;
           needs_bot_selection?: boolean;
           next_credit_reset_at?: string;
           plan_id: string;
           status?: string | null;
           updated_at?: string;
           user_id: string;
+          workspace_id?: string | null;
         };
         Update: {
           billing_cycle?: Database["public"]["Enums"]["billing_cycle"] | null;
+          bots_limit_override?: number | null;
           cancel_at_period_end?: boolean | null;
           created_at?: string;
           current_period_end?: string;
           current_period_start?: string;
           id?: string;
+          monthly_credits_override?: number | null;
           needs_bot_selection?: boolean;
           next_credit_reset_at?: string;
           plan_id?: string;
           status?: string | null;
           updated_at?: string;
           user_id?: string;
+          workspace_id?: string | null;
         };
         Relationships: [
           {
@@ -759,6 +887,7 @@ export type Database = {
           created_at: string;
           id: string;
           visitor_id: string | null;
+          workspace_id: string | null;
         };
         Insert: {
           action: string;
@@ -768,6 +897,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           visitor_id?: string | null;
+          workspace_id?: string | null;
         };
         Update: {
           action?: string;
@@ -777,6 +907,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           visitor_id?: string | null;
+          workspace_id?: string | null;
         };
         Relationships: [
           {
@@ -795,7 +926,7 @@ export type Database = {
           subscription_credits: number;
           total_credits: number;
           updated_at: string;
-          user_id: string;
+          workspace_id: string;
         };
         Insert: {
           is_payg_enabled?: boolean | null;
@@ -803,7 +934,7 @@ export type Database = {
           subscription_credits?: number;
           total_credits?: never;
           updated_at?: string;
-          user_id: string;
+          workspace_id: string;
         };
         Update: {
           is_payg_enabled?: boolean | null;
@@ -811,7 +942,7 @@ export type Database = {
           subscription_credits?: number;
           total_credits?: never;
           updated_at?: string;
-          user_id?: string;
+          workspace_id?: string;
         };
         Relationships: [];
       };
@@ -935,6 +1066,53 @@ export type Database = {
           },
         ];
       };
+      workspace_knowledge: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          title: string;
+          content: string;
+          source_type: string;
+          metadata: Json | null;
+          status: string;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          title: string;
+          content: string;
+          source_type?: string;
+          metadata?: Json | null;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          title?: string;
+          content?: string;
+          source_type?: string;
+          metadata?: Json | null;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_knowledge_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -958,10 +1136,17 @@ export type Database = {
           full_text_weight?: number;
           semantic_weight?: number;
           p_bot_id?: string;
+          p_workspace_id?: string;
         };
         Returns: Array<{
           content: string;
           metadata: Json;
+          bot_id: string | null;
+          workspace_id: string | null;
+          id: string;
+          similarity: number;
+          source_type: string;
+          resolved_url: string | null;
         }>;
       };
       update_updated_at_column: { Args: never; Returns: unknown };

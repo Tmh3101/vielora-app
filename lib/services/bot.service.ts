@@ -1,10 +1,7 @@
 import type { ServiceClient } from "@/lib/services/types";
-import type { Json, Tables, TablesInsert, TablesUpdate } from "@/lib/supabase/types";
-import {
-  deleteKnowledgeFile,
-  deleteKnowledgeFilesByBotId,
-  uploadKnowledgeFile,
-} from "@/lib/supabase/upload";
+import type { createServerClient } from "@/lib/supabase/server";
+import type { Json, Tables, TablesUpdate } from "@/lib/supabase/types";
+import { deleteKnowledgeFilesByBotId } from "@/lib/supabase/upload";
 import { deletePagesByBotId } from "@/lib/services/page.service";
 import { getJobById, getActiveJobsByBotId } from "@/lib/services/job.service";
 import { validateRateLimitValue } from "@/lib/bot-rate-limit";
@@ -24,6 +21,10 @@ import {
   EPageStatus,
   EPageSourceType,
 } from "@/types";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getEffectiveEntitlements } from "@/lib/services/entitlement.service";
+import { EWorkspaceMemberStatus, EWorkspaceRole } from "@/types/enums";
+import { WorkspaceService } from "@/lib/services/workspace.service";
 
 // ============================================================
 // Validation Helpers
@@ -391,79 +392,49 @@ export async function addKnowledgeFile(
   client: ServiceClient,
   request: { botId: string; file: File }
 ): Promise<NonNullable<AddKnowledgeResponse["data"]>> {
-  const uploadResult = await uploadKnowledgeFile(client, request.file, request.botId);
-  if (!uploadResult.success || !uploadResult.url) {
-    throw new Error(uploadResult.error || "Failed to upload knowledge file");
+  const formData = new FormData();
+  formData.append("botId", request.botId);
+  formData.append("file", request.file);
+
+  const authHeaders = await getAuthHeaders(client);
+
+  const response = await fetch("/api/bots/knowledge/upload", {
+    method: "POST",
+    headers: authHeaders,
+    body: formData,
+  });
+
+  const res = (await response.json()) as AddKnowledgeResponse;
+  if (!response.ok || !res.success || !res.data) {
+    throw new Error(res.message || "Failed to add file knowledge");
   }
 
-  const headers = {
-    ...(await getAuthHeaders(client)),
-    "Content-Type": "application/json",
-  };
-
-  try {
-    const response = await fetch("/api/bots/knowledge", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        botId: request.botId,
-        mode: "file",
-        filePath: uploadResult.url,
-      }),
-    });
-
-    const res = (await response.json()) as AddKnowledgeResponse;
-    if (!response.ok || !res.success || !res.data) {
-      throw new Error(res.message || "Failed to add file knowledge");
-    }
-
-    return res.data;
-  } catch (error) {
-    await deleteKnowledgeFile(client, uploadResult.url).catch((error) => {
-      console.error("[BotService] Failed to cleanup uploaded knowledge file", error);
-    });
-    throw error;
-  }
+  return res.data;
 }
 
 export async function addOnboardingKnowledgeFile(
   client: ServiceClient,
   request: { botId: string; file: File }
 ): Promise<NonNullable<AddKnowledgeResponse["data"]>> {
-  const uploadResult = await uploadKnowledgeFile(client, request.file, request.botId);
-  if (!uploadResult.success || !uploadResult.url) {
-    throw new Error(uploadResult.error || "Failed to upload knowledge file");
+  const formData = new FormData();
+  formData.append("botId", request.botId);
+  formData.append("file", request.file);
+  formData.append("isOnboarding", "true");
+
+  const authHeaders = await getAuthHeaders(client);
+
+  const response = await fetch("/api/bots/knowledge/upload", {
+    method: "POST",
+    headers: authHeaders,
+    body: formData,
+  });
+
+  const res = (await response.json()) as AddKnowledgeResponse;
+  if (!response.ok || !res.success || !res.data) {
+    throw new Error(res.message || "Failed to add onboarding file knowledge");
   }
 
-  const headers = {
-    ...(await getAuthHeaders(client)),
-    "Content-Type": "application/json",
-  };
-
-  try {
-    const response = await fetch("/api/bots/knowledge", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        botId: request.botId,
-        mode: "file",
-        context: "onboarding",
-        filePath: uploadResult.url,
-      }),
-    });
-
-    const res = (await response.json()) as AddKnowledgeResponse;
-    if (!response.ok || !res.success || !res.data) {
-      throw new Error(res.message || "Failed to add onboarding file knowledge");
-    }
-
-    return res.data;
-  } catch (error) {
-    await deleteKnowledgeFile(client, uploadResult.url).catch((error) => {
-      console.error("[BotService] Failed to cleanup uploaded onboarding knowledge file", error);
-    });
-    throw error;
-  }
+  return res.data;
 }
 
 export async function addKnowledgeUrl(
@@ -564,6 +535,7 @@ export type BotRow = Tables<"bots">;
 
 export interface CreateBotParams {
   userId: string;
+  workspaceId?: string;
   name: string;
   domain: string;
   avatarUrl?: string | null;
@@ -593,38 +565,121 @@ export interface UpdateBotAllowedDomainsParams {
   allowedDomains: string[];
 }
 
+export interface BotsPaginatedOptions {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: "name" | "created_at";
+  sortOrder?: "asc" | "desc";
+  workspaceId?: string;
+}
+
+export interface BotsPaginatedResult {
+  bots: BotRow[];
+  total: number;
+}
+
 /**
- * Lấy danh sách tất cả bots của user, sắp xếp theo ngày tạo giảm dần.
+ * Lấy danh sách bots phân trang, hỗ trợ search và sort.
  */
-export async function getBotsByUserId(client: ServiceClient, userId: string): Promise<BotRow[]> {
-  const { data, error } = await client
-    .from("bots")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+export async function getBotsPaginated(
+  client: ServiceClient,
+  userId: string,
+  options: BotsPaginatedOptions = {}
+): Promise<BotsPaginatedResult> {
+  const page = Math.max(1, options.page ?? 1);
+  const limit = Math.min(Math.max(1, options.limit ?? 12), 50);
+  const offset = (page - 1) * limit;
+
+  let query = client.from("bots").select("*", { count: "exact" });
+
+  if (options.workspaceId) {
+    query = query.eq("workspace_id", options.workspaceId);
+  } else {
+    query = query.eq("user_id", userId);
+  }
+
+  if (options.search?.trim()) {
+    query = query.ilike("name", `%${options.search.trim()}%`);
+  }
+
+  const sortBy = options.sortBy ?? "created_at";
+  const sortOrder = options.sortOrder ?? "desc";
+  query = query.order(sortBy, { ascending: sortOrder === "asc" });
+
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
 
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return { bots: data ?? [], total: count ?? 0 };
 }
 
 /**
  * Lấy thông tin một bot theo botId.
  */
 export async function getBotById(client: ServiceClient, botId: string): Promise<BotRow | null> {
-  const { data, error } = await client.from("bots").select("*").eq("id", botId).single();
+  if (typeof window !== "undefined") {
+    const res = await fetch(`/api/bots/${botId}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        return json.data as BotRow;
+      }
+    }
+    // Don't fall through to direct query on browser — RLS will block admin users
+    return null;
+  }
+
+  const activeClient = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (activeClient as any)
+    .from("bots")
+    .select("*")
+    .eq("id", botId)
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return data;
+  return data as BotRow | null;
 }
 
 /**
  * Tạo một bot mới cho user.
  */
-export async function createBot(client: ServiceClient, params: CreateBotParams): Promise<BotRow> {
+export async function createBot(_client: ServiceClient, params: CreateBotParams): Promise<BotRow> {
   const allowedDomains = validateAllowedDomains([params.domain]);
 
-  const newBot: TablesInsert<"bots"> = {
+  let workspaceId = params.workspaceId;
+  if (!workspaceId) {
+    workspaceId = await WorkspaceService.getOrCreateDefaultWorkspace(params.userId);
+  }
+
+  if (!workspaceId) {
+    throw new Error(
+      "Không thể xác định Workspace cho bot. Vui lòng chọn hoặc tạo Workspace trước."
+    );
+  }
+
+  const adminClient = createAdminClient();
+  const entitlements = await getEffectiveEntitlements(adminClient, workspaceId);
+  if (entitlements) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { count: activeBotsCount } = await (adminClient as any)
+      .from("bots")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("is_stopped", false);
+
+    if ((activeBotsCount || 0) >= entitlements.botsLimit) {
+      throw new Error(
+        `Workspace đã đạt giới hạn tối đa ${entitlements.botsLimit} bots đối với gói ${entitlements.planCode.toUpperCase()}. Vui lòng nâng cấp gói để tạo thêm bot.`
+      );
+    }
+  }
+
+  const newBot = {
     user_id: params.userId,
+    workspace_id: workspaceId,
     name: params.name,
     domain: params.domain,
     allowed_domains: allowedDomains.valid ? allowedDomains.domains : [],
@@ -647,19 +702,60 @@ export async function createBot(client: ServiceClient, params: CreateBotParams):
     ...(params.crawlSettings !== undefined ? { crawl_settings: params.crawlSettings } : {}),
   };
 
-  const { data, error } = await client.from("bots").insert(newBot).select().single();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (adminClient as any).from("bots").insert(newBot).select().single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("[BotService] Error creating bot:", error);
+    throw new Error(error.message);
+  }
   if (!data) throw new Error("Failed to create bot");
-  return data;
+  return data as BotRow;
 }
 
 /**
- * Xóa một bot cùng toàn bộ pages liên quan.
+ * Kiểm tra xem người dùng có quyền xóa Bot hay không.
+ * Cho phép nếu:
+ * 1. Là người trực tiếp tạo ra bot (user_id === userId).
+ * 2. Có vai trò Owner hoặc Admin trong workspace chứa bot.
  */
-export async function deleteBot(client: ServiceClient, botId: string): Promise<void> {
+export async function canUserDeleteBot(
+  _client: ServiceClient,
+  bot: { user_id: string; workspace_id?: string | null },
+  userId: string
+): Promise<boolean> {
+  if (bot.user_id === userId) return true;
+
+  if (bot.workspace_id) {
+    const adminClient = createAdminClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: member } = await (adminClient as any)
+      .from("workspace_members")
+      .select("role_id, status")
+      .eq("workspace_id", bot.workspace_id)
+      .eq("user_id", userId)
+      .eq("status", EWorkspaceMemberStatus.Active)
+      .maybeSingle();
+
+    if (
+      member &&
+      (member.role_id === EWorkspaceRole.Owner || member.role_id === EWorkspaceRole.Admin)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Xóa một bot cùng toàn bộ pages và storage liên quan.
+ */
+export async function deleteBot(_client: ServiceClient, botId: string): Promise<void> {
+  const adminClient = createAdminClient();
+
   try {
-    const deleteStorageResult = await deleteKnowledgeFilesByBotId(client, botId);
+    const deleteStorageResult = await deleteKnowledgeFilesByBotId(adminClient, botId);
     if (!deleteStorageResult.success) {
       console.error(
         `[BotService] Failed to delete knowledge files for bot ${botId}:`,
@@ -670,9 +766,10 @@ export async function deleteBot(client: ServiceClient, botId: string): Promise<v
     console.error(`[BotService] Error during storage cleanup for bot ${botId}:`, storageError);
   }
 
-  await deletePagesByBotId(client, botId);
+  await deletePagesByBotId(adminClient, botId);
 
-  const { error } = await client.from("bots").delete().eq("id", botId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (adminClient as any).from("bots").delete().eq("id", botId);
   if (error) throw new Error(error.message);
 }
 
@@ -752,7 +849,22 @@ export async function updateBotStatus(
  * Dừng một bot (is_stopped = true).
  */
 export async function stopBot(client: ServiceClient, botId: string): Promise<void> {
-  const { error } = await client.from("bots").update({ is_stopped: true }).eq("id", botId);
+  if (typeof window !== "undefined") {
+    const res = await fetch(`/api/bots/${botId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isStopped: true }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || "Failed to stop bot");
+    }
+    return;
+  }
+
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin as any).from("bots").update({ is_stopped: true }).eq("id", botId);
   if (error) throw new Error(error.message);
 }
 
@@ -760,7 +872,22 @@ export async function stopBot(client: ServiceClient, botId: string): Promise<voi
  * Khởi động lại một bot (is_stopped = false).
  */
 export async function startBot(client: ServiceClient, botId: string): Promise<void> {
-  const { error } = await client.from("bots").update({ is_stopped: false }).eq("id", botId);
+  if (typeof window !== "undefined") {
+    const res = await fetch(`/api/bots/${botId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isStopped: false }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || "Failed to start bot");
+    }
+    return;
+  }
+
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin as any).from("bots").update({ is_stopped: false }).eq("id", botId);
   if (error) throw new Error(error.message);
 }
 
@@ -769,7 +896,12 @@ export async function startBot(client: ServiceClient, botId: string): Promise<vo
  */
 export async function activateBots(client: ServiceClient, botIds: string[]): Promise<void> {
   if (botIds.length === 0) return;
-  const { error } = await client.from("bots").update({ is_stopped: false }).in("id", botIds);
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin as any)
+    .from("bots")
+    .update({ is_stopped: false })
+    .in("id", botIds);
   if (error) throw new Error(error.message);
 }
 
@@ -778,7 +910,9 @@ export async function activateBots(client: ServiceClient, botIds: string[]): Pro
  */
 export async function stopBots(client: ServiceClient, botIds: string[]): Promise<void> {
   if (botIds.length === 0) return;
-  const { error } = await client.from("bots").update({ is_stopped: true }).in("id", botIds);
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin as any).from("bots").update({ is_stopped: true }).in("id", botIds);
   if (error) throw new Error(error.message);
 }
 
@@ -807,35 +941,70 @@ export async function getActiveBotCount(client: ServiceClient, userId: string): 
 export async function getBotByIdServer(
   client: ServiceClient,
   botId: string
-): Promise<Pick<BotRow, "id" | "status" | "user_id"> | null> {
-  const { data, error } = await client
+): Promise<BotRow | null> {
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (activeClient as any)
     .from("bots")
-    .select("id, status, user_id")
+    .select("*")
     .eq("id", botId)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return data as Pick<BotRow, "id" | "status" | "user_id"> | null;
+  return data as BotRow | null;
 }
 
 /**
- * Lấy bot theo ID và kiểm tra chủ sở hữu (server client).
- * Dùng cho các route yêu cầu ownership check.
+ * Kiểm tra xem người dùng có quyền truy cập vào Bot hay không
+ * (Bao gồm trực tiếp chủ sở hữu hoặc thành viên active của workspace chứa bot).
+ */
+export async function canUserAccessBot(
+  client: ServiceClient,
+  bot: { user_id: string; workspace_id?: string | null },
+  userId: string
+): Promise<boolean> {
+  if (bot.user_id === userId) return true;
+
+  if (bot.workspace_id) {
+    const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: member } = await (activeClient as any)
+      .from("workspace_members")
+      .select("id, status")
+      .eq("workspace_id", bot.workspace_id)
+      .eq("user_id", userId)
+      .eq("status", EWorkspaceMemberStatus.Active)
+      .maybeSingle();
+
+    return !!member;
+  }
+
+  return false;
+}
+
+/**
+ * Lấy bot theo ID và kiểm tra quyền truy cập của người dùng (Server/Client).
  */
 export async function getBotByOwner(
   client: ServiceClient,
   botId: string,
   userId: string
 ): Promise<BotRow | null> {
-  const { data, error } = await client
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: bot, error } = await (activeClient as any)
     .from("bots")
     .select("*")
     .eq("id", botId)
-    .eq("user_id", userId)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
-  return data as BotRow | null;
+  if (error || !bot) return null;
+
+  const hasAccess = await canUserAccessBot(client, bot, userId);
+  if (!hasAccess) return null;
+
+  return bot as BotRow;
 }
 
 /**
@@ -948,6 +1117,7 @@ export interface PublicBotData {
   is_public: boolean;
   is_stopped: boolean;
   status: string;
+  pwa_updated_at: string;
 }
 
 /**
@@ -960,7 +1130,7 @@ export async function getBotBySlug(
   const normalizedSlug = slug.toLowerCase();
   const { data, error } = await client
     .from("bots")
-    .select("id, name, avatar_url, widget_settings, is_public, is_stopped, status")
+    .select("id, name, avatar_url, widget_settings, is_public, is_stopped, status, pwa_updated_at")
     .eq("slug", normalizedSlug)
     .eq("is_public", true)
     .maybeSingle();
@@ -999,4 +1169,127 @@ export async function updateBotSlugSettings(
     }
     throw new Error(error.message);
   }
+}
+
+type PublicSupabaseClient = Awaited<ReturnType<typeof createServerClient>>;
+
+export interface PublicBotBranding {
+  slug: string;
+  name: string;
+  widget_settings: Json | null;
+  avatar_url: string | null;
+  pwa_updated_at: string;
+}
+
+export async function getPublicBotBranding(
+  client: PublicSupabaseClient,
+  botSlug: string
+): Promise<PublicBotBranding | null> {
+  const normalizedSlug = botSlug.toLowerCase();
+  const { data, error } = await client
+    .from("bots")
+    .select("slug, name, widget_settings, avatar_url, pwa_updated_at")
+    .eq("slug", normalizedSlug)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as PublicBotBranding | null;
+}
+
+// ============================================================
+// Workspace-scoped Bot variants
+// ============================================================
+
+export interface CreateBotInWorkspaceParams {
+  userId: string;
+  workspaceId: string;
+  name: string;
+  domain: string;
+  avatarUrl?: string | null;
+  crawlSettings?: Json | null;
+}
+
+/**
+ * Lấy danh sách tất cả bots của workspace, sắp xếp theo ngày tạo giảm dần.
+ */
+export async function getBotsByWorkspaceId(
+  client: ServiceClient,
+  workspaceId: string
+): Promise<BotRow[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (client as any)
+    .from("bots")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as BotRow[];
+}
+
+/**
+ * Tạo một bot mới cho workspace.
+ */
+export async function createBotInWorkspace(
+  _client: ServiceClient,
+  params: CreateBotInWorkspaceParams
+): Promise<BotRow> {
+  const allowedDomains = validateAllowedDomains([params.domain]);
+
+  const newBot = {
+    user_id: params.userId,
+    workspace_id: params.workspaceId,
+    name: params.name,
+    domain: params.domain,
+    allowed_domains: allowedDomains.valid ? allowedDomains.domains : [],
+    widget_settings: {
+      primaryColor: WIDGET_FALLBACK.PRIMARY_COLOR,
+      textColor: WIDGET_FALLBACK.TEXT_COLOR,
+      position: WIDGET_FALLBACK.POSITION,
+      welcomeMessage: WIDGET_FALLBACK.WELCOME_MESSAGE,
+      suggestedQuestions: [],
+      chatBackgroundType: WIDGET_FALLBACK.CHAT_BACKGROUND_TYPE,
+      chatBackgroundValue: WIDGET_FALLBACK.CHAT_BACKGROUND_VALUE,
+      chatBackgroundOpacity: WIDGET_FALLBACK.CHAT_BACKGROUND_OPACITY,
+      chatIconType: WIDGET_FALLBACK.CHAT_ICON_TYPE,
+      chatIconPreset: WIDGET_FALLBACK.CHAT_ICON_PRESET,
+      chatIconUrl: null,
+      chatIconColor: WIDGET_FALLBACK.CHAT_ICON_COLOR,
+      chatIconBgColor: WIDGET_FALLBACK.CHAT_ICON_BG_COLOR,
+    },
+    ...(params.avatarUrl !== undefined ? { avatar_url: params.avatarUrl } : {}),
+    ...(params.crawlSettings !== undefined ? { crawl_settings: params.crawlSettings } : {}),
+  };
+
+  const adminClient = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (adminClient as any).from("bots").insert(newBot).select().single();
+
+  if (error) {
+    console.error("[BotService] Error creating bot in workspace:", error);
+    throw new Error(error.message);
+  }
+  if (!data) throw new Error("Failed to create bot");
+  return data as BotRow;
+}
+
+/**
+ * Đếm số lượng bots đang hoạt động (is_stopped = false) của workspace.
+ */
+export async function getActiveBotCountByWorkspaceId(
+  client: ServiceClient,
+  workspaceId: string
+): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count, error } = await (client as any)
+    .from("bots")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId)
+    .eq("is_stopped", false);
+
+  if (error) throw new Error(error.message);
+  return count ?? 0;
 }

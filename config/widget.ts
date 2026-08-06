@@ -26,7 +26,6 @@ export const WIDGET_LIMITS = {
     { id: "messagecircle", name: "Message" },
     { id: "headphones", name: "Headphones" },
     { id: "help", name: "Trợ giúp" },
-    { id: "comment", name: "Bình luận" },
     { id: "bot", name: "Robot" },
     { id: "sparkles", name: "Sáng tạo" },
     { id: "zap", name: "Năng lượng" },

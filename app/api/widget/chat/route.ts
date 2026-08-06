@@ -28,7 +28,7 @@ import {
   ERROR_RESPONSE,
   NO_ANSWER_PHRASES,
 } from "@/config";
-import { deductCredits, refundCredits } from "@/lib/services/credit.service";
+import { deductBotCredits, refundBotCredits } from "@/lib/services/credit.service";
 import {
   createConversation,
   saveMessage,
@@ -230,8 +230,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
 
     // Social messages: skip RAG, go straight to LLM with friendly response
     if (intent === Intent.Social) {
-      const deductionResult = await deductCredits(supabase, {
-        userId: bot.user_id,
+      const deductionResult = await deductBotCredits(supabase, bot, {
         creditAmount: CREDIT_PER_MESSAGE,
         transactionType: ETransactionType.ChatMessage,
         transactionDescription: `Deducted ${CREDIT_PER_MESSAGE} credit for chat message on bot ${botId}`,
@@ -274,12 +273,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
         ).catch(async (error) => {
           console.error("Gemini API error (social):", error);
           if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
-            await refundCredits(supabase, {
-              userId: bot.user_id,
+            await refundBotCredits(supabase, bot, {
               deductedFromSubscription,
               deductedFromPayg,
               transactionType: ETransactionType.ChatMessageRefund,
-              transactionDescription: `Refunded ${CREDIT_PER_MESSAGE} credit due to chat processing failure on bot ${botId}`,
+              transactionDescription: `Refunded ${CREDIT_PER_MESSAGE} credit due to failure while recording social chat message for bot ${botId}`,
             });
             deductedFromSubscription = 0;
             deductedFromPayg = 0;
@@ -296,6 +294,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
 
         await insertUsageLog(supabase, {
           bot_id: botId,
+          workspace_id: botData.workspace_id ?? null,
           action: EUsageAction.ChatMessage,
           visitor_id: visitorId,
           client_ip: clientIp,
@@ -317,57 +316,89 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
         );
       } catch (processingError) {
         if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
-          await refundCredits(supabase, {
-            userId: bot.user_id,
+          await refundBotCredits(supabase, bot, {
             deductedFromSubscription,
             deductedFromPayg,
             transactionType: ETransactionType.ChatMessageRefund,
-            transactionDescription: `Refunded ${CREDIT_PER_MESSAGE} credit due to chat processing failure on bot ${botId}`,
+            transactionDescription: `Refunded ${CREDIT_PER_MESSAGE} credit due to an error while generating social response for bot ${botId}`,
           });
         }
         throw processingError;
       }
     }
 
-    // Knowledge messages: use RAG
-    const retrieval = await hybridRetrival(message, botId);
+    // Knowledge messages: use RAG (bot private + workspace shared)
+    const retrieval = await hybridRetrival(message, botId, botData.workspace_id ?? null);
 
     if (shouldShowLeadForm(retrieval)) {
-      await saveMessage(
-        supabase,
-        currentConversationId,
-        EMessageRole.Assistant,
-        LEAD_FORM_MESSAGE,
-        true
-      );
-
-      await insertUsageLog(supabase, {
-        bot_id: botId,
-        action: EUsageAction.ChatMessage,
-        visitor_id: visitorId,
-        client_ip: clientIp,
-        count: 1,
+      const deductionResult = await deductBotCredits(supabase, bot, {
+        creditAmount: CREDIT_PER_MESSAGE,
+        transactionType: ETransactionType.ChatMessage,
+        transactionDescription: `Deducted ${CREDIT_PER_MESSAGE} credit for lead form chat message on bot ${botId}`,
       });
 
-      return NextResponse.json(
-        {
-          success: true,
-          message: "Message requires lead generation",
-          data: {
-            conversationId: currentConversationId,
-            message: LEAD_FORM_MESSAGE,
-            noAnswer: true,
-            type: ChatResponseType.SHOW_LEAD_FORM,
-            originalQuestion: message,
+      if (!deductionResult.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: INSUFFICIENT_CREDITS_MESSAGE,
+            code: INSUFFICIENT_CREDITS_ERROR_CODE,
+            error: deductionResult.message || "Insufficient credits to send chat messages.",
           },
-        },
-        { headers: corsHeaders }
-      );
+          { status: 402, headers: corsHeaders }
+        );
+      }
+
+      const deductedFromSubscription = deductionResult.deductedFromSubscription || 0;
+      const deductedFromPayg = deductionResult.deductedFromPayg || 0;
+
+      try {
+        await saveMessage(
+          supabase,
+          currentConversationId,
+          EMessageRole.Assistant,
+          LEAD_FORM_MESSAGE,
+          true
+        );
+
+        await insertUsageLog(supabase, {
+          bot_id: botId,
+          workspace_id: botData.workspace_id ?? null,
+          action: EUsageAction.ChatMessage,
+          visitor_id: visitorId,
+          client_ip: clientIp,
+          count: 1,
+        });
+
+        return NextResponse.json(
+          {
+            success: true,
+            message: "Message requires lead generation",
+            data: {
+              conversationId: currentConversationId,
+              message: LEAD_FORM_MESSAGE,
+              noAnswer: true,
+              type: ChatResponseType.SHOW_LEAD_FORM,
+              originalQuestion: message,
+            },
+          },
+          { headers: corsHeaders }
+        );
+      } catch (processingError) {
+        if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
+          await refundBotCredits(supabase, bot, {
+            deductedFromSubscription,
+            deductedFromPayg,
+            transactionType: ETransactionType.ChatMessageRefund,
+            transactionDescription: `Refunded ${CREDIT_PER_MESSAGE} credit due to an error while recording lead form message for bot ${botId}`,
+          });
+        }
+        throw processingError;
+      }
     }
 
     // Normal RAG flow: deduct credits and generate AI response
-    const deductionResult = await deductCredits(supabase, {
-      userId: bot.user_id,
+    const deductionResult = await deductBotCredits(supabase, bot, {
       creditAmount: CREDIT_PER_MESSAGE,
       transactionType: ETransactionType.ChatMessage,
       transactionDescription: `Deducted ${CREDIT_PER_MESSAGE} credit for chat message on bot ${botId}`,
@@ -421,8 +452,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       ).catch(async (error) => {
         console.error("Gemini API error:", error);
         if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
-          await refundCredits(supabase, {
-            userId: bot.user_id,
+          await refundBotCredits(supabase, bot, {
             deductedFromSubscription,
             deductedFromPayg,
             transactionType: ETransactionType.ChatMessageRefund,
@@ -450,6 +480,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
 
       await insertUsageLog(supabase, {
         bot_id: botId,
+        workspace_id: botData.workspace_id ?? null,
         action: EUsageAction.ChatMessage,
         visitor_id: visitorId,
         client_ip: clientIp,
@@ -471,8 +502,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       );
     } catch (processingError) {
       if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
-        await refundCredits(supabase, {
-          userId: bot.user_id,
+        await refundBotCredits(supabase, bot, {
           deductedFromSubscription,
           deductedFromPayg,
           transactionType: ETransactionType.ChatMessageRefund,

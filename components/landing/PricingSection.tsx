@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import type { Tables } from "@/lib/supabase/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { getSubscriptionByUserId } from "@/lib/services/subscription.service";
+import { getSubscriptionByWorkspaceId } from "@/lib/services/subscription.service";
 import { getActivePlans } from "@/lib/services/plan.service";
 import { planCTA, planFeatures, planOrder } from "@/config/pricing";
 import { comparePlans } from "@/lib/utils/pricing";
@@ -14,11 +14,14 @@ import { PricingToggle } from "@/components/shared/pricing/PricingToggle";
 import { PricingCard } from "@/components/shared/pricing/PricingCard";
 import { ESubscriptionCycle, ESubscriptionPlan } from "@/types";
 
+import { useWorkspace } from "@/hooks/useWorkspace";
+
 const PricingSection = () => {
   const [billingCycle, setBillingCycle] = useState<ESubscriptionCycle>(ESubscriptionCycle.Monthly);
   const [plans, setPlans] = useState<Tables<"plans">[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(true);
   const { user, isLoading: authLoading } = useAuth();
+  const { activeWorkspace } = useWorkspace();
   const router = useRouter();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
@@ -32,9 +35,14 @@ const PricingSection = () => {
         const plansData = await getActivePlans(supabase);
         setPlans(plansData);
 
-        // Fetch User Subscription if logged in
+        // Fetch workspace subscription if logged in
         if (user) {
-          const subData = await getSubscriptionByUserId(supabase, user.id);
+          const wsId =
+            activeWorkspace?.id ||
+            (typeof document !== "undefined"
+              ? (document.cookie.match(/(?:^|;\s*)active_workspace_id=([^;]+)/)?.[1] ?? null)
+              : null);
+          const subData = wsId ? await getSubscriptionByWorkspaceId(supabase, wsId) : null;
           if (subData) {
             const activePlan = plansData.find((p) => p.id === subData.plan_id);
             if (activePlan) {
@@ -51,19 +59,32 @@ const PricingSection = () => {
     if (!authLoading) {
       fetchPlansAndSub();
     }
-  }, [user, authLoading, supabase]);
+  }, [user, authLoading, supabase, activeWorkspace]);
 
   const handleSelectPlan = (planCode: string) => {
+    const targetSlug = activeWorkspace?.slug;
+    const targetBase = targetSlug ? `/${encodeURIComponent(targetSlug)}` : "/dashboard";
+
+    if (planCode === ESubscriptionPlan.Enterprise) {
+      const enterpriseTarget = `${targetBase}/upgrade/enterprise?cycle=${billingCycle}`;
+      if (!authLoading && user) {
+        router.push(enterpriseTarget);
+      } else {
+        router.push(`/auth?mode=signup&redirect=${encodeURIComponent(enterpriseTarget)}`);
+      }
+      return;
+    }
+
     if (planCode === ESubscriptionPlan.Free) {
       router.push("/auth?mode=signup");
       return;
     }
 
-    const target = `/dashboard/upgrade?plan=${planCode}&cycle=${billingCycle}`;
+    const target = `${targetBase}/upgrade?plan=${planCode}&cycle=${billingCycle}`;
     if (!authLoading && user) {
       router.push(target);
     } else {
-      router.push(`/auth?mode=signup`);
+      router.push(`/auth?mode=signup&redirect=${encodeURIComponent(target)}`);
     }
   };
 
@@ -113,18 +134,21 @@ const PricingSection = () => {
         </motion.div>
 
         {/* Plans grid */}
-        <div className="mx-auto grid max-w-5xl gap-6 pt-4 md:grid-cols-3 lg:gap-8">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-2 pt-12 md:grid-cols-2 lg:grid-cols-4 lg:gap-4">
           {isLoadingPlans
-            ? Array.from({ length: 3 }).map((_, i) => (
+            ? Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="glass h-[420px] animate-pulse rounded-3xl p-8" />
               ))
             : plans.map((plan, index) => {
-                // Dynamically prepend DB values to static features
-                const features = [
-                  `${plan.monthly_credits.toLocaleString()} credits/tháng`,
-                  `${plan.bots_limit} chatbot`,
-                  ...(planFeatures.landing[plan.code] ?? []),
-                ];
+                // Dynamically prepend DB values to static features (except for Enterprise plan)
+                const isEnterprisePlan = plan.code === ESubscriptionPlan.Enterprise;
+                const features = isEnterprisePlan
+                  ? (planFeatures.landing[plan.code] ?? [])
+                  : [
+                      `${plan.monthly_credits.toLocaleString()} credits/tháng`,
+                      `${plan.bots_limit} chatbot`,
+                      ...(planFeatures.landing[plan.code] ?? []),
+                    ];
 
                 const { isCurrentPlan, isDowngrade, isUpgrade } = comparePlans(
                   activePlanCode,
@@ -132,15 +156,21 @@ const PricingSection = () => {
                   planOrder
                 );
 
-                const isPaidPlan = activePlanCode && activePlanCode !== ESubscriptionPlan.Free;
-                const isBlocked = isCurrentPlan || isDowngrade || (isPaidPlan && isUpgrade);
+                const isBlocked = isCurrentPlan || isDowngrade;
 
                 const isPopular = plan.code === ESubscriptionPlan.Standard && !isCurrentPlan;
 
                 let cta = planCTA.landing[plan.code] ?? "Chọn gói";
-                if (isCurrentPlan) cta = "Gói hiện tại";
-                else if (isDowngrade) cta = "Hạ cấp";
-                else if (isPaidPlan && isUpgrade) cta = "Liên hệ hỗ trợ";
+                if (isCurrentPlan) {
+                  cta = "Gói hiện tại";
+                } else if (isDowngrade) {
+                  cta = "Hạ cấp";
+                } else if (isUpgrade) {
+                  cta =
+                    plan.code === ESubscriptionPlan.Enterprise
+                      ? "Cấu hình gói"
+                      : `Nâng cấp ${plan.name}`;
+                }
 
                 return (
                   <PricingCard

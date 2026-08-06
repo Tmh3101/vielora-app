@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsHeaders } from "@/lib/constants";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import { getBotAnalytics } from "@/lib/services/analytics.service";
-import { getBotByIdServer } from "@/lib/services/bot.service";
+import { getBotByIdServer, canUserAccessBot } from "@/lib/services/bot.service";
 import { parseDateParam } from "@/lib/helpers/url-helpers";
 import type { AnalyticsRouteResponse } from "@/types";
 
@@ -49,7 +49,7 @@ export async function GET(
       );
     }
 
-    if (bot.user_id !== user.id) {
+    if (!(await canUserAccessBot(supabase, bot, user.id))) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403, headers: corsHeaders }

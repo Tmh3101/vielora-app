@@ -5,17 +5,16 @@ export type WalletRow = Tables<"wallets">;
 export type UsageLogRow = Tables<"usage_logs">;
 
 /**
- * Lấy thông tin wallet của user (total_credits).
- * Trả về null nếu không tìm thấy.
+ * Lấy thông tin wallet theo workspaceId.
  */
-export async function getWalletByUserId(
+export async function getWalletByWorkspaceId(
   client: ServiceClient,
-  userId: string
+  workspaceId: string
 ): Promise<Pick<WalletRow, "total_credits"> | null> {
   const { data } = await client
     .from("wallets")
     .select("total_credits")
-    .eq("user_id", userId)
+    .eq("workspace_id", workspaceId)
     .maybeSingle();
 
   return (data as Pick<WalletRow, "total_credits"> | null) ?? null;

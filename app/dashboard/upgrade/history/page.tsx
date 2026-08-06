@@ -1,8 +1,11 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { PaymentHistoryClient } from "@/components/dashboard/upgrade/PaymentHistoryClient";
 import {
   getPaymentHistoryByUserId,
   getPaymentHistoryCountByUserId,
+  getPaymentHistoryByWorkspaceId,
+  getPaymentHistoryCountByWorkspaceId,
 } from "@/lib/services/payment-history.service";
 import { createServerClient } from "@/lib/supabase/server";
 import { UPGRADE_HISTORY_PAGE_SIZE } from "@/lib/constants/pagination";
@@ -25,21 +28,23 @@ export default async function UpgradeHistoryPage({ searchParams }: UpgradeHistor
     redirect("/auth");
   }
 
+  const cookieStore = await cookies();
+  const workspaceId = cookieStore.get("active_workspace_id")?.value;
+
   const resolvedSearchParams = await searchParams;
   const requestedPage = Number(resolvedSearchParams?.page ?? "1");
-  const totalItems = await getPaymentHistoryCountByUserId(supabase, user.id);
+  const totalItems = workspaceId
+    ? await getPaymentHistoryCountByWorkspaceId(supabase, workspaceId)
+    : await getPaymentHistoryCountByUserId(supabase, user.id);
   const totalPages = Math.max(1, Math.ceil(totalItems / UPGRADE_HISTORY_PAGE_SIZE));
   const currentPage =
     Number.isFinite(requestedPage) && requestedPage > 0
       ? Math.min(Math.floor(requestedPage), totalPages)
       : 1;
   const offset = (currentPage - 1) * UPGRADE_HISTORY_PAGE_SIZE;
-  const paymentHistory = await getPaymentHistoryByUserId(
-    supabase,
-    user.id,
-    UPGRADE_HISTORY_PAGE_SIZE,
-    offset
-  );
+  const paymentHistory = workspaceId
+    ? await getPaymentHistoryByWorkspaceId(supabase, workspaceId, UPGRADE_HISTORY_PAGE_SIZE, offset)
+    : await getPaymentHistoryByUserId(supabase, user.id, UPGRADE_HISTORY_PAGE_SIZE, offset);
 
   return (
     <PaymentHistoryClient

@@ -8,6 +8,8 @@ import { normalizeSeedUrl, validateWebsiteUrl } from "@/lib/helpers";
 import { EBotStatus } from "@/types";
 import { ONBOARDING_SOURCE_MODE } from "@/lib/constants";
 
+import { useWorkspace } from "@/hooks/useWorkspace";
+
 export interface BotAvatarInput {
   url: string | null;
   file?: File;
@@ -15,6 +17,7 @@ export interface BotAvatarInput {
 
 export interface CreateBotAndStartDiscoverInput {
   userId: string;
+  workspaceId?: string;
   websiteUrl: string;
   botName: string;
   botAvatar: BotAvatarInput;
@@ -23,6 +26,7 @@ export interface CreateBotAndStartDiscoverInput {
 
 export interface CreateFileOnboardingBotInput {
   userId: string;
+  workspaceId?: string;
   botName: string;
   botAvatar: BotAvatarInput;
 }
@@ -35,12 +39,13 @@ export interface UseBotCreationReturn {
 
 export function useBotCreation(): UseBotCreationReturn {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const { activeWorkspace } = useWorkspace();
   const [isCreating, setIsCreating] = useState(false);
 
   const createBotAndStartDiscover = async (
     input: CreateBotAndStartDiscoverInput
   ): Promise<string> => {
-    const { userId, websiteUrl, botName, botAvatar, includeSubdomains } = input;
+    const { websiteUrl, botName, botAvatar, includeSubdomains } = input;
 
     setIsCreating(true);
 
@@ -52,7 +57,32 @@ export function useBotCreation(): UseBotCreationReturn {
 
       const formattedUrl = validation.formattedUrl;
       const domain = validation.hostname;
-      const bot = await createBot(supabase, { userId, name: botName, domain });
+      const workspaceId = input.workspaceId || activeWorkspace?.id;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch("/api/bots/create", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: botName,
+          domain,
+          workspaceId,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success || !resData.data) {
+        throw new Error(resData.message || "Không thể tạo bot");
+      }
+
+      const bot = resData.data;
       const seedUrl = normalizeSeedUrl(formattedUrl);
       const crawlSettings =
         bot.crawl_settings &&
@@ -96,19 +126,40 @@ export function useBotCreation(): UseBotCreationReturn {
   };
 
   const createFileOnboardingBot = async (input: CreateFileOnboardingBotInput): Promise<string> => {
-    const { userId, botName, botAvatar } = input;
+    const { botName, botAvatar } = input;
 
     setIsCreating(true);
 
     try {
-      const bot = await createBot(supabase, {
-        userId,
-        name: botName,
-        domain: "manual-upload.local",
-        crawlSettings: {
-          onboardingSourceMode: ONBOARDING_SOURCE_MODE.FILES,
-        },
+      const workspaceId = input.workspaceId || activeWorkspace?.id;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch("/api/bots/create", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: botName,
+          domain: "manual-upload.local",
+          workspaceId,
+          crawlSettings: {
+            onboardingSourceMode: ONBOARDING_SOURCE_MODE.FILES,
+          },
+        }),
       });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success || !resData.data) {
+        throw new Error(resData.message || "Không thể tạo bot");
+      }
+
+      const bot = resData.data;
 
       if (botAvatar.file) {
         const uploadResult = await uploadBotAvatar(botAvatar.file, bot.id);

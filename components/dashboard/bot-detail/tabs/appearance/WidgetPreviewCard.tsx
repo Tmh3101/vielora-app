@@ -8,7 +8,7 @@ import {
   getBackgroundStyle,
   getUserMessageTextColor as getTextColor,
 } from "@/lib/helpers";
-import { Bot, MinusCircle } from "lucide-react";
+import { Bot, Eye, MinusCircle } from "lucide-react";
 import { EWidgetIconType } from "@/types";
 
 interface WidgetPreviewCardProps {
@@ -41,13 +41,22 @@ export function WidgetPreviewCard({
   const getUserMessageTextColor = () => previewPrimaryTextColor;
 
   return (
-    <Card className="glass flex h-full flex-col">
-      <CardHeader>
-        <CardTitle>Xem trước Widget</CardTitle>
-        <CardDescription>Hiển thị thay đổi theo thời gian thực</CardDescription>
+    <Card className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
+      <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+            <Eye className="h-5 w-5" />
+          </div>
+          <div>
+            <CardTitle className="text-base font-semibold">Xem trước Widget</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">
+              Hiển thị thay đổi theo thời gian thực
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="flex-1">
-        <div className="relative flex min-h-[500px] items-end justify-center overflow-hidden rounded-xl border border-border/50 bg-muted/40 p-8 lg:justify-end">
+      <CardContent className="flex-1 p-5 sm:p-6">
+        <div className="relative flex min-h-[520px] items-end justify-center overflow-hidden rounded-xl border border-border/40 bg-muted/30 p-6 lg:justify-end">
           <div
             className="absolute inset-0 opacity-5"
             style={{
@@ -57,16 +66,16 @@ export function WidgetPreviewCard({
             }}
           />
 
-          <div className="relative z-10 flex flex-col items-end gap-4">
+          <div className="relative z-10 flex w-full flex-col items-end gap-4 sm:w-auto">
             <div
-              className="w-[320px] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+              className="w-full overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl transition-all sm:w-[320px]"
               style={{ transformOrigin: "bottom right" }}
             >
               <div
-                className="flex items-center gap-3 p-4"
+                className="flex items-center gap-3 p-4 shadow-sm"
                 style={{ backgroundColor: primaryColor, color: getUserMessageTextColor() }}
               >
-                <Avatar className="h-9 w-9 border border-white/20">
+                <Avatar className="shadow-xs h-9 w-9 border border-white/20">
                   <AvatarImage src={avatarUrl || undefined} alt={editBotName} />
                   <AvatarFallback className="bg-white/20 text-current">
                     <Bot className="h-5 w-5" />
@@ -94,33 +103,35 @@ export function WidgetPreviewCard({
                   chatBackgroundOpacity / 100
                 )}
               >
-                <div className="my-4 text-center text-xs text-muted-foreground">Hôm nay</div>
+                <div className="my-2 text-center text-[11px] font-medium text-muted-foreground/70">
+                  Hôm nay
+                </div>
                 <div
-                  className="max-w-[85%] rounded-2xl rounded-tl-none bg-muted p-3 text-sm duration-500 animate-in fade-in slide-in-from-bottom-2"
+                  className="shadow-xs max-w-[85%] rounded-2xl rounded-tl-none bg-muted/90 p-3 text-xs leading-relaxed duration-500 animate-in fade-in slide-in-from-bottom-2"
                   style={{ color: textColor }}
                 >
                   {welcomeMessage || "Xin chào! Tôi có thể giúp gì cho bạn?"}
                 </div>
                 <div
-                  className="ml-auto max-w-[85%] rounded-2xl rounded-tr-none p-3 text-sm"
+                  className="shadow-xs ml-auto max-w-[85%] rounded-2xl rounded-tr-none p-3 text-xs leading-relaxed"
                   style={{ backgroundColor: primaryColor, color: getUserMessageTextColor() }}
                 >
-                  Xin chào! Tôi muốn tìm hiểu về sản phẩm.
+                  Xin chào! Tôi muốn tìm hiểu về dịch vụ.
                 </div>
                 <div
-                  className="max-w-[85%] rounded-2xl rounded-tl-none bg-muted p-3 text-sm delay-300 duration-500 animate-in fade-in slide-in-from-bottom-2"
+                  className="shadow-xs max-w-[85%] rounded-2xl rounded-tl-none bg-muted/90 p-3 text-xs leading-relaxed delay-300 duration-500 animate-in fade-in slide-in-from-bottom-2"
                   style={{ color: textColor }}
                 >
-                  Rất vui được hỗ trợ bạn! Chúng tôi có nhiều sản phẩm tuyệt vời...
+                  Rất vui được hỗ trợ bạn! Hãy đặt câu hỏi bất kỳ cho tôi nhé...
                 </div>
-                <div className="flex h-8 w-12 items-center gap-1 rounded-2xl rounded-tl-none bg-muted p-2 delay-500 duration-700 animate-in fade-in">
+                <div className="flex h-7 w-11 items-center gap-1 rounded-2xl rounded-tl-none bg-muted/80 p-2 delay-500 duration-700 animate-in fade-in">
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/40" />
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/40 delay-150" />
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/40 delay-300" />
                 </div>
               </div>
 
-              <div className="relative border-t border-border bg-transparent">
+              <div className="relative border-t border-border/50 bg-background">
                 {showSuggestedOverlay && (
                   <>
                     <style jsx>{`
@@ -136,16 +147,16 @@ export function WidgetPreviewCard({
                         height: 0;
                       }
                     `}</style>
-                    <div className="pointer-events-none absolute inset-x-0 bottom-16 z-10 px-3 py-3">
+                    <div className="pointer-events-none absolute inset-x-0 bottom-16 z-10 px-3 py-2">
                       <div
-                        className="preview-suggested-scroll pointer-events-auto flex gap-3 overflow-x-auto pb-1 pr-2"
+                        className="preview-suggested-scroll pointer-events-auto flex gap-2 overflow-x-auto pb-1 pr-2"
                         onWheel={handleSuggestedQuestionsWheel}
                       >
                         {previewSuggestedQuestions.map((question, idx) => (
                           <button
                             key={idx}
                             disabled
-                            className="flex-shrink-0 cursor-not-allowed whitespace-nowrap rounded-full border border-input bg-background px-3 py-1.5 text-xs font-medium shadow-sm transition-colors"
+                            className="shadow-xs flex-shrink-0 cursor-not-allowed whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-2.5 py-1 text-[11px] font-medium transition-colors"
                           >
                             {question}
                           </button>
@@ -157,16 +168,17 @@ export function WidgetPreviewCard({
 
                 <div className="rounded-b-2xl bg-background p-3">
                   <div className="flex gap-2">
-                    <div className="flex-1 cursor-not-allowed rounded-full border border-input bg-muted/10 px-4 py-2.5 text-sm text-foreground">
+                    <div className="flex-1 cursor-not-allowed rounded-full border border-border/60 bg-muted/20 px-3.5 py-2 text-xs text-muted-foreground">
                       Nhập câu hỏi...
                     </div>
                     <button
-                      className="flex h-10 w-10 items-center justify-center rounded-full"
+                      type="button"
+                      className="shadow-xs flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
                       style={{ backgroundColor: primaryColor, color: getUserMessageTextColor() }}
                     >
                       <svg
-                        width="18"
-                        height="18"
+                        width="16"
+                        height="16"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -184,7 +196,7 @@ export function WidgetPreviewCard({
             </div>
 
             <div
-              className="flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform duration-300 hover:scale-105"
+              className="flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition-transform duration-300 hover:scale-105"
               style={{ backgroundColor: chatIconBgColor, cursor: "pointer" }}
               title="Click để mở chat"
             >
@@ -202,8 +214,8 @@ export function WidgetPreviewCard({
                 <Image
                   src={chatIconUrl}
                   alt="Custom icon"
-                  width={56}
-                  height={56}
+                  width={48}
+                  height={48}
                   className="h-full w-full rounded-full object-cover"
                 />
               ) : (

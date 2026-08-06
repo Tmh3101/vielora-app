@@ -5,6 +5,7 @@ import {
   CHUNK_OVERLAP,
   MIN_CHUNK_SIZE,
   BATCH_SIZE,
+  BATCH_DELAY_MS,
   MAX_RETRIES,
   INITIAL_BACKOFF_MS,
 } from "@/config";
@@ -192,7 +193,7 @@ export async function embedChunks(chunks: DocumentChunk[]): Promise<ProcessedDoc
         embeddings.push(...batchEmbeddings);
 
         if (batchIndex < chunkBatches.length - 1) {
-          await sleep(1000);
+          await sleep(BATCH_DELAY_MS);
         }
 
         break;

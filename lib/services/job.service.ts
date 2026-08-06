@@ -1,6 +1,7 @@
 import type { ServiceClient } from "@/lib/services/types";
 import type { Database, Json, Tables } from "@/lib/supabase/types";
 import { EJobStatus } from "@/types";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type JobRow = Tables<"jobs">;
 
@@ -128,7 +129,8 @@ export async function getJobById(
   client: ServiceClient,
   jobId: string
 ): Promise<Pick<JobRow, "id" | "bot_id" | "status" | "progress" | "error_message"> | null> {
-  const { data, error } = await client
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+  const { data, error } = await activeClient
     .from("jobs")
     .select("id, bot_id, status, progress, error_message")
     .eq("id", jobId)
@@ -146,7 +148,8 @@ export async function getActiveJobsByBotId(
   client: ServiceClient,
   botId: string
 ): Promise<Pick<JobRow, "id" | "status">[]> {
-  const { data, error } = await client
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+  const { data, error } = await activeClient
     .from("jobs")
     .select("id, status")
     .eq("bot_id", botId)
@@ -175,7 +178,8 @@ export async function getJobDetailById(
   | "started_at"
   | "finished_at"
 > | null> {
-  const { data, error } = await client
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+  const { data, error } = await activeClient
     .from("jobs")
     .select(
       "id, bot_id, name, status, progress, error_message, created_at, started_at, finished_at"

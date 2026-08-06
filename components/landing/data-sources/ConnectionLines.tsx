@@ -221,15 +221,15 @@ export default function ConnectionLines({ hoveredSource, gridRef, coreRef }: Con
       const newPaths = computePaths(gridRect, coreRect, nodeRects);
       pathsRef.current = newPaths;
 
-      const expectedLen = newPaths.length * 2;
+      const expectedLen = newPaths.length;
       if (pr.current.length !== expectedLen) {
         pcRef.current = expectedLen;
         pr.current = Array.from({ length: expectedLen }, (_, i) => ({
           x: 0,
           y: 0,
-          progress: (i % 2) * 0.5,
-          speed: 0.002 + Math.random() * 0.001,
-          pathIndex: Math.floor(i / 2),
+          progress: Math.random(),
+          speed: 0.0008 + Math.random() * 0.0004,
+          pathIndex: i,
         }));
         gr.current = new Array(expectedLen).fill(null);
         cr.current = new Array(expectedLen).fill(null);
@@ -290,7 +290,7 @@ export default function ConnectionLines({ hoveredSource, gridRef, coreRef }: Con
     return () => cancelAnimationFrame(raf.current);
   }, []);
 
-  const renderPc = renderPaths.length * 2;
+  const renderPc = renderPaths.length;
 
   return (
     <svg
@@ -353,8 +353,7 @@ export default function ConnectionLines({ hoveredSource, gridRef, coreRef }: Con
       })}
 
       {Array.from({ length: renderPc }, (_, i) => {
-        const pathIdx = Math.floor(i / 2);
-        const np = renderPaths[pathIdx];
+        const np = renderPaths[i];
         if (!np) return null;
         const ih = hoveredSource === np.id;
         const iah = hoveredSource !== null;

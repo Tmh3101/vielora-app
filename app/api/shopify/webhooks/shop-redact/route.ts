@@ -99,13 +99,32 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Delete workspace-scoped credit transactions (their user_id is NULL)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const workspacesResult = await (admin as any)
+      .from("workspaces")
+      .select("id")
+      .eq("owner_id", userId);
+    if (workspacesResult.error) throw workspacesResult.error;
+    const workspaceIds = (workspacesResult.data ?? []).map((ws: { id: string }) => ws.id);
+
+    const transactionDeletes = [admin.from("credit_transactions").delete().eq("user_id", userId)];
+    if (workspaceIds.length > 0) {
+      transactionDeletes.push(
+        admin.from("credit_transactions").delete().in("workspace_id", workspaceIds)
+      );
+    }
+
     const userScopedDeletes = await Promise.all([
-      admin.from("credit_transactions").delete().eq("user_id", userId),
+      ...transactionDeletes,
       admin.from("payments").delete().eq("user_id", userId),
       admin.from("subscriptions").delete().eq("user_id", userId),
-      admin.from("wallets").delete().eq("user_id", userId),
       admin.from("bots").delete().eq("user_id", userId),
     ]);
+
+    if (workspaceIds.length > 0) {
+      await admin.from("wallets").delete().in("workspace_id", workspaceIds);
+    }
     userScopedDeletes.forEach((result) => {
       if (result.error) throw result.error;
     });

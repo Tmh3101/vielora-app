@@ -41,6 +41,8 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const prevIsTypingRef = useRef(isTyping);
   const [conversationId, setConversationId] = useState<string>("");
   const [suggestedQuestionsShown, setSuggestedQuestionsShown] = useState(false);
   const [botInfo, setBotInfo] = useState<BotInfo>(getFallbackBotInfo());
@@ -57,6 +59,16 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     rateLimitMessage,
     botInfo.botName
   );
+
+  // Focus ô input sau khi chatbot trả lời xong
+  useEffect(() => {
+    if (prevIsTypingRef.current && !isTyping && !isChatBlocked) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+    prevIsTypingRef.current = isTyping;
+  }, [isTyping, isChatBlocked]);
 
   const { clampedPosition, positionChatBelow, horizontalMidpoint } = computeClampedPosition(
     position || botInfo.settings.position,
@@ -703,6 +715,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                     )}
                     <form onSubmit={handleSubmit} className="flex gap-2">
                       <Input
+                        ref={inputRef}
                         value={input}
                         onChange={handleInputChange}
                         placeholder={

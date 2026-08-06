@@ -20,12 +20,12 @@ export default function LenisProvider({ children }: { children: React.ReactNode 
       root
       ref={lenisRef}
       options={{
-        duration: 1.2,
-        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        lerp: 0.08,
         wheelMultiplier: 1,
-        touchMultiplier: 2,
+        touchMultiplier: 1.5,
         anchors: true,
         autoRaf: false,
+        overscroll: true,
       }}
     >
       {children}

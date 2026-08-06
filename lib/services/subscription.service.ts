@@ -1,140 +1,14 @@
 import type { ServiceClient } from "@/lib/services/types";
 import type { Tables } from "@/lib/supabase/types";
-import { getPlanById } from "@/lib/services/plan.service";
-import type { PlanRow } from "@/lib/services/plan.service";
-import { ESubscriptionStatus, ESubscriptionPlan } from "@/types";
+import { ESubscriptionPlan } from "@/types";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getEffectiveEntitlements } from "@/lib/services/entitlement.service";
 
-export type { PlanRow } from "@/lib/services/plan.service";
 export type SubscriptionRow = Tables<"subscriptions">;
-
-export interface SubscriptionWithPlan {
-  subscription: SubscriptionRow;
-  plan: PlanRow;
-}
 
 export interface UserSubscriptionPlan {
   planCode: ESubscriptionPlan;
   botsLimit: number;
-}
-
-/**
- * Lấy subscription của user. Trả về null nếu không tìm thấy.
- */
-export async function getSubscriptionByUserId(
-  client: ServiceClient,
-  userId: string
-): Promise<SubscriptionRow | null> {
-  const { data, error } = await client
-    .from("subscriptions")
-    .select("*")
-    .eq("user_id", userId)
-    .order("current_period_end", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-  return data;
-}
-
-/**
- * Lấy subscription kèm plan của user trong một lần truy vấn.
- * Trả về null nếu không có subscription hoặc không có plan_id.
- */
-export async function getSubscriptionWithPlan(
-  client: ServiceClient,
-  userId: string
-): Promise<SubscriptionWithPlan | null> {
-  const subscription = await getSubscriptionByUserId(client, userId);
-  if (!subscription?.plan_id) return null;
-
-  const plan = await getPlanById(client, subscription.plan_id);
-  if (!plan) return null;
-
-  return { subscription, plan };
-}
-
-/**
- * Lấy planCode và botsLimit từ subscription đang active của user.
- * Trả về null nếu không tìm thấy hoặc không có subscription active.
- */
-export async function getUserSubscriptionPlan(
-  client: ServiceClient,
-  userId: string
-): Promise<UserSubscriptionPlan | null> {
-  const { data, error } = await client
-    .from("subscriptions")
-    .select("plans!inner(code, bots_limit)")
-    .eq("user_id", userId)
-    .eq("status", ESubscriptionStatus.Active)
-    .single();
-
-  if (error) return null;
-  if (!data) return null;
-
-  const planInfoRaw = data.plans as unknown as { code: ESubscriptionPlan; bots_limit: number }[];
-  const planInfo = Array.isArray(planInfoRaw) ? planInfoRaw[0] : planInfoRaw;
-  if (!planInfo) return null;
-  return {
-    planCode: planInfo.code,
-    botsLimit: planInfo.bots_limit,
-  };
-}
-
-// ============================================================
-// Server-client variants — nhận ServiceClient làm tham số
-// Dùng trong API routes với server client
-// ============================================================
-
-/**
- * Lấy subscription của user theo userId (server client).
- */
-export async function getSubscriptionByUserIdServer(
-  client: ServiceClient,
-  userId: string
-): Promise<Pick<SubscriptionRow, "id" | "plan_id" | "status" | "current_period_end"> | null> {
-  const { data, error } = await client
-    .from("subscriptions")
-    .select("id, plan_id, status, current_period_end")
-    .eq("user_id", userId)
-    .order("current_period_end", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-  return data as Pick<SubscriptionRow, "id" | "plan_id" | "status" | "current_period_end"> | null;
-}
-
-/**
- * Server variant: lấy full subscription row theo userId.
- * Dùng cho server-rendered pages cần đầy đủ thông tin subscription.
- */
-export async function getSubscriptionByUserIdServerFull(
-  client: ServiceClient,
-  userId: string
-): Promise<SubscriptionRow | null> {
-  return getSubscriptionByUserId(client, userId);
-}
-
-/**
- * Lấy plan code từ subscription active của user (server client).
- * Dùng để kiểm tra quyền trong API routes.
- */
-export async function getUserActivePlanCodeServer(
-  client: ServiceClient,
-  userId: string
-): Promise<ESubscriptionPlan | null> {
-  const { data, error } = await client
-    .from("subscriptions")
-    .select("plans!inner(code)")
-    .eq("user_id", userId)
-    .eq("status", ESubscriptionStatus.Active)
-    .single();
-
-  if (error) return null;
-  if (!data) return null;
-
-  const plan = data.plans as unknown as { code: ESubscriptionPlan };
-  return plan.code ?? null;
 }
 
 /**
@@ -153,4 +27,76 @@ export async function clearBotSelectionFlagServer(
     .eq("user_id", userId); // CHỐT CHẶN BẢO MẬT: Đảm bảo sub thuộc về user này
 
   if (error) throw new Error(error.message);
+}
+
+// ============================================================
+// Workspace-scoped variants
+// ============================================================
+
+/**
+ * Lấy subscription của workspace theo workspaceId.
+ * Trả về null nếu không tìm thấy.
+ */
+export async function getSubscriptionByWorkspaceId(
+  client: ServiceClient,
+  workspaceId: string
+): Promise<SubscriptionRow | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (client as any)
+    .from("subscriptions")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("current_period_end", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data as SubscriptionRow | null;
+}
+
+/**
+ * Lấy planCode và botsLimit từ subscription đang active của workspace.
+ * Trả về null nếu không tìm thấy hoặc không có subscription active.
+ */
+export async function getWorkspaceSubscriptionPlan(
+  client: ServiceClient,
+  workspaceId: string
+): Promise<UserSubscriptionPlan | null> {
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/subscription`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          return json.data;
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching workspace subscription via API:", err);
+    }
+    // Don't fall through to direct query on browser — RLS will block admin users
+    return null;
+  }
+
+  const activeClient = createAdminClient();
+  const entitlements = await getEffectiveEntitlements(activeClient, workspaceId);
+  if (!entitlements) return null;
+
+  return {
+    planCode: entitlements.planCode,
+    botsLimit: entitlements.botsLimit,
+  };
+}
+
+/**
+ * Lấy planCode active của Bot — luôn theo workspace plan.
+ * Free nếu workspace chưa có subscription active hoặc bot không có workspace.
+ */
+export async function getBotActivePlanCode(
+  client: ServiceClient,
+  bot: { user_id: string; workspace_id?: string | null }
+): Promise<ESubscriptionPlan | null> {
+  if (!bot.workspace_id) return ESubscriptionPlan.Free;
+  const wsPlan = await getWorkspaceSubscriptionPlan(client, bot.workspace_id);
+  return wsPlan?.planCode ?? ESubscriptionPlan.Free;
 }

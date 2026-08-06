@@ -12,14 +12,16 @@ export function getPublicBotOrigin(botSlug: string): string {
   return `${protocol}${botSlug}.${root}${port}`;
 }
 
-export function getPublicBotAppleTouchIconPath(botSlug: string): string {
-  return `/public-bot/${botSlug}/apple-touch-icon.png`;
+export function getPublicBotAppleTouchIconPath(botSlug: string, version?: string): string {
+  const base = `/public-bot/${botSlug}/apple-touch-icon.png`;
+  return version ? `${base}?v=${version}` : base;
 }
 
-export function getPublicBotAppleTouchIconUrl(botSlug: string): string {
-  return `${getPublicBotOrigin(botSlug)}${getPublicBotAppleTouchIconPath(botSlug)}`;
+export function getPublicBotAppleTouchIconUrl(botSlug: string, version?: string): string {
+  return `${getPublicBotOrigin(botSlug)}${getPublicBotAppleTouchIconPath(botSlug, version)}`;
 }
 
-export function getPublicBotIcon512Path(botSlug: string): string {
-  return `/public-bot/${botSlug}/icon-512.png`;
+export function getPublicBotIcon512Path(botSlug: string, version?: string): string {
+  const base = `/public-bot/${botSlug}/icon-512.png`;
+  return version ? `${base}?v=${version}` : base;
 }

@@ -1,10 +1,10 @@
 import { ImageResponse } from "next/og";
 import { APPLE_TOUCH_ICON_SIZE } from "@/lib/public-bot/apple-touch-icon";
-import { getPublicBotThemeColor } from "@/lib/public-bot/branding";
-import type { PublicBotBranding } from "@/lib/public-bot/branding";
+import { getPublicBotThemeColor } from "@/lib/helpers/pwa-helpers";
+import type { PublicBotBranding } from "@/lib/services/bot.service";
 
 const CACHE_HEADERS = {
-  "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+  "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
   "Content-Type": "image/png",
 };
 

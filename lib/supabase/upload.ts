@@ -17,10 +17,12 @@ import {
 } from "@/config";
 import { WIDGET_LIMITS } from "@/config/widget";
 import type { ServiceClient } from "@/lib/services/types";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface UploadResult {
   success: boolean;
   url?: string;
+  path?: string;
   error?: string;
 }
 
@@ -48,19 +50,55 @@ async function uploadFile(
     };
   }
 
+  if (typeof window !== "undefined") {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("botId", botId);
+      formData.append("bucket", bucket);
+      formData.append("filePrefix", filePrefix);
+
+      const res = await fetch("/api/bots/upload-asset", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (res.ok && json.success && json.url) {
+        return {
+          success: true,
+          url: json.url,
+          path: json.path,
+        };
+      } else {
+        return {
+          success: false,
+          error: json.error || "Failed to upload file.",
+        };
+      }
+    } catch (err) {
+      console.error("Upload via API error:", err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Failed to upload file.",
+      };
+    }
+  }
+
   try {
+    const admin = createAdminClient();
     const fileExt = file.name.split(".").pop()?.toLowerCase() || "png";
     const fileName = `${botId}/${filePrefix}-${Date.now()}.${fileExt}`;
 
     const performUpload = async () => {
-      const { data: existingFiles } = await supabase.storage.from(bucket).list(botId);
+      const { data: existingFiles } = await admin.storage.from(bucket).list(botId);
 
       if (existingFiles && existingFiles.length > 0) {
         const filesToDelete = existingFiles.map((f) => `${botId}/${f.name}`);
-        await supabase.storage.from(bucket).remove(filesToDelete);
+        await admin.storage.from(bucket).remove(filesToDelete);
       }
 
-      return await supabase.storage.from(bucket).upload(fileName, file, {
+      return await admin.storage.from(bucket).upload(fileName, file, {
         cacheControl: DEFAULT_CACHE_CONTROL,
         upsert: true,
       });
@@ -218,7 +256,7 @@ export async function deleteWidgetIcon(botId: string): Promise<boolean> {
 export async function uploadKnowledgeFile(
   client: ServiceClient,
   file: File,
-  botId: string
+  scope: { botId: string } | { workspaceId: string }
 ): Promise<UploadResult> {
   const extension = file.name.split(".").pop()?.toLowerCase();
   const extWithDot = extension ? `.${extension}` : "";
@@ -240,10 +278,13 @@ export async function uploadKnowledgeFile(
     };
   }
 
+  const scopeKey = "botId" in scope ? scope.botId : scope.workspaceId;
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const filePath = `${botId}/${crypto.randomUUID()}-${safeName}`;
+  const filePath = `${scopeKey}/${crypto.randomUUID()}-${safeName}`;
 
-  const { data, error } = await client.storage
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+
+  const { data, error } = await activeClient.storage
     .from(KNOWLEDGE_FILES_BUCKET_NAME)
     .upload(filePath, file, {
       upsert: false,
@@ -273,7 +314,11 @@ export async function deleteKnowledgeFile(
     };
   }
 
-  const { error } = await client.storage.from(KNOWLEDGE_FILES_BUCKET_NAME).remove([normalizedPath]);
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+
+  const { error } = await activeClient.storage
+    .from(KNOWLEDGE_FILES_BUCKET_NAME)
+    .remove([normalizedPath]);
   if (error) {
     return {
       success: false,
@@ -296,7 +341,8 @@ export async function deleteKnowledgeFilesByBotId(
     };
   }
 
-  const bucket = client.storage.from(KNOWLEDGE_FILES_BUCKET_NAME);
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+  const bucket = activeClient.storage.from(KNOWLEDGE_FILES_BUCKET_NAME);
   const filesToDelete: string[] = [];
   let offset = 0;
   let hasMoreFiles = true;

@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { ESubscriptionCycle, EPaymentCurrency } from "@/types";
+import { generateInvoiceToken } from "@/lib/helpers/invoice-token";
 
 // ============================================================
 // Resend client (lazy-init singleton)
@@ -16,6 +17,10 @@ function getResend(): Resend | null {
   }
   return _resend;
 }
+
+// function getResendClient(): Resend | null {
+//   return getResend();
+// }
 
 const FROM = () => {
   const fromEnv = process.env.RESEND_FROM_EMAIL;
@@ -241,7 +246,7 @@ export async function sendPaymentConfirmationEmail(
     `Gói ${data.planName} đã được kích hoạt`,
     body
   );
-  return sendEmail(to, `✅ Thanh toán thành công — Gói ${data.planName} đã được kích hoạt`, html);
+  return sendEmail(to, `Thanh toán thành công gói ${data.planName}`, html);
 }
 
 // ============================================================
@@ -440,7 +445,51 @@ export async function sendPAYGPurchaseEmail(
     `Bạn vừa nạp ${formattedCreditsAdded} credits`,
     body
   );
-  return sendEmail(to, `✅ Nạp thành công ${formattedCreditsAdded} credits vào tài khoản`, html);
+  return sendEmail(to, `Nạp thành công ${formattedCreditsAdded} credits`, html);
+}
+
+// ============================================================
+// UC8 — Invoice issued email
+// ============================================================
+
+export interface InvoiceIssuedEmailData {
+  invoiceId: string;
+  companyName: string;
+  invoiceNo: string;
+  amount: number;
+}
+
+export async function sendInvoiceIssuedEmail(
+  to: string,
+  data: InvoiceIssuedEmailData
+): Promise<boolean> {
+  const appUrl = APP_URL();
+  const formattedAmount = new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+  }).format(data.amount);
+
+  // Signed link with 7-day expiration
+  const { token: invoiceToken, exp: invoiceTokenExp } = generateInvoiceToken(data.invoiceId);
+  const invoicePdfUrl = `${appUrl}/api/invoices/${data.invoiceId}/pdf?token=${invoiceToken}&exp=${invoiceTokenExp}`;
+
+  const body =
+    paragraph(`Xin chào,`) +
+    paragraph(
+      `Hóa đơn điện tử cho <strong>${data.companyName}</strong> đã được phát hành thành công.`
+    ) +
+    infoTable(
+      infoRow("Số hóa đơn", data.invoiceNo) +
+        infoRow("Tổng tiền", formattedAmount) +
+        infoRow("Trạng thái", "Đã phát hành")
+    ) +
+    ctaButton("Xem & Tải hóa đơn", invoicePdfUrl) +
+    paragraph(
+      `🔗 <em>Link này sẽ hết hạn sau <strong>7 ngày</strong>. Sau khi hết hạn, bạn có thể xem lại hóa đơn trong mục <strong>Lịch sử thanh toán</strong> trong trang quản lý của Vielora.</em>`
+    );
+
+  const html = emailLayout("Hóa đơn điện tử", "Hóa đơn đã phát hành", body);
+  return sendEmail(to, "Xuất hóa đơn điện tử", html);
 }
 
 // ============================================================
@@ -470,4 +519,97 @@ export async function getUserEmailById(
     console.error(`[EmailService] Failed to fetch user ${userId}`);
     return null;
   }
+}
+
+/**
+ * Lấy danh sách email và tên của tất cả thành viên (và owner) trong workspace.
+ */
+export async function getWorkspaceMemberEmails(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  adminClient: any,
+  workspaceId: string
+): Promise<Array<{ email: string; fullName: string }>> {
+  try {
+    const { data: members } = await adminClient
+      .from("workspace_members")
+      .select("user_id")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "active");
+
+    const userIds = new Set<string>();
+    if (members && Array.isArray(members)) {
+      members.forEach((m: { user_id: string }) => {
+        if (m.user_id) userIds.add(m.user_id);
+      });
+    }
+
+    const { data: ws } = await adminClient
+      .from("workspaces")
+      .select("owner_id")
+      .eq("id", workspaceId)
+      .maybeSingle();
+
+    if (ws?.owner_id) {
+      userIds.add(ws.owner_id);
+    }
+
+    const results: Array<{ email: string; fullName: string }> = [];
+    for (const uid of Array.from(userIds)) {
+      const userInfo = await getUserEmailById(adminClient, uid);
+      if (userInfo && !results.some((r) => r.email === userInfo.email)) {
+        results.push(userInfo);
+      }
+    }
+
+    return results;
+  } catch (err) {
+    console.error(
+      `[EmailService] Failed to fetch member emails for workspace ${workspaceId}:`,
+      err
+    );
+    return [];
+  }
+}
+
+// ============================================================
+// Workspace Invitation Email
+// ============================================================
+
+export interface InvitationEmailData {
+  workspaceName: string;
+  workspaceSlug: string;
+  invitedByName: string;
+  acceptUrl: string;
+}
+
+export async function sendWorkspaceInvitationEmail(
+  to: string,
+  data: InvitationEmailData
+): Promise<boolean> {
+  const body =
+    paragraph(
+      `<strong>${data.invitedByName}</strong> đã mời bạn tham gia không gian làm việc (workspace) <strong>${data.workspaceName}</strong> trên Vielora.`
+    ) +
+    infoTable(
+      infoRow("Workspace", data.workspaceName) +
+        infoRow("Người mời", data.invitedByName) +
+        infoRow("Thời hạn lời mời", "7 ngày")
+    ) +
+    paragraph("Nhấn vào nút bên dưới để chấp nhận lời mời và gia nhập workspace ngay:") +
+    ctaButton("Chấp nhận lời mời →", data.acceptUrl) +
+    paragraph(
+      `<span style="font-size: 13px; color: #94a3b8;">Nếu bạn không muốn tham gia hoặc nhận email này do nhầm lẫn, bạn có thể an tâm bỏ qua.</span>`
+    );
+
+  const html = emailLayout(
+    "✉️ Lời mời tham gia Workspace",
+    `Mời tham gia ${data.workspaceName}`,
+    body
+  );
+
+  return sendEmail(
+    to,
+    `${data.invitedByName} mời bạn tham gia "${data.workspaceName}" trên Vielora`,
+    html
+  );
 }

@@ -78,6 +78,15 @@ export const RESERVED_SUBDOMAINS = [
 
   // --- System Protocols ---
   ".well-known",
+
+  // --- Application Routes ---
+  "posts",
+  "privacy",
+  "terms",
+  "public-bot",
+  "onboarding",
 ] as const;
 
 export type ReservedSubdomain = (typeof RESERVED_SUBDOMAINS)[number];
+
+export const RESERVED_PATHS = new Set<string>(RESERVED_SUBDOMAINS);

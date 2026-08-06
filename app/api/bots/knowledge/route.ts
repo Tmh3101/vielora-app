@@ -21,8 +21,8 @@ import {
   SINGLE_URL_CRAWL_TIMEOUT_MS,
   EDIT_KNOWLEDGE_ALLOWED_PLANS,
 } from "@/config";
-import { deductCredits, refundCredits } from "@/lib/services/credit.service";
-import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
+import { deductBotCredits, refundBotCredits } from "@/lib/services/credit.service";
+import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { getBotByOwner, updateBotStatusServer } from "@/lib/services/bot.service";
 import { clearBotCache } from "@/lib/services/server/bot-cache.service";
 import {
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
 
     if (!isOnboardingContext) {
       // Check user's subscription plan
-      const planCode = await getUserActivePlanCodeServer(supabase, user.id);
+      const planCode = await getBotActivePlanCode(supabase, bot);
 
       if (!planCode) {
         return NextResponse.json(
@@ -216,8 +216,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
       }
     }
 
-    const deductionResult = await deductCredits(supabase, {
-      userId: bot.user_id,
+    const deductionResult = await deductBotCredits(supabase, bot, {
       creditAmount: CREDIT_PER_PAGE,
       transactionType: ETransactionType.AddKnowledge,
       transactionDescription: `Deducted ${CREDIT_PER_PAGE} credits to add knowledge for bot ${botId} (${CREDIT_PER_PAGE} credit/page)`,
@@ -307,8 +306,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
           console.error("[KnowledgeAPI] Failed to cleanup orphaned page", err)
         );
 
-        await refundCredits(supabase, {
-          userId: bot.user_id,
+        await refundBotCredits(supabase, bot, {
           deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
           deductedFromPayg: deductionResult.deductedFromPayg || 0,
           transactionType: ETransactionType.AddKnowledgeRefund,
@@ -361,7 +359,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
             transformRelativeUrls: true,
           },
           creditRefund: {
-            userId: bot.user_id,
+            workspaceId: bot.workspace_id,
             deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
             deductedFromPayg: deductionResult.deductedFromPayg || 0,
             creditAmount: CREDIT_PER_PAGE,
@@ -389,8 +387,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<KnowledgeResp
         const urlError = urlErr as Error;
 
         await deletePageByIdServer(supabase, pageId).catch(() => undefined);
-        await refundCredits(supabase, {
-          userId: bot.user_id,
+        await refundBotCredits(supabase, bot, {
           deductedFromSubscription: deductionResult.deductedFromSubscription || 0,
           deductedFromPayg: deductionResult.deductedFromPayg || 0,
           transactionType: ETransactionType.AddKnowledgeRefund,

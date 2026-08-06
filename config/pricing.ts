@@ -18,6 +18,7 @@ const unifiedPlanFeatures: Partial<Record<PlanCode, string[]>> = {
     "Tùy chỉnh tính cách",
     "Thu thập Lead Form",
     "Chatbot Mobile App",
+    "Voice Chat",
   ],
   pro: [
     "Tùy chỉnh kiến thức chatbot",
@@ -25,6 +26,17 @@ const unifiedPlanFeatures: Partial<Record<PlanCode, string[]>> = {
     "Tùy chỉnh tính cách",
     "Thu thập Lead Form",
     "Chatbot Mobile App",
+    "Voice Chat",
+  ],
+  enterprise: [
+    "Tùy chỉnh giới hạn số lượng bots",
+    "Tùy chỉnh Credits hàng tháng",
+    "Tùy chỉnh kiến thức chatbot",
+    "Tạo các câu hỏi gợi ý",
+    "Tùy chỉnh tính cách",
+    "Thu thập Lead Form",
+    "Chatbot Mobile App",
+    "Voice Chat",
   ],
 };
 
@@ -37,6 +49,7 @@ const unifiedPlanCTA: Partial<Record<PlanCode, string>> = {
   free: "Gói hiện tại",
   standard: "Nâng cấp Standard",
   pro: "Nâng cấp Pro",
+  enterprise: "Cấu hình gói",
 };
 
 export const planCTA: Record<PricingVariant, Partial<Record<PlanCode, string>>> = {
@@ -58,3 +71,6 @@ export const policies: readonly PricingPolicy[] = [
     description: "Chuyển đổi giữa các gói dễ dàng, phần chênh lệch sẽ được tính toán tự động.",
   },
 ];
+
+export * from "./plan-theme";
+

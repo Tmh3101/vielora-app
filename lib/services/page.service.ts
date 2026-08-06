@@ -1,6 +1,7 @@
 import type { ServiceClient } from "@/lib/services/types";
 import type { Tables, TablesInsert, TablesUpdate } from "@/lib/supabase/types";
 import { EPageStatus } from "@/types";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type PageRow = Tables<"pages">;
 
@@ -36,7 +37,25 @@ export async function getPagesByBotId(
   botId: string,
   statuses?: EPageStatus[]
 ): Promise<PageListItem[]> {
-  let query = client
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch(`/api/bots/${botId}/pages`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          return json.data;
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching pages via API:", err);
+    }
+    // Don't fall through to direct query on browser — RLS will block admin users
+    return [];
+  }
+
+  const activeClient = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (activeClient as any)
     .from("pages")
     .select("id, title, url, source_type, status, crawled_at, error_message, error_type")
     .eq("bot_id", botId)
@@ -59,7 +78,25 @@ export async function getDiscoveredPagesByBotId(
   client: ServiceClient,
   botId: string
 ): Promise<DiscoveredPage[]> {
-  const { data, error } = await client
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch(
+        `/api/bots/${botId}/pages?statuses=${EPageStatus.Pending}&fields=${encodeURIComponent("id, url, title")}`
+      );
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          return json.data as DiscoveredPage[];
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching discovered pages via API:", err);
+    }
+    return [];
+  }
+
+  const activeClient = createAdminClient();
+  const { data, error } = await activeClient
     .from("pages")
     .select("id, url, title")
     .eq("bot_id", botId)
@@ -77,7 +114,33 @@ export async function getPagePreviewByBotId(
   client: ServiceClient,
   botId: string
 ): Promise<PagePreview[]> {
-  const { data, error } = await client
+  if (typeof window !== "undefined") {
+    try {
+      const fields = encodeURIComponent("id, url, title, status, error_message, source_type");
+      // Pass all statuses to get all pages for preview
+      const allStatuses = [
+        EPageStatus.Pending,
+        EPageStatus.Completed,
+        EPageStatus.Processing,
+        EPageStatus.PendingIndex,
+        EPageStatus.Failed,
+        EPageStatus.Ignored,
+      ].join(",");
+      const res = await fetch(`/api/bots/${botId}/pages?statuses=${allStatuses}&fields=${fields}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          return json.data as PagePreview[];
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching page preview via API:", err);
+    }
+    return [];
+  }
+
+  const activeClient = createAdminClient();
+  const { data, error } = await activeClient
     .from("pages")
     .select("id, url, title, status, error_message, source_type")
     .eq("bot_id", botId);
@@ -245,7 +308,8 @@ export async function updatePagesStatusServer(
  * Xóa page theo ID (server client).
  */
 export async function deletePageByIdServer(client: ServiceClient, pageId: string): Promise<void> {
-  const { error } = await client.from("pages").delete().eq("id", pageId);
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+  const { error } = await activeClient.from("pages").delete().eq("id", pageId);
   if (error) throw new Error(error.message);
 }
 
@@ -257,11 +321,29 @@ export async function deleteDocumentsByPageUrl(
   botId: string,
   url: string
 ): Promise<void> {
-  const { error } = await client
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+  const { error } = await activeClient
     .from("documents")
     .delete()
     .eq("bot_id", botId)
     .eq("metadata->>url", url);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Xóa tất cả document chunks của một workspace knowledge item (server client).
+ */
+export async function deleteWorkspaceKnowledgeChunks(
+  client: ServiceClient,
+  workspaceId: string,
+  itemId: string
+): Promise<void> {
+  const activeClient = typeof window !== "undefined" ? client : createAdminClient();
+  const { error } = await activeClient
+    .from("documents")
+    .delete()
+    .eq("workspace_id", workspaceId)
+    .eq("metadata->>itemId", itemId);
   if (error) throw new Error(error.message);
 }
 

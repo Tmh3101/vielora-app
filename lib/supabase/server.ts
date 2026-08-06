@@ -41,22 +41,7 @@ export async function createServerClient() {
   });
 }
 
-export function createAdminClient() {
-  const { url, serviceRoleKey } = getEnv();
-
-  if (!serviceRoleKey) {
-    throw new Error("Missing env var: SUPABASE_SERVICE_ROLE_KEY");
-  }
-
-  return createClient<Database>(url, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-    global: {
-      fetch: (fetchUrl, options) => {
-        return fetch(fetchUrl, { ...options, cache: "no-store" });
-      },
-    },
-  });
-}
+export { createAdminClient } from "./admin";
 
 export function createAuthClient() {
   const { url, anonKey } = getEnv();

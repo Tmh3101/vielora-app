@@ -7,7 +7,7 @@ import {
 import { setBotReadyServer, setBotStatusIfNotReadyServer } from "@/lib/services/bot.service";
 import { getRedisPublisher } from "@/lib/config/redis";
 import { EBotStatus, EPageStatus, EPageErrorType } from "@/types";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getRedisConnectionOptions } from "@/lib/config/redis";
 import { NextRequest } from "next/server";
 

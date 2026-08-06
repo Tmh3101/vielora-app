@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Bot, Share2, Copy, Check, QrCode } from "lucide-react";
+import { Send, Bot, Share2, Copy, Check, QrCode, Mic, Square } from "lucide-react";
 import type { PublicBotData } from "@/lib/services/bot.service";
 import type { Json } from "@/lib/supabase/types";
 import {
@@ -27,11 +27,11 @@ import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
 import type { BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
 import { EMessageRole, EWidgetBackgroundType } from "@/types/enums";
 import type { ChatResponse, ChatMessage, ChatData } from "@/types/widget-api";
-import { LeadForm } from "@/components/chat/LeadForm";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { useOfflineMessageQueue } from "@/hooks/useOfflineMessageQueue";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { OfflineBanner } from "@/components/chat/OfflineBanner";
 import { useToast } from "@/hooks/use-toast";
-import { StandaloneChatPageQRCode } from "@/components/dashboard/StandaloneChatPageQRCode";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { VOICE_RECORDING_DURATION } from "@/config/voice-chat";
+
+const LeadForm = dynamic(() => import("@/components/chat/LeadForm").then((mod) => mod.LeadForm), {
+  ssr: false,
+});
+const StandaloneChatPageQRCode = dynamic(
+  () =>
+    import("@/components/dashboard/StandaloneChatPageQRCode").then(
+      (mod) => mod.StandaloneChatPageQRCode
+    ),
+  { ssr: false }
+);
 
 const PWAInstallRoot = dynamic(
   () => import("./pwa-install/PWAInstallRoot").then((mod) => mod.PWAInstallRoot),
@@ -48,6 +60,7 @@ const PWAInstallHeaderButton = dynamic(
   () => import("./pwa-install/PWAInstallHeaderButton").then((mod) => mod.PWAInstallHeaderButton),
   { ssr: false }
 );
+
 interface WidgetSettings {
   primaryColor?: string;
   welcomeMessage?: string;
@@ -55,9 +68,9 @@ interface WidgetSettings {
   chatBackgroundType?: EWidgetBackgroundType;
   chatBackgroundValue?: string;
   chatBackgroundOpacity?: number;
+  subscriptionPlan?: string;
 }
 
-// FingerprintJS types
 declare global {
   interface Window {
     FingerprintJS?: {
@@ -71,15 +84,20 @@ declare global {
 export function StandaloneChatUI({
   bot,
   isMobile = false,
+  pwaVersion = "1",
 }: {
   bot: PublicBotData;
   isMobile?: boolean;
+  pwaVersion?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [visitorId, setVisitorId] = useState<string | null>(null);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const prevIsLoadingRef = useRef(isLoading);
 
   const [isAvailable, setIsAvailable] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -95,17 +113,147 @@ export function StandaloneChatUI({
   const [leadFormQuestion, setLeadFormQuestion] = useState("");
   const isOnline = useNetworkStatus();
   const { toast } = useToast();
+  const { queueMessage } = useOfflineMessageQueue();
 
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string>("free");
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       setShareUrl(window.location.href);
     }
   }, []);
+
+  // Tích hợp nút Micro kế bên nút Gửi (Send) trong form input chat
+  const {
+    isRecording,
+    audioBlob,
+    recordingSeconds,
+    error: recordError,
+    startRecording,
+    stopRecording,
+  } = useAudioRecorder(VOICE_RECORDING_DURATION);
+  const [isSttLoading, setIsSttLoading] = useState(false);
+
+  // Hiển thị thông báo khi có lỗi cấp quyền micro
+  useEffect(() => {
+    if (recordError) {
+      toast({
+        title: "Lỗi thiết bị",
+        description: recordError,
+        variant: "destructive",
+      });
+    }
+  }, [recordError, toast]);
+
+  const processedAudioBlobRef = useRef<Blob | null>(null);
+  const conversationIdRef = useRef<string | null>(conversationId);
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
+  // Gửi Audio lên API ngay khi dừng ghi âm sinh ra blob
+  useEffect(() => {
+    const handleSendAudio = async (blob: Blob) => {
+      setIsSttLoading(true);
+
+      // Show a processing indicator in the chat (animated mic, no text)
+      const tempMessageId = `temp_${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: tempMessageId,
+          role: EMessageRole.User,
+          content: "",
+          isProcessing: true,
+        },
+      ]);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", blob, "voice.webm");
+
+        // Bước 1: Gửi file audio lên API dịch thuật
+        const res = await fetch("/api/widget/voice", {
+          method: "POST",
+          headers: {
+            "x-bot-id": bot.id,
+            "x-visitor-id": visitorId || "",
+            "x-standalone-chat": "true",
+          },
+          body: formData,
+        });
+
+        const data = await res.json();
+        if (data.success && data.text) {
+          // Replace the processing indicator with the actual transcript + voice flag
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === tempMessageId
+                ? { ...msg, content: data.text, isVoice: true, isProcessing: false }
+                : msg
+            )
+          );
+
+          // Bước 2: Tự động gọi API Chat để gửi văn bản này đi liền lập tức, tạo cảm giác mượt mà không có điểm dừng khựng
+          setIsLoading(true);
+          const chatRes = await fetch("/api/widget/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-bot-id": bot.id,
+              "x-visitor-id": visitorId || "",
+              "x-standalone-chat": "true",
+            },
+            body: JSON.stringify({
+              botId: bot.id,
+              message: data.text,
+              conversationId: conversationIdRef.current,
+              visitorId,
+            }),
+          });
+
+          const chatData = await chatRes.json();
+          if (chatData.success && chatData.data) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: EMessageRole.Assistant,
+                content: chatData.data.message || "Sorry, something went wrong.",
+              },
+            ]);
+            if (chatData.data.conversationId) setConversationId(chatData.data.conversationId);
+          }
+        } else {
+          throw new Error(data.message || "Lỗi xử lý âm thanh");
+        }
+      } catch (err: unknown) {
+        console.error("Lỗi chuyển dịch giọng nói:", err);
+        // Remove the processing indicator on error
+        setMessages((prev) => prev.filter((msg) => msg.id !== tempMessageId));
+        toast({
+          title: "Lỗi chuyển giọng nói",
+          description:
+            err instanceof Error
+              ? err.message
+              : "Không thể nhận diện giọng nói của bạn, vui lòng thử lại.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSttLoading(false);
+        setIsLoading(false);
+      }
+    };
+
+    if (audioBlob && audioBlob !== processedAudioBlobRef.current) {
+      processedAudioBlobRef.current = audioBlob;
+      void handleSendAudio(audioBlob);
+    }
+  }, [audioBlob, bot.id, visitorId, toast]);
 
   const handleCopy = async () => {
     try {
@@ -142,6 +290,28 @@ export function StandaloneChatUI({
     }
   };
 
+  const handleCopyMessage = async (id: string, text: string) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        textArea.remove();
+      }
+      setCopiedMessageId(id);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch {
+      // silent fail
+    }
+  };
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const widgetSettings = (bot.widget_settings as Json as WidgetSettings | null) || {};
   const primaryColor = widgetSettings?.primaryColor || "#3B82F6";
@@ -158,6 +328,22 @@ export function StandaloneChatUI({
   );
   const isChatBlocked = baseChatBlocked || quotaExceeded || !isAvailable;
   const headerTextColor = getUserMessageTextColor(primaryColor);
+
+  // Focus ô input sau khi chatbot trả lời xong
+  useEffect(() => {
+    if (
+      prevIsLoadingRef.current &&
+      !isLoading &&
+      !isChatBlocked &&
+      !showLeadForm &&
+      !isSttLoading
+    ) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+    prevIsLoadingRef.current = isLoading;
+  }, [isLoading, isChatBlocked, showLeadForm, isSttLoading]);
 
   const shareDialog = (
     <Dialog
@@ -372,6 +558,9 @@ export function StandaloneChatUI({
           setRateLimitExceeded(Boolean(data.data.rateLimitExceeded));
           setRateLimitMessage(data.data?.errorCode ? rateLimitMessCreated : null);
           setSuggestedQuestions(settings?.suggestedQuestions || []);
+          if (settings?.subscriptionPlan) {
+            setSubscriptionPlan(settings.subscriptionPlan);
+          }
           if (data.data.rateLimitExceeded) {
             setSuggestedQuestionsShown(true);
           }
@@ -444,7 +633,7 @@ export function StandaloneChatUI({
     if (e) e.preventDefault();
 
     const messageToSend = (overrideInput || input).trim();
-    if (!messageToSend || isLoading || !visitorId || !isOnline) return;
+    if (!messageToSend || isLoading || !visitorId) return;
 
     if (messageToSend.length > 200) {
       appendAssistantMessage("Tin nhắn quá dài (tối đa 200 ký tự). Vui lòng rút gọn nội dung.");
@@ -561,12 +750,34 @@ export function StandaloneChatUI({
         appendAssistantMessage(message);
       }
     } catch {
-      appendAssistantMessage("Sorry, I'm having trouble connecting right now.");
+      if (!navigator.onLine) {
+        try {
+          await queueMessage(
+            "/api/widget/chat",
+            {
+              "Content-Type": "application/json",
+              "x-bot-id": bot.id,
+              "x-visitor-id": visitorId,
+              "x-standalone-chat": "true",
+            },
+            JSON.stringify({
+              botId: bot.id,
+              message: messageToSend,
+              conversationId,
+              visitorId,
+            })
+          );
+          appendAssistantMessage("Tin nhắn đã được lưu và sẽ gửi khi có kết nối trở lại.");
+        } catch {
+          appendAssistantMessage("Sorry, I'm having trouble connecting right now.");
+        }
+      } else {
+        appendAssistantMessage("Sorry, I'm having trouble connecting right now.");
+      }
     } finally {
       setIsLoading(false);
     }
   };
-
   return (
     <div className="flex h-dvh flex-col bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Markdown Link Styles */}
@@ -609,6 +820,7 @@ export function StandaloneChatUI({
             appName={bot.name}
             primaryColor={primaryColor}
             headerForeground={headerTextColor}
+            pwaVersion={pwaVersion}
           >
             <div
               className="flex items-center gap-3 px-6 py-4 shadow-sm"
@@ -651,40 +863,76 @@ export function StandaloneChatUI({
                   <div className="h-px flex-1 bg-slate-300" />
                 </div>
               )}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.3,
-                  delay: idx === messages.length - 1 ? 0.1 : 0,
-                }}
-                className={`flex ${msg.role === EMessageRole.User ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
-                    msg.role === EMessageRole.User ? "rounded-br-sm" : "rounded-bl-sm bg-muted"
-                  }`}
-                  style={
-                    msg.role === EMessageRole.User
-                      ? {
-                          backgroundColor: primaryColor,
-                          color: headerTextColor,
-                        }
-                      : {}
-                  }
+              <div className="group relative">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: 0.3,
+                    delay: idx === messages.length - 1 ? 0.1 : 0,
+                  }}
+                  className={`flex ${msg.role === EMessageRole.User ? "justify-end" : "justify-start"}`}
                 >
-                  {msg.role === EMessageRole.Assistant ? (
-                    <div
-                      className="chatbot-message-content whitespace-pre-line"
-                      dangerouslySetInnerHTML={{
-                        __html: parseMarkdown(msg.content, primaryColor),
-                      }}
-                    />
-                  ) : (
-                    <p className="whitespace-pre-line">{msg.content}</p>
-                  )}
-                </div>
-              </motion.div>
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm ${
+                      msg.role === EMessageRole.User ? "rounded-br-sm" : "rounded-bl-sm bg-muted"
+                    } ${msg.role === EMessageRole.User && msg.isVoice && !msg.isProcessing ? "relative pr-8" : ""}`}
+                    style={
+                      msg.role === EMessageRole.User
+                        ? {
+                            backgroundColor: primaryColor,
+                            color: headerTextColor,
+                          }
+                        : {}
+                    }
+                  >
+                    {msg.role === EMessageRole.Assistant ? (
+                      <div
+                        className="chatbot-message-content whitespace-pre-line"
+                        dangerouslySetInnerHTML={{
+                          __html: parseMarkdown(msg.content, primaryColor),
+                        }}
+                      />
+                    ) : msg.isProcessing ? (
+                      <div className="flex items-center gap-2 px-1 py-1">
+                        <Mic className="h-3.5 w-3.5 animate-pulse text-white/90" />
+                        <div className="flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/80" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/80 [animation-delay:0.15s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/80 [animation-delay:0.3s]" />
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-line">{msg.content}</p>
+                    )}
+
+                    {msg.role === EMessageRole.User && msg.isVoice && !msg.isProcessing && (
+                      <span
+                        className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-sm"
+                        title="Tin nhắn bằng giọng nói"
+                      >
+                        <Mic className="h-3 w-3 text-white" />
+                      </span>
+                    )}
+                  </div>
+                </motion.div>
+                {!msg.isProcessing && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyMessage(`${idx}`, msg.content)}
+                    className={`absolute -bottom-6 z-10 flex items-center rounded-md border border-slate-200 bg-white p-1.5 text-slate-400 opacity-0 shadow-sm transition-all duration-200 hover:text-slate-600 group-hover:opacity-100 ${
+                      msg.role === EMessageRole.User ? "right-0" : "left-0"
+                    }`}
+                    title="Sao chép tin nhắn"
+                  >
+                    {copiedMessageId === `${idx}` ? (
+                      <Check className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
 
@@ -772,24 +1020,124 @@ export function StandaloneChatUI({
         )}
         <form
           onSubmit={handleSubmit}
-          className={`mx-auto flex max-w-3xl gap-2 ${!isOnline ? "opacity-60" : ""}`}
+          className={`mx-auto flex max-w-3xl items-center gap-2 ${!isOnline ? "opacity-60" : ""}`}
         >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={insufficientCredits ? "Bot đã hết credits" : "Nhập tin nhắn..."}
-            disabled={isLoading || isChatBlocked || !isOnline || showLeadForm}
-            maxLength={200}
-            className="flex-1 rounded-2xl"
-          />
-          <Button
-            type="submit"
-            disabled={isLoading || !input.trim() || isChatBlocked || !isOnline}
-            className="rounded-full shadow-sm transition-shadow hover:shadow-md"
-            style={{ backgroundColor: primaryColor }}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+          {isRecording ? (
+            <>
+              {/* Recording indicator bar using primary color & soundwave visualizer */}
+              <div
+                className="flex h-10 flex-1 items-center gap-3 rounded-2xl border bg-white px-3.5 shadow-sm"
+                style={{ borderColor: `${primaryColor}40` }}
+              >
+                <div className="relative flex h-3 w-3 shrink-0 items-center justify-center">
+                  <span
+                    className="absolute h-3 w-3 animate-ping rounded-full opacity-75"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                  <span
+                    className="relative h-2 w-2 rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                </div>
+
+                {/* Dynamic Soundwave Waveform Bars */}
+                <div className="flex flex-1 items-center gap-1 overflow-hidden px-1">
+                  <span
+                    className="h-3 w-0.5 animate-[bounce_1s_infinite_100ms] rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                  <span
+                    className="h-5 w-0.5 animate-[bounce_1s_infinite_200ms] rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                  <span
+                    className="h-3 w-0.5 animate-[bounce_1s_infinite_300ms] rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                  <span
+                    className="h-6 w-0.5 animate-[bounce_1s_infinite_400ms] rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                  <span
+                    className="h-4 w-0.5 animate-[bounce_1s_infinite_150ms] rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                  <span
+                    className="h-5.5 w-0.5 animate-[bounce_1s_infinite_250ms] rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                  <span
+                    className="h-3.5 w-0.5 animate-[bounce_1s_infinite_350ms] rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                  <span
+                    className="h-5 w-0.5 animate-[bounce_1s_infinite_450ms] rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                  <span
+                    className="h-3 w-0.5 animate-[bounce_1s_infinite_200ms] rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                  <span
+                    className="h-4 w-0.5 animate-[bounce_1s_infinite_300ms] rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                </div>
+
+                <span
+                  className="text-sm font-semibold tabular-nums"
+                  style={{ color: primaryColor }}
+                >
+                  {recordingSeconds}s
+                </span>
+              </div>
+              <Button
+                type="button"
+                onClick={stopRecording}
+                style={{ backgroundColor: primaryColor }}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full p-0 shadow-none transition-transform hover:scale-105"
+                title="Dừng ghi âm"
+              >
+                <Square className="h-4 w-4 fill-white text-white" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={insufficientCredits ? "Bot đã hết credits" : "Nhập tin nhắn..."}
+                disabled={isLoading || isChatBlocked || showLeadForm || isSttLoading}
+                maxLength={200}
+                className="flex-1 rounded-2xl"
+              />
+              {subscriptionPlan !== "free" && isOnline && !isChatBlocked && !input.trim() && (
+                <Button
+                  type="button"
+                  onClick={startRecording}
+                  disabled={isSttLoading || isLoading}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 p-0 text-slate-700 shadow-none hover:bg-slate-200"
+                >
+                  {isSttLoading ? (
+                    <Mic className="h-4 w-4 animate-pulse text-red-500" />
+                  ) : (
+                    <Mic className="h-4 w-4 text-slate-600" />
+                  )}
+                </Button>
+              )}
+              <Button
+                type="submit"
+                disabled={
+                  isLoading || !input.trim() || isChatBlocked || isRecording || isSttLoading
+                }
+                className="flex h-10 w-10 items-center justify-center rounded-full p-0 shadow-sm transition-shadow hover:shadow-md"
+                style={{ backgroundColor: primaryColor }}
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </form>
       </div>
 

@@ -34,6 +34,8 @@ export const JobName = {
   DISCOVER: "discover",
   PAGE_CRAWL: "page_crawl",
   INDEX: "index",
+  WORKSPACE_KNOWLEDGE: "workspace_knowledge_index",
+  ISSUE_INVOICE: "issue-invoice",
 } as const;
 
 export const DISCOVER_QUEUE_NAME = "discover-queue";
@@ -45,5 +47,11 @@ export const PAGE_CRAWLER_WORKER_CONCURRENCY = 5;
 export const INDEXER_QUEUE_NAME = "indexer-queue";
 export const INDEXER_WORKER_CONCURRENCY = 2;
 
+export const WORKSPACE_KNOWLEDGE_QUEUE_NAME = "workspace-knowledge-queue";
+export const WORKSPACE_KNOWLEDGE_WORKER_CONCURRENCY = 2;
+
 export const CRON_QUEUE_NAME = "cron-queue";
 export const CRON_WORKER_CONCURRENCY = 1;
+
+export const INVOICE_QUEUE_NAME = "invoice-queue";
+export const INVOICE_WORKER_CONCURRENCY = 1;

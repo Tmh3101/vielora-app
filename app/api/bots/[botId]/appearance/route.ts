@@ -5,10 +5,11 @@ import { ESubscriptionPlan, AppearanceUpdateResponse, AppearanceUpdateRequest } 
 import { clearBotCache } from "@/lib/services/server/bot-cache.service";
 import {
   getBotByIdServer,
+  canUserAccessBot,
   updateBotAppearance,
   validateSuggestedQuestions,
 } from "@/lib/services/bot.service";
-import { getUserActivePlanCodeServer } from "@/lib/services/subscription.service";
+import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { isHexColor } from "@/lib/helpers";
 import { SUGGESTED_QUESTIONS_ALLOWED_PLANS } from "@/config";
 
@@ -44,7 +45,7 @@ export async function POST(
       );
     }
 
-    if (bot.user_id !== user.id) {
+    if (!(await canUserAccessBot(supabase, bot, user.id))) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403, headers: corsHeaders }
@@ -87,7 +88,7 @@ export async function POST(
 
     // If suggestedQuestions is being set, check plan
     if (widgetSettings?.suggestedQuestions && widgetSettings.suggestedQuestions.length > 0) {
-      const planCode = await getUserActivePlanCodeServer(supabase, user.id);
+      const planCode = await getBotActivePlanCode(supabase, bot);
 
       if (!planCode) {
         return NextResponse.json(

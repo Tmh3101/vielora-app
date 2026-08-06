@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { getCreditSummary } from "@/lib/services/credit.service";
+import { getWorkspaceCreditSummary } from "@/lib/services/credit.service";
 import { getBotById } from "@/lib/services/bot.service";
 import { getPagesByBotId, type PageListItem } from "@/lib/services/page.service";
-import { getUserSubscriptionPlan } from "@/lib/services/subscription.service";
+import { getWorkspaceSubscriptionPlan } from "@/lib/services/subscription.service";
 import type { Tables } from "@/lib/supabase/types";
 import { EPageStatus, ESubscriptionPlan } from "@/types";
 
@@ -64,15 +64,29 @@ export async function loadBotDetailData({
 }: LoadBotDetailDataParams) {
   const shouldFetchBot = refreshBot || !initialBot;
 
-  const [botData, pagesData, summary, planInfo] = await Promise.all([
-    shouldFetchBot ? getBotById(supabase, botId) : Promise.resolve(initialBot),
-    getPagesByBotId(supabase, botId, [
-      EPageStatus.Completed,
-      EPageStatus.PendingIndex,
-      EPageStatus.Processing,
-    ]),
-    userId ? getCreditSummary(supabase, userId) : Promise.resolve(null),
-    userId ? getUserSubscriptionPlan(supabase, userId) : Promise.resolve(null),
+  const botData = shouldFetchBot ? await getBotById(supabase, botId) : initialBot;
+
+  const pagesDataPromise = getPagesByBotId(supabase, botId, [
+    EPageStatus.Completed,
+    EPageStatus.PendingIndex,
+    EPageStatus.Processing,
+  ]);
+
+  let summaryPromise: Promise<{ totalCredits?: number; totalRemainingCredits?: number } | null> =
+    Promise.resolve(null);
+  let planInfoPromise: Promise<{ planCode: ESubscriptionPlan; botsLimit: number } | null> =
+    Promise.resolve(null);
+
+  const wsId = (botData as { workspace_id?: string | null } | null)?.workspace_id;
+  if (wsId) {
+    summaryPromise = getWorkspaceCreditSummary(supabase, wsId);
+    planInfoPromise = getWorkspaceSubscriptionPlan(supabase, wsId);
+  }
+
+  const [pagesData, summary, planInfo] = await Promise.all([
+    pagesDataPromise,
+    summaryPromise,
+    planInfoPromise,
   ]);
 
   return { botData, pagesData, summary, planInfo };
@@ -88,6 +102,7 @@ export interface UseBotDataResult {
   botLoadVersion: number;
   pagesCount: number;
   fetchData: () => Promise<void>;
+  setPages: Dispatch<SetStateAction<PageListItem[]>>;
   setBot: Dispatch<SetStateAction<BotType | null>>;
   setTotalCredits: Dispatch<SetStateAction<number>>;
 }
@@ -138,7 +153,7 @@ export function useBotData({
         setPagesCount(pagesData.length);
 
         if (userId) {
-          setTotalCredits(summary?.totalRemainingCredits ?? 0);
+          setTotalCredits(summary?.totalCredits ?? summary?.totalRemainingCredits ?? 0);
 
           if (planInfo) {
             setPlanCode(planInfo.planCode);
@@ -187,6 +202,7 @@ export function useBotData({
     botLoadVersion,
     pagesCount,
     fetchData,
+    setPages,
     setBot,
     setTotalCredits,
   };

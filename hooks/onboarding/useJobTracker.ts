@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+
 import {
   computeCounts,
   createDefaultCounts,
@@ -19,7 +19,6 @@ import {
 } from "@/types";
 
 export function useJobTracker(options: JobTrackerOptions): UseJobTrackerReturn {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const jobMapRef = useRef<Map<string, TrackedJob>>(new Map());
   const seenActionKeysRef = useRef<Set<string>>(new Set());
   const lastDisplayedActionRef = useRef<string>("");
@@ -108,21 +107,28 @@ export function useJobTracker(options: JobTrackerOptions): UseJobTrackerReturn {
     const loadJobs = async () => {
       if (!isMounted) return;
       try {
-        let query = supabase.from("jobs").select("id, status, progress, data, error_message");
-        if (mode === JobTrackerMode.Aggregate) {
-          query = query.eq("bot_id", botId).eq("name", jobName);
-        } else if (mode === JobTrackerMode.Job) {
-          query = query.eq("id", jobId);
+        let rows: JobRowPick[] = [];
+
+        if (mode === JobTrackerMode.Job && jobId) {
+          const res = await fetch(`/api/jobs/${jobId}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && json.data) {
+              rows = [json.data as JobRowPick];
+            }
+          }
+        } else if (mode === JobTrackerMode.Aggregate && botId && jobName) {
+          const res = await fetch(
+            `/api/bots/${botId}/jobs?name=${encodeURIComponent(jobName)}&fields=${encodeURIComponent("id, status, progress, data, error_message")}`
+          );
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && Array.isArray(json.data)) {
+              rows = json.data as JobRowPick[];
+            }
+          }
         }
 
-        const { data, error } = await query;
-
-        if (error) {
-          if (isMounted) setState((prev) => ({ ...prev, error: error.message }));
-          return;
-        }
-
-        const rows = (data ?? []) as JobRowPick[];
         if (rows.length > 0 && isMounted) {
           rows.forEach((row) => handleRow(row));
         }
@@ -133,7 +139,10 @@ export function useJobTracker(options: JobTrackerOptions): UseJobTrackerReturn {
     };
 
     void loadJobs();
-    const fallback = setInterval(() => void loadJobs(), 4000);
+    let fallback: NodeJS.Timeout | null = null;
+    if (state.status !== EJobStatus.Completed && state.status !== EJobStatus.Failed) {
+      fallback = setInterval(() => void loadJobs(), 4000);
+    }
 
     if (mode === JobTrackerMode.Job && jobId) {
       console.log(`[UI: Realtime] Init SSE connection for jobId: ${jobId}`);
@@ -208,10 +217,10 @@ export function useJobTracker(options: JobTrackerOptions): UseJobTrackerReturn {
     // Cleanup memory leaks when unmount
     return () => {
       isMounted = false;
-      clearInterval(fallback);
+      if (fallback) clearInterval(fallback);
       if (es) es.close();
     };
-  }, [botId, jobName, mode, jobId, supabase, totalPages]);
+  }, [botId, jobName, mode, jobId, totalPages, state.status]);
 
   return state;
 }

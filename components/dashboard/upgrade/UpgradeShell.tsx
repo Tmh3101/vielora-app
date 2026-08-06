@@ -8,25 +8,54 @@ import { ArrowLeft, CreditCard, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { useWorkspace } from "@/hooks/useWorkspace";
+
 interface UpgradeShellProps {
   children: ReactNode;
 }
 
-const navItems = [
-  {
-    href: "/dashboard/upgrade",
-    label: "Gói Dịch Vụ & Credit",
-    icon: CreditCard,
-  },
-  {
-    href: "/dashboard/upgrade/history",
-    label: "Lịch sử thanh toán",
-    icon: History,
-  },
-];
-
 export function UpgradeShell({ children }: UpgradeShellProps) {
   const pathname = usePathname();
+  const { activeWorkspace } = useWorkspace();
+
+  const getSubPath = () => {
+    if (!pathname) return "/";
+    if (activeWorkspace?.slug && pathname.startsWith(`/${activeWorkspace.slug}`)) {
+      return pathname.slice(activeWorkspace.slug.length + 1) || "/";
+    }
+    if (pathname.startsWith("/dashboard")) {
+      return pathname.slice("/dashboard".length) || "/";
+    }
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length === 1) return "/";
+    if (segments.length > 1) return `/${segments.slice(1).join("/")}`;
+    return pathname;
+  };
+
+  const subPath = getSubPath();
+
+  const plansHref = activeWorkspace?.slug
+    ? `/${activeWorkspace.slug}/upgrade`
+    : "/dashboard/upgrade";
+  const historyHref = activeWorkspace?.slug
+    ? `/${activeWorkspace.slug}/upgrade/history`
+    : "/dashboard/upgrade/history";
+  const dashboardHref = activeWorkspace?.slug ? `/${activeWorkspace.slug}` : "/dashboard";
+
+  const navItems = [
+    {
+      href: plansHref,
+      label: "Gói dịch vụ & Credit",
+      icon: CreditCard,
+      isActive: subPath === "/upgrade" || subPath === "/upgrade/",
+    },
+    {
+      href: historyHref,
+      label: "Lịch sử thanh toán",
+      icon: History,
+      isActive: subPath === "/upgrade/history" || subPath.startsWith("/upgrade/history"),
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -39,7 +68,7 @@ export function UpgradeShell({ children }: UpgradeShellProps) {
               size="sm"
               className="border-none hover:bg-white hover:text-primary"
             >
-              <Link href="/dashboard">
+              <Link href={dashboardHref}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Dashboard
               </Link>
@@ -65,20 +94,15 @@ export function UpgradeShell({ children }: UpgradeShellProps) {
             <nav className="grid gap-2 rounded-lg border border-border/60 bg-card/60 p-2 shadow-sm sm:grid-cols-2 lg:grid-cols-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive =
-                  item.href === "/dashboard/upgrade"
-                    ? pathname === item.href
-                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
-
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={cn(
                       "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      item.isActive
+                        ? "bg-primary/10 font-semibold text-primary"
+                        : "font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                     )}
                   >
                     <Icon className="h-4 w-4" />

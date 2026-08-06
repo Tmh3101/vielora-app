@@ -1,6 +1,7 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
-import { getSubscriptionByUserIdServerFull } from "@/lib/services/subscription.service";
+import { getSubscriptionByWorkspaceId } from "@/lib/services/subscription.service";
 import { getPlanByIdServer } from "@/lib/services/plan.service";
 import SupportClient from "@/components/dashboard/support/SupportClient";
 import type { ServiceClient } from "@/lib/services/types";
@@ -19,7 +20,12 @@ export default async function SupportPage() {
     redirect("/auth");
   }
 
-  const subscription = await getSubscriptionByUserIdServerFull(dbClient, user.id);
+  const cookieStore = await cookies();
+  const workspaceId = cookieStore.get("active_workspace_id")?.value;
+
+  const subscription = workspaceId
+    ? await getSubscriptionByWorkspaceId(dbClient, workspaceId)
+    : null;
   const plan = subscription?.plan_id
     ? await getPlanByIdServer(dbClient, subscription.plan_id)
     : null;

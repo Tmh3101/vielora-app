@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -11,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bot, Crown, Loader2 } from "lucide-react";
 import type { Tables } from "@/lib/supabase/types";
 
@@ -61,8 +61,11 @@ export function BotSelectorDialog({
             const isSelected = selectedBotIds.has(bot.id);
             const isDisabled = !isSelected && selectedBotIds.size >= botsLimit;
             return (
-              <label
+              <div
                 key={bot.id}
+                onClick={() => {
+                  if (!isDisabled) onToggleBotSelection(bot.id);
+                }}
                 className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-all ${
                   isSelected
                     ? "border-primary/50 bg-primary/5"
@@ -74,25 +77,19 @@ export function BotSelectorDialog({
                 <Checkbox
                   checked={isSelected}
                   disabled={isDisabled}
-                  onCheckedChange={() => onToggleBotSelection(bot.id)}
+                  className="pointer-events-none"
                 />
                 <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10">
-                    {bot.avatar_url ? (
-                      <Image
-                        src={bot.avatar_url}
-                        alt={bot.name}
-                        width={36}
-                        height={36}
-                        className="h-full w-full object-cover"
-                        unoptimized={
-                          bot.avatar_url.startsWith("blob:") || bot.avatar_url.startsWith("data:")
-                        }
-                      />
-                    ) : (
+                  <Avatar className="h-9 w-9 shrink-0 rounded-xl">
+                    <AvatarImage
+                      src={bot.avatar_url || undefined}
+                      alt={bot.name}
+                      className="object-cover"
+                    />
+                    <AvatarFallback className="rounded-xl bg-primary/10">
                       <Bot className="h-4 w-4 text-primary" />
-                    )}
-                  </div>
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{bot.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{bot.domain}</p>
@@ -105,7 +102,7 @@ export function BotSelectorDialog({
                 >
                   {isSelected ? "Hoạt động" : "Đã dừng"}
                 </span>
-              </label>
+              </div>
             );
           })}
         </div>

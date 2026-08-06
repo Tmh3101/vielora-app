@@ -1,4 +1,5 @@
 DROP FUNCTION IF EXISTS public.hybrid_search(text, vector, integer, double precision, double precision, uuid);
+DROP FUNCTION IF EXISTS public.hybrid_search(text, vector, integer, double precision, double precision, uuid, uuid);
 
 CREATE OR REPLACE FUNCTION public.hybrid_search(
   query_text text,
@@ -6,10 +7,12 @@ CREATE OR REPLACE FUNCTION public.hybrid_search(
   match_count integer DEFAULT 5,
   full_text_weight double precision DEFAULT 1.0,
   semantic_weight double precision DEFAULT 1.0,
-  p_bot_id uuid DEFAULT NULL::uuid
+  p_bot_id uuid DEFAULT NULL::uuid,
+  p_workspace_id uuid DEFAULT NULL::uuid
 ) RETURNS TABLE(
   id uuid,
   bot_id uuid,
+  workspace_id uuid,
   content text,
   metadata jsonb,
   similarity double precision,
@@ -38,7 +41,10 @@ begin
       row_number() over (order by ts_rank_cd(d.fts, fts_query) desc) as rank_ix
     from public.documents d
     where
-      (p_bot_id is null or d.bot_id = p_bot_id)
+      (
+        (p_bot_id is not null and d.bot_id = p_bot_id)
+        or (p_workspace_id is not null and d.workspace_id = p_workspace_id)
+      )
       and fts_query is not null
       and d.fts @@ fts_query
     limit 20
@@ -50,7 +56,10 @@ begin
       row_number() over (order by d.embedding <=> query_embedding) as rank_ix
     from public.documents d
     where
-      (p_bot_id is null or d.bot_id = p_bot_id)
+      (
+        (p_bot_id is not null and d.bot_id = p_bot_id)
+        or (p_workspace_id is not null and d.workspace_id = p_workspace_id)
+      )
       and d.embedding is not null
     limit 20
   ),
@@ -77,10 +86,18 @@ begin
   select
     d.id,
     d.bot_id,
+    d.workspace_id,
     d.content,
     d.metadata,
     coalesce(tm.semantic_similarity, 0.0) as similarity,
-    coalesce(p.source_type, 'website') as source_type,
+    coalesce(
+      p.source_type,
+      case
+        when d.metadata->>'source_type' = 'manual' then 'manual_text'
+        else d.metadata->>'source_type'
+      end,
+      'website'
+    ) as source_type,
     p.url as resolved_url
   from top_matches tm
   join public.documents d on d.id = tm.id

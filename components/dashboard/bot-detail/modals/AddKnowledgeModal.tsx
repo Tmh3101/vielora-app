@@ -24,7 +24,7 @@ export interface AddKnowledgeModalProps {
   isSubmitting: boolean;
   totalCredits: number;
   onConfirmManual: (title: string, content: string) => Promise<void>;
-  onConfirmFile: (file: File) => Promise<void>;
+  onConfirmFile: (files: File[]) => Promise<void>;
   onConfirmUrl: (url: string) => Promise<void>;
 }
 
@@ -57,6 +57,11 @@ export function AddKnowledgeModal({
     }
   }
 
+  const maxSelectableFilesByCredit = Math.floor(totalCredits / CREDIT_PER_PAGE);
+  const fileCreditsCost = selectedFiles.length * CREDIT_PER_PAGE;
+  const requiredCredits =
+    inputMode === "file" ? Math.max(1, selectedFiles.length) * CREDIT_PER_PAGE : CREDIT_PER_PAGE;
+
   const validateUrl = (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return "Vui lòng nhập URL.";
@@ -73,6 +78,25 @@ export function AddKnowledgeModal({
   };
 
   const currentUrlError = inputMode === "url" ? validateUrl(url) : null;
+
+  const handleSubmit = () => {
+    if (inputMode === "manual") {
+      const trimmedTitle = title.trim();
+      const trimmedContent = content.trim();
+      const finalContent = trimmedTitle ? `${trimmedTitle}\n\n${trimmedContent}` : trimmedContent;
+      void onConfirmManual(title, finalContent);
+      return;
+    }
+    if (inputMode === "file" && selectedFiles.length > 0) {
+      void onConfirmFile(selectedFiles);
+      return;
+    }
+    if (inputMode === "url") {
+      const error = validateUrl(url);
+      setUrlError(error);
+      if (!error) void onConfirmUrl(url);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -165,6 +189,8 @@ export function AddKnowledgeModal({
                 files={selectedFiles}
                 onFilesChange={setSelectedFiles}
                 disabled={isSubmitting}
+                multiple
+                maxFiles={maxSelectableFilesByCredit}
               />
             </div>
           ) : (
@@ -196,7 +222,7 @@ export function AddKnowledgeModal({
 
         <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-2">
-            {totalCredits < CREDIT_PER_PAGE && (
+            {totalCredits < requiredCredits && (
               <p className="text-xs font-medium text-amber-600">
                 Không đủ credits để thêm dữ liệu mới.
               </p>
@@ -209,7 +235,11 @@ export function AddKnowledgeModal({
                 </p>
               </div>
               <div className="h-8 w-px bg-border" />
-              <p className="text-xs text-muted-foreground">Cần {CREDIT_PER_PAGE} credit để thêm</p>
+              <p className="text-xs text-muted-foreground">
+                {inputMode === "file" && selectedFiles.length > 1
+                  ? `Cần ${fileCreditsCost} credits cho ${selectedFiles.length} tệp`
+                  : `Cần ${CREDIT_PER_PAGE} credit để thêm`}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:justify-end">
@@ -222,24 +252,10 @@ export function AddKnowledgeModal({
               Hủy
             </Button>
             <Button
-              onClick={() => {
-                if (inputMode === "manual") {
-                  void onConfirmManual(title, content);
-                  return;
-                }
-                if (inputMode === "file" && selectedFiles[0]) {
-                  void onConfirmFile(selectedFiles[0]);
-                  return;
-                }
-                if (inputMode === "url") {
-                  const error = validateUrl(url);
-                  setUrlError(error);
-                  if (!error) void onConfirmUrl(url);
-                }
-              }}
+              onClick={handleSubmit}
               disabled={
                 isSubmitting ||
-                totalCredits < CREDIT_PER_PAGE ||
+                totalCredits < requiredCredits ||
                 (inputMode === "manual"
                   ? !title.trim() || !content.trim()
                   : inputMode === "file"
