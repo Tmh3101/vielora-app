@@ -16,6 +16,7 @@ export type WidgetSettings = {
   chatIconColor?: string;
   chatIconBgColor?: string;
   subscriptionPlan?: string;
+  isVoiceEnabled?: boolean;
 };
 
 export type InitRequest = {

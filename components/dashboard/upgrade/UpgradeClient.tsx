@@ -145,7 +145,7 @@ export default function UpgradeClient({
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-muted-foreground">Gói hiện tại</span>
                     <span
-                      className={`rounded-full px-3 py-0.5 text-xs font-bold uppercase tracking-wider border ${getPlanTheme(planCode).badgeClass}`}
+                      className={`rounded-full border px-3 py-0.5 text-xs font-bold uppercase tracking-wider ${getPlanTheme(planCode).badgeClass}`}
                     >
                       {planCode.toUpperCase()}
                     </span>

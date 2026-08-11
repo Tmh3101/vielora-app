@@ -8,14 +8,13 @@ import {
 } from "@/lib/security";
 import { API_RATE_LIMITS, corsHeaders } from "@/lib/constants";
 import { InitRequest, InitResponse, Message } from "@/types";
-import { EUsageAction, ESubscriptionPlan, EWidgetBackgroundType, EWidgetIconType } from "@/types";
+import { ESubscriptionPlan, EWidgetBackgroundType, EWidgetIconType } from "@/types";
 import {
   findActiveConversation,
   getConversationMessages,
   endConversation,
 } from "@/lib/services/conversations.service";
-import { getWorkspaceCreditSummary } from "@/lib/services/credit.service";
-import { getMonthlyBotMessageCount } from "@/lib/services/wallet.service";
+import { getWorkspaceCreditSummary, resolveWorkspaceId } from "@/lib/services/credit.service";
 import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { getBotStatusInfo, isMissingBotError } from "@/lib/helpers";
 import { CONVERSATION_MAX_AGE, WIDGET_FALLBACK } from "@/config/widget";
@@ -141,7 +140,14 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
         );
       }
 
-      bot = securityResult.context!.bot;
+      bot = {
+        ...securityResult.context!.bot,
+        workspace_id:
+          (securityResult.context!.bot as { workspace_id?: string | null }).workspace_id ??
+          botData.workspace_id ??
+          null,
+        user_id: securityResult.context!.bot.user_id || botData.user_id,
+      };
       clientIp = securityResult.context!.clientIp;
     }
 
@@ -160,22 +166,32 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const [creditSummary, messagesUsed, userPlanCode, conversation] = await Promise.all([
-      bot.workspace_id
-        ? getWorkspaceCreditSummary(supabase, bot.workspace_id)
+    const effectiveWorkspaceId =
+      bot.workspace_id || botData.workspace_id || (await resolveWorkspaceId(supabase, bot));
+
+    const [creditSummary, userPlanCode, conversation] = await Promise.all([
+      effectiveWorkspaceId
+        ? getWorkspaceCreditSummary(supabase, effectiveWorkspaceId)
         : Promise.resolve(null),
-      getMonthlyBotMessageCount(supabase, botId, EUsageAction.ChatMessage, startOfMonth),
       getBotActivePlanCode(supabase, bot),
       visitorId ? findActiveConversation(supabase, botId, visitorId) : Promise.resolve(null),
     ]);
 
-    const messagesLimit =
+    const totalRemainingCredits =
       (creditSummary as { totalCredits?: number; totalRemainingCredits?: number } | null)
         ?.totalCredits ??
       (creditSummary as { totalCredits?: number; totalRemainingCredits?: number } | null)
         ?.totalRemainingCredits ??
       0;
-    const quotaExceeded = messagesUsed >= messagesLimit;
+    const quotaExceeded = effectiveWorkspaceId ? totalRemainingCredits <= 0 : false;
+    console.log("[WidgetInitDebug]", {
+      botId: bot.id,
+      botWorkspaceId: bot.workspace_id,
+      effectiveWorkspaceId,
+      creditSummary,
+      totalRemainingCredits,
+      quotaExceeded,
+    });
     const statusInfo = getBotStatusInfo(bot.status, bot.is_stopped);
     const widgetSettings = bot.widget_settings as {
       primaryColor?: string;
@@ -191,6 +207,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
       chatBackgroundType?: EWidgetBackgroundType;
       chatBackgroundValue?: string;
       chatBackgroundOpacity?: number;
+      isVoiceEnabled?: boolean;
     } | null;
 
     const allowedPlans = [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro];
@@ -229,7 +246,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
           domain: bot.domain,
           subscriptionPlan: userPlanCode || ESubscriptionPlan.Free,
           quotaExceeded,
-          messagesRemaining: Math.max(0, messagesLimit - messagesUsed),
+          messagesRemaining: Math.max(0, totalRemainingCredits),
           isAvailable: statusInfo.isAvailable,
           statusMessage: statusInfo.message,
           rateLimitExceeded: rateLimitResult ? !rateLimitResult.allowed : false,
@@ -265,6 +282,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
             chatBackgroundType: widgetSettings?.chatBackgroundType || EWidgetBackgroundType.Solid,
             chatBackgroundValue: widgetSettings?.chatBackgroundValue || "#ffffff",
             chatBackgroundOpacity: widgetSettings?.chatBackgroundOpacity || 100,
+            isVoiceEnabled: widgetSettings?.isVoiceEnabled ?? true,
           },
           conversationId: existingConversation?.id || null,
           messages: previousMessages,

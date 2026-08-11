@@ -18,7 +18,9 @@ import {
   ShieldAlert,
   Share2,
   Key,
+  Mic,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { MAX_ALLOWED_DOMAINS } from "@/lib/security/allowed-domains";
 import type { Tables } from "@/lib/supabase/types";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +37,7 @@ export interface SettingsTabProps {
   onSaveRateLimit: () => Promise<void>;
   onSaveAllowedDomains: () => Promise<void>;
   onSaveSlugSettings: () => Promise<void>;
+  onSaveAppearance?: (overrides?: { isVoiceEnabled?: boolean }) => Promise<void>;
 }
 
 export function SettingsTab({
@@ -43,6 +46,7 @@ export function SettingsTab({
   onSaveRateLimit,
   onSaveAllowedDomains,
   onSaveSlugSettings,
+  onSaveAppearance,
 }: SettingsTabProps) {
   const { toast } = useToast();
 
@@ -64,6 +68,8 @@ export function SettingsTab({
   const setSlug = useAppearanceStore((s) => s.setSlug);
   const isPublic = useAppearanceStore((s) => s.isPublic);
   const setIsPublic = useAppearanceStore((s) => s.setIsPublic);
+  const isVoiceEnabled = useAppearanceStore((s) => s.isVoiceEnabled);
+  const setIsVoiceEnabled = useAppearanceStore((s) => s.setIsVoiceEnabled);
 
   const setStopModalOpen = useBotDetailUIStore((s) => s.setStopModalOpen);
 
@@ -188,6 +194,54 @@ export function SettingsTab({
             )}
           </div>
         </div>
+      </Card>
+
+      {/* Tính năng Chatbot */}
+      <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
+        <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+              <Mic className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-semibold">Tính năng Chatbot</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                Quản lý các tính năng tương tác của chatbot trên Widget và trang Chat
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <Label
+                htmlFor="voice-chat-switch"
+                className="cursor-pointer text-sm font-medium leading-none"
+              >
+                Trò chuyện bằng giọng nói
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {isVoiceEnabled
+                  ? "Đang bật: Người dùng có thể thu âm gửi tin nhắn thoại (dành cho các gói trả phí)."
+                  : "Đang tắt: Nút Micro sẽ bị ẩn hoàn toàn trên widget và trang chat."}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                id="voice-chat-switch"
+                checked={isVoiceEnabled}
+                disabled={isSaving}
+                onCheckedChange={(checked) => {
+                  setIsVoiceEnabled(checked);
+                  if (onSaveAppearance) {
+                    void onSaveAppearance({ isVoiceEnabled: checked });
+                  }
+                }}
+              />
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+          </div>
+        </CardContent>
       </Card>
 
       {/* Trang Chat Độc Lập */}

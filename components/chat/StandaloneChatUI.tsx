@@ -69,6 +69,7 @@ interface WidgetSettings {
   chatBackgroundValue?: string;
   chatBackgroundOpacity?: number;
   subscriptionPlan?: string;
+  isVoiceEnabled?: boolean;
 }
 
 declare global {
@@ -319,6 +320,7 @@ export function StandaloneChatUI({
   const bgType = widgetSettings?.chatBackgroundType || EWidgetBackgroundType.Solid;
   const bgValue = widgetSettings?.chatBackgroundValue || "#ffffff";
   const bgOpacity = (widgetSettings?.chatBackgroundOpacity || 100) / 100;
+  const isVoiceEnabled = widgetSettings?.isVoiceEnabled !== false;
   const { blockedChatMessage, isChatBlocked: baseChatBlocked } = getChatBlockedData(
     insufficientCredits,
     rateLimitExceeded,
@@ -1112,20 +1114,24 @@ export function StandaloneChatUI({
                 maxLength={200}
                 className="flex-1 rounded-2xl"
               />
-              {subscriptionPlan !== "free" && isOnline && !isChatBlocked && !input.trim() && (
-                <Button
-                  type="button"
-                  onClick={startRecording}
-                  disabled={isSttLoading || isLoading}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 p-0 text-slate-700 shadow-none hover:bg-slate-200"
-                >
-                  {isSttLoading ? (
-                    <Mic className="h-4 w-4 animate-pulse text-red-500" />
-                  ) : (
-                    <Mic className="h-4 w-4 text-slate-600" />
-                  )}
-                </Button>
-              )}
+              {isVoiceEnabled &&
+                subscriptionPlan !== "free" &&
+                isOnline &&
+                !isChatBlocked &&
+                !input.trim() && (
+                  <Button
+                    type="button"
+                    onClick={startRecording}
+                    disabled={isSttLoading || isLoading}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 p-0 text-slate-700 shadow-none hover:bg-slate-200"
+                  >
+                    {isSttLoading ? (
+                      <Mic className="h-4 w-4 animate-pulse text-red-500" />
+                    ) : (
+                      <Mic className="h-4 w-4 text-slate-600" />
+                    )}
+                  </Button>
+                )}
               <Button
                 type="submit"
                 disabled={

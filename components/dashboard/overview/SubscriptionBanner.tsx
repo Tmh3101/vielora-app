@@ -6,6 +6,7 @@ import { Crown, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { Tables } from "@/lib/supabase/types";
 import { ESubscriptionPlan } from "@/types";
+import { getPlanTheme } from "@/config/plan-theme";
 
 type SubscriptionType = Tables<"subscriptions">;
 
@@ -32,6 +33,15 @@ export function SubscriptionBanner({
 }: SubscriptionBannerProps) {
   const router = useRouter();
 
+  const normalizedPlan = (currentPlan || ESubscriptionPlan.Free).toLowerCase();
+  const theme = getPlanTheme(normalizedPlan);
+
+  const isEnterprise =
+    normalizedPlan === ESubscriptionPlan.Enterprise || normalizedPlan === "enterprise";
+  const isStandard = normalizedPlan === ESubscriptionPlan.Standard || normalizedPlan === "standard";
+  const isPro = normalizedPlan === ESubscriptionPlan.Pro || normalizedPlan === "pro";
+  const isFree = !isEnterprise && !isStandard && !isPro;
+
   const formattedPeriod =
     subscription?.current_period_start && subscription?.current_period_end
       ? `${new Date(subscription.current_period_start).toLocaleDateString("vi-VN")} - ${new Date(
@@ -41,21 +51,18 @@ export function SubscriptionBanner({
 
   return (
     <Card
-      className={`relative overflow-hidden border backdrop-blur-md transition-all ${
-        currentPlan === ESubscriptionPlan.Pro
-          ? "border-violet-500/30 bg-gradient-to-br from-violet-500/10 via-card/80 to-purple-500/5 shadow-lg shadow-violet-500/5"
-          : currentPlan === ESubscriptionPlan.Standard
-            ? "border-blue-500/30 bg-gradient-to-br from-blue-500/10 via-card/80 to-cyan-500/5 shadow-lg shadow-blue-500/5"
-            : "border-border/60 bg-gradient-to-br from-card/60 via-card/90 to-muted/20 shadow-sm"
-      }`}
+      className={`relative overflow-hidden border backdrop-blur-md transition-all ${theme.borderClass} ${theme.bgGradientClass} shadow-lg`}
     >
+      {/* Top accent bar matching plan theme */}
       <div
         className={`absolute left-0 right-0 top-0 h-1 ${
-          currentPlan === ESubscriptionPlan.Pro
+          isPro
             ? "bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500"
-            : currentPlan === ESubscriptionPlan.Standard
+            : isStandard
               ? "bg-gradient-to-r from-blue-500 via-cyan-500 to-sky-500"
-              : "bg-gradient-to-r from-slate-400 via-slate-500 to-slate-400"
+              : isEnterprise
+                ? "bg-gradient-to-r from-slate-600 via-zinc-600 to-slate-600"
+                : "bg-gradient-to-r from-slate-400 via-slate-500 to-slate-400"
         }`}
       />
       <CardContent className="p-4 sm:p-6">
@@ -63,11 +70,13 @@ export function SubscriptionBanner({
           <div className="flex items-center gap-3 sm:gap-4">
             <div
               className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-md sm:h-14 sm:w-14 ${
-                currentPlan === ESubscriptionPlan.Pro
+                isPro
                   ? "bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-violet-500/25"
-                  : currentPlan === ESubscriptionPlan.Standard
+                  : isStandard
                     ? "bg-gradient-to-br from-blue-500 to-cyan-600 text-white shadow-blue-500/25"
-                    : "bg-gradient-to-br from-slate-500 to-slate-700 text-white shadow-slate-500/20"
+                    : isEnterprise
+                      ? "bg-gradient-to-br from-slate-700 to-zinc-900 text-white shadow-slate-500/25"
+                      : "bg-gradient-to-br from-slate-500 to-slate-700 text-white shadow-slate-500/20"
               }`}
             >
               <Crown className="h-6 w-6 sm:h-7 sm:w-7" />
@@ -75,19 +84,12 @@ export function SubscriptionBanner({
             <div>
               <div className="flex items-center gap-2">
                 <span
-                  className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${
-                    currentPlan === ESubscriptionPlan.Pro
-                      ? "border border-violet-500/30 bg-violet-500/15 text-violet-600 dark:text-violet-300"
-                      : currentPlan === ESubscriptionPlan.Standard
-                        ? "border border-blue-500/30 bg-blue-500/15 text-blue-600 dark:text-blue-300"
-                        : "border border-slate-500/30 bg-slate-500/15 text-slate-700 dark:text-slate-300"
-                  }`}
+                  className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider ${theme.badgeClass}`}
                 >
-                  Gói{" "}
-                  {currentPlan === ESubscriptionPlan.Free ? "Miễn phí" : currentPlan.toUpperCase()}
+                  Gói {isFree ? "Miễn phí" : normalizedPlan.toUpperCase()}
                 </span>
               </div>
-              {currentPlan !== ESubscriptionPlan.Free && (
+              {!isFree && (
                 <p className="mt-1 text-xs font-medium text-muted-foreground sm:text-sm">
                   Thời hạn: {formattedPeriod}
                 </p>
@@ -116,11 +118,11 @@ export function SubscriptionBanner({
                       ? "stroke-destructive"
                       : usagePercent > 70
                         ? "stroke-amber-500"
-                        : currentPlan === ESubscriptionPlan.Pro
+                        : isPro
                           ? "stroke-violet-500"
-                          : currentPlan === ESubscriptionPlan.Standard
+                          : isStandard
                             ? "stroke-blue-500"
-                            : "stroke-slate-500"
+                            : "stroke-slate-600"
                   }`}
                   strokeLinecap="round"
                   strokeDasharray={`${(usagePercent * 201) / 100} 201`}
@@ -138,18 +140,12 @@ export function SubscriptionBanner({
           </div>
 
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
-            {currentPlan !== ESubscriptionPlan.Enterprise && (
-              <Button
-                onClick={onUpgrade}
-                className={`w-full rounded-xl px-5 font-semibold shadow-md transition-all sm:w-auto ${
-                  currentPlan === ESubscriptionPlan.Pro
-                    ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-violet-500/20 hover:from-violet-700 hover:to-purple-700"
-                    : "bg-primary text-primary-foreground shadow-primary/20 hover:bg-primary/90"
-                }`}
-              >
-                Nâng cấp gói
-              </Button>
-            )}
+            <Button
+              onClick={onUpgrade}
+              className={`w-full rounded-xl px-5 font-semibold transition-all sm:w-auto ${theme.buttonClass}`}
+            >
+              {isEnterprise ? "Gia hạn / Nâng cấp" : "Nâng cấp gói"}
+            </Button>
 
             {usagePercent > 80 && (
               <Button

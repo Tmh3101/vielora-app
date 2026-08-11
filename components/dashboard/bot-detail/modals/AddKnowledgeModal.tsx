@@ -17,12 +17,15 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CREDIT_PER_PAGE, MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH } from "@/config";
 import { FileText, Link, Loader2, Plus, Upload } from "lucide-react";
+import { VoiceInputButton } from "@/components/dashboard/shared/VoiceInputButton";
 
 export interface AddKnowledgeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isSubmitting: boolean;
   totalCredits: number;
+  botId?: string;
+  isPaidPlan?: boolean;
   onConfirmManual: (title: string, content: string) => Promise<void>;
   onConfirmFile: (files: File[]) => Promise<void>;
   onConfirmUrl: (url: string) => Promise<void>;
@@ -33,6 +36,8 @@ export function AddKnowledgeModal({
   onOpenChange,
   isSubmitting,
   totalCredits,
+  botId,
+  isPaidPlan = true,
   onConfirmManual,
   onConfirmFile,
   onConfirmUrl,
@@ -100,7 +105,7 @@ export function AddKnowledgeModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl overflow-hidden">
         <DialogHeader>
           <DialogTitle>Thêm dữ liệu</DialogTitle>
           <DialogDescription>Thêm văn bản, tệp hoặc URL cho bot.</DialogDescription>
@@ -134,7 +139,9 @@ export function AddKnowledgeModal({
           {inputMode === "manual" ? (
             <>
               <div className="space-y-2">
-                <Label htmlFor="manual-title">Tiêu đề *</Label>
+                <Label htmlFor="manual-title">
+                  Tiêu đề <span className="font-normal text-destructive">*</span>
+                </Label>
                 <Input
                   id="manual-title"
                   placeholder="VD: Hướng dẫn sử dụng sản phẩm"
@@ -157,7 +164,25 @@ export function AddKnowledgeModal({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="manual-content">Nội dung *</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="manual-content">
+                    Nội dung <span className="font-normal text-destructive">*</span>
+                  </Label>
+                  {botId && (
+                    <VoiceInputButton
+                      scope="bot"
+                      targetId={botId}
+                      isPaidPlan={isPaidPlan}
+                      disabled={isSubmitting}
+                      onTranscript={(text, suggestedTitle) => {
+                        setContent((prev) => (prev.trim() ? `${prev.trim()}\n\n${text}` : text));
+                        if (suggestedTitle && !title.trim()) {
+                          setTitle(suggestedTitle);
+                        }
+                      }}
+                    />
+                  )}
+                </div>
                 <Textarea
                   id="manual-content"
                   placeholder="Nhập nội dung văn bản hoặc markdown..."
@@ -184,7 +209,9 @@ export function AddKnowledgeModal({
             </>
           ) : inputMode === "file" ? (
             <div className="space-y-2">
-              <Label>Tệp *</Label>
+              <Label>
+                Tệp <span className="font-normal text-destructive">*</span>
+              </Label>
               <KnowledgeFileDropzone
                 files={selectedFiles}
                 onFilesChange={setSelectedFiles}
@@ -195,7 +222,10 @@ export function AddKnowledgeModal({
             </div>
           ) : (
             <div className="space-y-2">
-              <Label htmlFor="knowledge-url">URL bài viết/tài liệu *</Label>
+              <Label htmlFor="knowledge-url">
+                URL bài viết/tài liệu <span className="font-normal text-destructive">*</span>
+              </Label>
+
               <Input
                 id="knowledge-url"
                 type="url"
@@ -271,7 +301,7 @@ export function AddKnowledgeModal({
               ) : (
                 <>
                   {inputMode === "manual" ? (
-                    <Plus className="mr-2 h-4 w-4" />
+                    <Plus className="mr-0 h-4 w-4" />
                   ) : inputMode === "file" ? (
                     <Upload className="mr-2 h-4 w-4" />
                   ) : (

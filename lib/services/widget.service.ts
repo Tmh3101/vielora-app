@@ -12,6 +12,7 @@ import {
   getFallbackSetting,
   getFallbackBotInfo,
 } from "@/lib/helpers/chat-helpers";
+import { EBotStatus } from "@/types";
 
 export const callChatAPI = async (
   botId: string,
@@ -26,6 +27,13 @@ export const callChatAPI = async (
   insufficientCreditsMessage?: string | null;
 }> => {
   const visitorId = generateVisitorId();
+  console.log("[WidgetClientDebug] calling callChatAPI:", {
+    botId,
+    message,
+    conversationId,
+    visitorId,
+    url: `${WIDGET_CONFIG.BASE_URL}/api/widget/chat`,
+  });
 
   try {
     const response = await fetch(`${WIDGET_CONFIG.BASE_URL}/api/widget/chat`, {
@@ -43,8 +51,11 @@ export const callChatAPI = async (
       }),
     });
 
+    console.log("[WidgetClientDebug] response status:", response.status);
+
     if (response.status === 429) {
       const data: InitResponse = await response.json();
+      console.log("[WidgetClientDebug] 429 Rate limit response:", data);
       return {
         message: data.message || WIDGET_MESSAGES.API_ERROR,
         conversationId: conversationId || "",
@@ -54,11 +65,13 @@ export const callChatAPI = async (
     }
 
     if (response.status === 403) {
+      console.warn("[WidgetClientDebug] 403 Domain not allowed");
       throw new Error("Domain not allowed");
     }
 
     if (response.status === 402) {
       const data = await response.json();
+      console.log("[WidgetClientDebug] 402 Insufficient credits response:", data);
       return {
         message: data.message || INSUFFICIENT_CREDITS_MESSAGE,
         conversationId: conversationId || "",
@@ -141,13 +154,13 @@ async function _fetchInitBot(botId: string): Promise<BotInfo> {
         botName: data.data.name || WIDGET_FALLBACK.BOT_NAME,
         avatarUrl: data.data.avatarUrl || null,
         settings: data.data.settings || getFallbackSetting(),
-        isReady: data.data.status === "ready",
+        isReady: data.data.status === EBotStatus.Ready,
         previousMessages: data.data.messages || [],
         conversationId: data.data.conversationId || undefined,
         rateLimitExceeded: Boolean(data.data.rateLimitExceeded),
         rateLimitMessage: data.data.rateLimitMessage || null,
-        insufficientCredits: false,
-        insufficientCreditsMessage: null,
+        insufficientCredits: Boolean(data.data.quotaExceeded),
+        insufficientCreditsMessage: data.data.quotaExceeded ? INSUFFICIENT_CREDITS_MESSAGE : null,
       };
 
       initBotCache.set(botId, { data: result, timestamp: Date.now() });

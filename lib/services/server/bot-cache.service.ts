@@ -19,6 +19,7 @@ export type BotForWidget = Pick<
   | "name"
   | "avatar_url"
   | "widget_settings"
+  | "workspace_id"
 >;
 
 export async function getBotByIdCached(

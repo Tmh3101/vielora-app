@@ -3,7 +3,7 @@ import { corsHeaders } from "@/lib/constants";
 import type { User } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, createServerClient } from "@/lib/supabase/server";
 
 export interface AuthResult {
   user: User;
@@ -17,43 +17,46 @@ export interface AuthErrorBody {
 }
 
 /**
- * Authenticate the request using the Authorization Bearer token.
- *
- * Extracts the JWT from the `Authorization: Bearer <token>` header,
- * creates a user-context Supabase client (anon key + JWT in headers so
- * RLS policies see the correct `auth.uid()`), verifies the token against
- * Supabase Auth, and returns both the user and the ready-to-use client.
- *
- * Returns a 401 NextResponse on failure — callers should short-circuit with
- * `if (isAuthError(result)) return result;`.
+ * Authenticate the request using Authorization Bearer token or cookie session.
  */
 export async function authenticateRequest(
   req: NextRequest
 ): Promise<AuthResult | NextResponse<AuthErrorBody>> {
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return NextResponse.json(
-      { success: false as const, message: "Unauthorized" },
-      { status: 401, headers: corsHeaders }
-    );
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.replace("Bearer ", "");
+    const supabase = createAdminClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+
+    if (!authError && user) {
+      return { user, supabase };
+    }
   }
 
-  const token = authHeader.replace("Bearer ", "");
-  const supabase = createAdminClient();
+  // Fallback to cookie session authentication for web client requests
+  try {
+    const serverSupabase = await createServerClient();
+    const {
+      data: { user },
+      error: serverAuthError,
+    } = await serverSupabase.auth.getUser();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    return NextResponse.json(
-      { success: false as const, message: "Unauthorized" },
-      { status: 401, headers: corsHeaders }
-    );
+    if (!serverAuthError && user) {
+      const adminClient = createAdminClient();
+      return { user, supabase: adminClient };
+    }
+  } catch (err) {
+    console.error("Cookie session auth fallback error:", err);
   }
 
-  return { user, supabase };
+  return NextResponse.json(
+    { success: false as const, message: "Unauthorized" },
+    { status: 401, headers: corsHeaders }
+  );
 }
 
 /**

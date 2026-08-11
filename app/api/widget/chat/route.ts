@@ -88,11 +88,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
 
     const supabase = createAdminClient();
 
-    console.log("Received chat request:", {
+    console.log("[WidgetChatDebug] Received chat request:", {
       botId,
       message,
       conversationId,
       visitorId,
+      standaloneHeader: req.headers.get("x-standalone-chat"),
+      origin: req.headers.get("origin"),
     });
 
     if (!botId || !message || !visitorId) {
@@ -118,6 +120,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
     });
 
     if (!botData) {
+      console.warn("[WidgetChatDebug] botData not found for botId:", botId);
       return NextResponse.json(
         { success: false, message: CHATBOT_UNAVAILABLE_MESSAGE },
         { status: 404, headers: corsHeaders }
@@ -180,6 +183,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       });
 
       if (!securityResult.success) {
+        console.warn("[WidgetChatDebug] verifyWidgetRequest failed:", securityResult);
         if (securityResult.statusCode === 429 && securityResult.rateLimitResult) {
           return createBusinessRateLimitResponse(securityResult.rateLimitResult);
         }
@@ -196,9 +200,22 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
         );
       }
 
-      bot = securityResult.context!.bot;
+      bot = {
+        ...securityResult.context!.bot,
+        workspace_id:
+          (securityResult.context!.bot as { workspace_id?: string | null }).workspace_id ??
+          botData.workspace_id ??
+          null,
+        user_id: securityResult.context!.bot.user_id || botData.user_id,
+      };
       clientIp = securityResult.context!.clientIp;
     }
+
+    console.log("[WidgetChatDebug] Resolved bot context:", {
+      id: bot.id,
+      user_id: bot.user_id,
+      workspace_id: (bot as unknown as { workspace_id?: string }).workspace_id,
+    });
 
     if (!process.env.GOOGLE_API_KEY) {
       throw new Error("GOOGLE_API_KEY is not configured");
@@ -230,7 +247,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
 
     // Social messages: skip RAG, go straight to LLM with friendly response
     if (intent === Intent.Social) {
-      const deductionResult = await deductBotCredits(supabase, bot, {
+      const deductionResult = await deductBotCredits(supabase, botData, {
         creditAmount: CREDIT_PER_MESSAGE,
         transactionType: ETransactionType.ChatMessage,
         transactionDescription: `Deducted ${CREDIT_PER_MESSAGE} credit for chat message on bot ${botId}`,
@@ -273,7 +290,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
         ).catch(async (error) => {
           console.error("Gemini API error (social):", error);
           if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
-            await refundBotCredits(supabase, bot, {
+            await refundBotCredits(supabase, botData, {
               deductedFromSubscription,
               deductedFromPayg,
               transactionType: ETransactionType.ChatMessageRefund,
@@ -316,7 +333,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
         );
       } catch (processingError) {
         if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
-          await refundBotCredits(supabase, bot, {
+          await refundBotCredits(supabase, botData, {
             deductedFromSubscription,
             deductedFromPayg,
             transactionType: ETransactionType.ChatMessageRefund,
@@ -331,7 +348,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
     const retrieval = await hybridRetrival(message, botId, botData.workspace_id ?? null);
 
     if (shouldShowLeadForm(retrieval)) {
-      const deductionResult = await deductBotCredits(supabase, bot, {
+      const deductionResult = await deductBotCredits(supabase, botData, {
         creditAmount: CREDIT_PER_MESSAGE,
         transactionType: ETransactionType.ChatMessage,
         transactionDescription: `Deducted ${CREDIT_PER_MESSAGE} credit for lead form chat message on bot ${botId}`,
@@ -386,7 +403,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
         );
       } catch (processingError) {
         if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
-          await refundBotCredits(supabase, bot, {
+          await refundBotCredits(supabase, botData, {
             deductedFromSubscription,
             deductedFromPayg,
             transactionType: ETransactionType.ChatMessageRefund,
@@ -398,7 +415,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
     }
 
     // Normal RAG flow: deduct credits and generate AI response
-    const deductionResult = await deductBotCredits(supabase, bot, {
+    const deductionResult = await deductBotCredits(supabase, botData, {
       creditAmount: CREDIT_PER_MESSAGE,
       transactionType: ETransactionType.ChatMessage,
       transactionDescription: `Deducted ${CREDIT_PER_MESSAGE} credit for chat message on bot ${botId}`,
@@ -452,7 +469,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       ).catch(async (error) => {
         console.error("Gemini API error:", error);
         if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
-          await refundBotCredits(supabase, bot, {
+          await refundBotCredits(supabase, botData, {
             deductedFromSubscription,
             deductedFromPayg,
             transactionType: ETransactionType.ChatMessageRefund,
@@ -502,7 +519,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       );
     } catch (processingError) {
       if (CREDIT_PER_MESSAGE > 0 && (deductedFromSubscription > 0 || deductedFromPayg > 0)) {
-        await refundBotCredits(supabase, bot, {
+        await refundBotCredits(supabase, botData, {
           deductedFromSubscription,
           deductedFromPayg,
           transactionType: ETransactionType.ChatMessageRefund,

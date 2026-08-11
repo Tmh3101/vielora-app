@@ -285,7 +285,6 @@ export default async function BlogPage(props: {
                     {/* Content Card */}
                     <div className="flex flex-1 flex-col justify-between p-6">
                       <div className="space-y-3">
-                        {/* Meta: Ngày đăng & danh mục */}
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3.5 w-3.5" />
@@ -297,18 +296,15 @@ export default async function BlogPage(props: {
                           </span>
                         </div>
 
-                        {/* Tiêu đề */}
                         <h3 className="line-clamp-2 text-xl font-bold text-foreground transition-colors duration-200 group-hover:text-primary">
                           <Link href={`/posts/${post.slug}`}>{post.title}</Link>
                         </h3>
 
-                        {/* Tóm tắt */}
                         <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
                           {post.summary}
                         </p>
                       </div>
 
-                      {/* Phân chân card: Danh mục & Chi tiết */}
                       <div className="mt-6 flex items-center justify-between border-t border-border/40 pt-4">
                         <div className="flex flex-wrap gap-1">
                           {post.categories.slice(0, 2).map((c) => (

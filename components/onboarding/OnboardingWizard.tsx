@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +23,7 @@ import { Step2CuratePages } from "@/components/onboarding/steps/Step2CuratePages
 import { Step2UploadFiles } from "@/components/onboarding/steps/Step2UploadFiles";
 import { Step3Indexing } from "@/components/onboarding/steps/Step3Indexing";
 import { Step4Success } from "@/components/onboarding/steps/Step4Success";
+import { BulkOnboardingWizard } from "@/components/onboarding/BulkOnboardingWizard";
 import { LogoLoader } from "@/components/ui/logo-loader";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { EBotStatus } from "@/types";
@@ -46,6 +48,9 @@ interface RestoredBotRow {
 }
 
 export function OnboardingWizard({ userId }: OnboardingWizardProps) {
+  const searchParams = useSearchParams();
+  const isBulkMode = searchParams.get("mode") === "bulk";
+
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -105,6 +110,10 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
     enabled: hasHydrated && !!botId,
     retry: 1,
   });
+
+  if (isBulkMode) {
+    return <BulkOnboardingWizard userId={userId} />;
+  }
 
   const handleCreated = (nextBotId: string, status = EBotStatus.Discovering) => {
     queryClient.removeQueries({ queryKey: [ONBOARDING_RESTORE_KEY, userId] });

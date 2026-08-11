@@ -17,6 +17,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CREDIT_PER_PAGE, MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH } from "@/config";
 import { FileText, Link, Loader2, Pencil, Plus, Upload } from "lucide-react";
+import { VoiceInputButton } from "@/components/dashboard/shared/VoiceInputButton";
 
 export interface WorkspaceKnowledgeModalProps {
   open: boolean;
@@ -24,6 +25,8 @@ export interface WorkspaceKnowledgeModalProps {
   isSaving: boolean;
   isEdit?: boolean;
   totalCredits?: number;
+  workspaceId?: string;
+  isPaidPlan?: boolean;
   initialTitle?: string;
   initialContent?: string;
   onConfirmManual: (title: string, content: string) => Promise<void>;
@@ -37,6 +40,8 @@ export function WorkspaceKnowledgeModal({
   isSaving,
   isEdit = false,
   totalCredits,
+  workspaceId,
+  isPaidPlan = true,
   initialTitle = "",
   initialContent = "",
   onConfirmManual,
@@ -103,7 +108,7 @@ export function WorkspaceKnowledgeModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isEdit ? (
@@ -151,7 +156,9 @@ export function WorkspaceKnowledgeModal({
           {isEdit || inputMode === "manual" ? (
             <>
               <div className="space-y-2">
-                <Label htmlFor="ws-knowledge-title">Tiêu đề *</Label>
+                <Label htmlFor="ws-knowledge-title">
+                  Tiêu đề <span className="font-normal text-destructive">*</span>
+                </Label>
                 <Input
                   id="ws-knowledge-title"
                   placeholder="VD: Hướng dẫn sử dụng sản phẩm"
@@ -174,7 +181,25 @@ export function WorkspaceKnowledgeModal({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="ws-knowledge-content">Nội dung *</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="ws-knowledge-content">
+                    Nội dung <span className="font-normal text-destructive">*</span>
+                  </Label>
+                  {workspaceId && (
+                    <VoiceInputButton
+                      scope="workspace"
+                      targetId={workspaceId}
+                      isPaidPlan={isPaidPlan}
+                      disabled={isSaving}
+                      onTranscript={(text, suggestedTitle) => {
+                        setContent((prev) => (prev.trim() ? `${prev.trim()}\n\n${text}` : text));
+                        if (suggestedTitle && !title.trim()) {
+                          setTitle(suggestedTitle);
+                        }
+                      }}
+                    />
+                  )}
+                </div>
                 <Textarea
                   id="ws-knowledge-content"
                   placeholder="Nhập nội dung chi tiết..."
@@ -201,7 +226,9 @@ export function WorkspaceKnowledgeModal({
             </>
           ) : inputMode === "file" ? (
             <div className="space-y-2">
-              <Label>Tệp *</Label>
+              <Label>
+                Tệp <span className="font-normal text-destructive">*</span>
+              </Label>
               <KnowledgeFileDropzone
                 files={selectedFiles}
                 onFilesChange={setSelectedFiles}
@@ -211,7 +238,10 @@ export function WorkspaceKnowledgeModal({
             </div>
           ) : (
             <div className="space-y-2">
-              <Label htmlFor="ws-knowledge-url">URL bài viết/tài liệu *</Label>
+              <Label htmlFor="ws-knowledge-url">
+                URL bài viết/tài liệu <span className="font-normal text-destructive">*</span>
+              </Label>
+
               <Input
                 id="ws-knowledge-url"
                 type="url"

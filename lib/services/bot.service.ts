@@ -1083,6 +1083,7 @@ export type BotForWidget = Pick<
   | "name"
   | "avatar_url"
   | "widget_settings"
+  | "workspace_id"
 >;
 
 /**
@@ -1096,7 +1097,7 @@ export async function getBotForWidgetServer(
   const { data, error } = await client
     .from("bots")
     .select(
-      "id, domain, allowed_domains, status, is_stopped, rate_limit_per_day, rate_limit_per_ip, user_id, name, avatar_url, widget_settings"
+      "id, domain, allowed_domains, status, is_stopped, rate_limit_per_day, rate_limit_per_ip, user_id, name, avatar_url, widget_settings, workspace_id"
     )
     .eq("id", botId)
     .maybeSingle();

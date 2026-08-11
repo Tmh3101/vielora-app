@@ -225,6 +225,23 @@
     }
   }
 
+  /* Sound wave animation for voice recording visualizer */
+  @keyframes sound-wave {
+    0%,
+    100% {
+      height: 15%;
+      opacity: 0.5;
+    }
+    50% {
+      height: 100%;
+      opacity: 1;
+    }
+  }
+
+  .animate-sound-wave {
+    animation: sound-wave 1.2s ease-in-out infinite;
+  }
+
   /* Scale in */
   @keyframes scale-in {
     from {

@@ -22,7 +22,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Book, ChevronDown, Home, LogOut, Check, Building2, Plus } from "lucide-react";
+import { ChevronDown, LogOut, Check, Building2, Plus } from "lucide-react";
+
 import { useWorkspace, WorkspaceItem } from "@/hooks/useWorkspace";
 
 export interface DashboardMobileHeaderProps {
@@ -160,29 +161,6 @@ export function DashboardMobileHeader({ fullName, email, onSignOut }: DashboardM
                   <p className="text-sm font-semibold text-foreground">{fullName}</p>
                   <p className="text-xs text-muted-foreground">{email}</p>
                 </div>
-
-                <DropdownMenuSeparator className="my-1 bg-border/40" />
-                <DropdownMenuLabel className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Điều hướng
-                </DropdownMenuLabel>
-                <DropdownMenuItem asChild>
-                  <Link
-                    href="/dashboard"
-                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs"
-                  >
-                    <Home className="h-3.5 w-3.5" />
-                    Tổng quan
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link
-                    href="/dashboard/workspace-knowledge"
-                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs"
-                  >
-                    <Book className="h-3.5 w-3.5" />
-                    Kiến thức chung
-                  </Link>
-                </DropdownMenuItem>
 
                 <DropdownMenuSeparator className="my-1 bg-border/40" />
 

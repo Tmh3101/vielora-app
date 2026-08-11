@@ -80,6 +80,7 @@ export const WIDGET_FALLBACK = {
   CHAT_ICON_PRESET: "messagecircle",
   CHAT_ICON_COLOR: "#ffffff",
   CHAT_ICON_BG_COLOR: "#3B82F6",
+  IS_VOICE_ENABLED: true,
 };
 
 /**

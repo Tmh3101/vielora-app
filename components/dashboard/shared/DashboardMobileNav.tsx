@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CreditCard, HelpCircle, Home, Users } from "lucide-react";
+import { Book, CreditCard, HelpCircle, Home, Users } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 
 export function DashboardMobileNav() {
@@ -23,12 +23,17 @@ export function DashboardMobileNav() {
   const subPath = getSubPath();
 
   const isOverviewActive = subPath === "/" || subPath === "";
+  const isKnowledgeActive =
+    subPath === "/workspace-knowledge" || subPath.startsWith("/workspace-knowledge/");
   const isMembersActive =
     subPath === "/settings/members" || subPath.startsWith("/settings/members/");
   const isUpgradeActive = subPath === "/upgrade" || subPath.startsWith("/upgrade/");
   const isSupportActive = subPath === "/support" || subPath.startsWith("/support/");
 
   const overviewHref = activeWorkspace?.slug ? `/${activeWorkspace.slug}` : "/dashboard";
+  const knowledgeHref = activeWorkspace?.slug
+    ? `/${activeWorkspace.slug}/workspace-knowledge`
+    : "/dashboard/workspace-knowledge";
   const membersHref = activeWorkspace?.slug
     ? `/${activeWorkspace.slug}/settings/members`
     : "/dashboard/settings/members";
@@ -52,6 +57,17 @@ export function DashboardMobileNav() {
           aria-label="Tổng quan"
         >
           <Home className="h-5 w-5" />
+        </Link>
+        <Link
+          href={knowledgeHref}
+          className={`flex flex-col items-center gap-1 rounded-xl p-2 transition-colors ${
+            isKnowledgeActive
+              ? "font-semibold text-primary"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          aria-label="Kiến thức chung"
+        >
+          <Book className="h-5 w-5" />
         </Link>
         <Link
           href={membersHref}

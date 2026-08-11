@@ -28,11 +28,19 @@ import {
   MinusCircle,
   Bot,
   UserPlus,
+  Menu,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 import { BotPlayground } from "@/components/dashboard/bots/BotPlayground";
 import { LogoLoader } from "@/components/ui/logo-loader";
-import { EBotStatus, EPageStatus } from "@/types";
+import { EBotStatus, EPageStatus, ESubscriptionPlan } from "@/types";
 import { BotDetailDashboardTabs } from "@/lib/constants";
 import { BOT_SKILLS_KEY } from "@/lib/constants/react-query-key";
 import { UpgradeModal } from "@/components/UpgradeModal";
@@ -242,6 +250,10 @@ export function BotDetailClient({
     { id: BotDetailDashboardTabs.SETTINGS, label: "Cài đặt", icon: Settings },
   ];
 
+  const first4Items = sidebarItems.slice(0, 4);
+  const remainingItems = sidebarItems.slice(4);
+  const isRemainingActive = remainingItems.some((item) => item.id === activeTab);
+
   const getStatusBadge = (status: EPageStatus) => {
     switch (status) {
       case EPageStatus.Pending:
@@ -365,11 +377,17 @@ export function BotDetailClient({
 
       {/* Mobile Header */}
       <header className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center gap-4 border-b border-border/50 bg-card/80 px-4 backdrop-blur-sm lg:hidden">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard">
-            <ArrowLeft className="h-5 w-5" />
+        <Button
+          variant="ghost"
+          size="icon"
+          asChild
+          className="h-9 w-9 rounded-xl border border-border/50 text-muted-foreground transition-all duration-200 hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:scale-95"
+        >
+          <Link href="/dashboard" aria-label="Quay lại">
+            <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
+
         <div className="flex items-center gap-2">
           <Avatar className="h-8 w-8">
             <AvatarImage src={bot.avatar_url || undefined} alt={bot.name} />
@@ -381,19 +399,65 @@ export function BotDetailClient({
         </div>
       </header>
 
-      {/* Mobile Tab Bar */}
+      {/* Mobile Tab Bar (First 4 items + 3-line menu for remaining items) */}
       <div className="fixed bottom-6 left-6 right-6 z-50 flex items-center justify-around rounded-2xl border border-white/10 bg-background/80 p-2 shadow-lg backdrop-blur-xl lg:hidden">
-        {sidebarItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id)}
-            className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 transition-colors ${
-              activeTab === item.id ? "text-primary" : "text-muted-foreground"
-            }`}
-          >
-            <item.icon className="h-5 w-5" />
-          </button>
-        ))}
+        {first4Items.map((item) => {
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 transition-colors ${
+                isActive
+                  ? "font-semibold text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              aria-label={item.label}
+            >
+              <item.icon className="h-5 w-5" />
+            </button>
+          );
+        })}
+
+        {/* 5th Button: 3-line Hamburger Menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={`relative flex flex-col items-center justify-center gap-1 rounded-xl p-2 transition-colors ${
+                isRemainingActive
+                  ? "font-semibold text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              aria-label="Mục khác"
+            >
+              <Menu className="h-5 w-5" />
+              {isRemainingActive && (
+                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top" className="mb-2 w-40 p-1.5 shadow-xl">
+            {remainingItems.map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <DropdownMenuItem
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs transition-colors ${
+                    isActive
+                      ? "bg-primary/10 font-semibold text-primary"
+                      : "text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <item.icon
+                    className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+                  />
+                  <span>{item.label}</span>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Main Content */}
@@ -494,6 +558,7 @@ export function BotDetailClient({
               onSaveRateLimit={handleSaveRateLimit}
               onSaveAllowedDomains={handleSaveAllowedDomains}
               onSaveSlugSettings={handleSaveSlugSettings}
+              onSaveAppearance={handleSaveAppearance}
             />
           )}
         </div>
@@ -539,6 +604,8 @@ export function BotDetailClient({
         onOpenChange={setAddDataSourceOpen}
         isSubmitting={isSubmittingDataSource}
         totalCredits={totalCredits}
+        botId={botId}
+        isPaidPlan={Boolean(planCode && planCode !== ESubscriptionPlan.Free)}
         onConfirmManual={handleAddDataSource}
         onConfirmFile={handleAddFileDataSource}
         onConfirmUrl={handleAddUrlDataSource}
@@ -551,6 +618,8 @@ export function BotDetailClient({
         isSaving={isSavingKnowledge}
         isLoadingContent={isLoadingPageDetail}
         totalCredits={totalCredits}
+        botId={botId}
+        isPaidPlan={Boolean(planCode && planCode !== ESubscriptionPlan.Free)}
         onConfirm={handleSaveEditKnowledge}
         onResetPage={clearEditingPage}
       />

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { CREDIT_PER_PAGE, MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH } from "@/config";
 import { Loader2, Pencil } from "lucide-react";
+import { VoiceInputButton } from "@/components/dashboard/shared/VoiceInputButton";
 import type { Tables } from "@/lib/supabase/types";
 
 type PageType = Tables<"pages">;
@@ -26,6 +27,8 @@ export interface EditKnowledgeModalProps {
   isSaving: boolean;
   isLoadingContent: boolean;
   totalCredits: number;
+  botId?: string;
+  isPaidPlan?: boolean;
   onConfirm: (title: string, content: string) => Promise<void>;
   onResetPage: () => void;
 }
@@ -37,6 +40,8 @@ export function EditKnowledgeModal({
   isSaving,
   isLoadingContent,
   totalCredits,
+  botId,
+  isPaidPlan = true,
   onConfirm,
   onResetPage,
 }: EditKnowledgeModalProps) {
@@ -78,7 +83,9 @@ export function EditKnowledgeModal({
 
         <div className="flex-1 space-y-4 overflow-hidden px-1">
           <div className="space-y-2">
-            <Label htmlFor="edit-title">Tiêu đề *</Label>
+            <Label htmlFor="edit-title">
+              Tiêu đề <span className="font-normal text-destructive">*</span>
+            </Label>
             <Input
               id="edit-title"
               placeholder="Nhập tiêu đề..."
@@ -101,7 +108,26 @@ export function EditKnowledgeModal({
           </div>
 
           <div className="-mx-1 flex-1 space-y-2 overflow-hidden px-1">
-            <Label htmlFor="edit-content">Nội dung *</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="edit-content">
+                Nội dung <span className="font-normal text-destructive">*</span>
+              </Label>
+
+              {botId && (
+                <VoiceInputButton
+                  scope="bot"
+                  targetId={botId}
+                  isPaidPlan={isPaidPlan}
+                  disabled={isSaving || isLoadingContent}
+                  onTranscript={(text, suggestedTitle) => {
+                    setContent((prev) => (prev.trim() ? `${prev.trim()}\n\n${text}` : text));
+                    if (suggestedTitle && !title.trim()) {
+                      setTitle(suggestedTitle);
+                    }
+                  }}
+                />
+              )}
+            </div>
             {isLoadingContent ? (
               <div className="flex h-[300px] items-center justify-center rounded-lg border bg-muted/30">
                 <div className="flex flex-col items-center gap-2 text-muted-foreground">

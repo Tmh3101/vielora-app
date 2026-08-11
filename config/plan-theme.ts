@@ -26,7 +26,8 @@ export const PLAN_THEMES: Record<string, PlanTheme> = {
     iconBgClass: "bg-slate-500/10 text-slate-600 dark:text-slate-400",
     iconTextClass: "text-slate-600 dark:text-slate-400",
     textPrimaryClass: "text-slate-700 dark:text-slate-300",
-    buttonClass: "border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800",
+    buttonClass:
+      "!bg-slate-800 hover:!bg-slate-900 !text-white dark:!bg-slate-200 dark:!text-slate-900 dark:hover:!bg-white shadow-md shadow-slate-500/20 border-0",
   },
   [ESubscriptionPlan.Standard]: {
     code: ESubscriptionPlan.Standard,
@@ -39,7 +40,8 @@ export const PLAN_THEMES: Record<string, PlanTheme> = {
     iconBgClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
     iconTextClass: "text-blue-600 dark:text-blue-400",
     textPrimaryClass: "text-blue-600 dark:text-blue-400",
-    buttonClass: "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20",
+    buttonClass:
+      "!bg-blue-600 hover:!bg-blue-700 !text-white shadow-md shadow-blue-500/25 border-0",
   },
   [ESubscriptionPlan.Pro]: {
     code: ESubscriptionPlan.Pro,
@@ -52,7 +54,8 @@ export const PLAN_THEMES: Record<string, PlanTheme> = {
     iconBgClass: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
     iconTextClass: "text-violet-600 dark:text-violet-400",
     textPrimaryClass: "text-violet-600 dark:text-violet-400",
-    buttonClass: "bg-violet-600 hover:bg-violet-700 text-white shadow-violet-500/20",
+    buttonClass:
+      "!bg-violet-600 hover:!bg-violet-700 !text-white shadow-md shadow-violet-500/25 border-0",
   },
   [ESubscriptionPlan.Enterprise]: {
     code: ESubscriptionPlan.Enterprise,
@@ -65,13 +68,13 @@ export const PLAN_THEMES: Record<string, PlanTheme> = {
     iconBgClass: "bg-slate-500/10 text-slate-700 dark:text-slate-300",
     iconTextClass: "text-slate-700 dark:text-slate-300",
     textPrimaryClass: "text-slate-800 dark:text-slate-200",
-    buttonClass: "bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white shadow-slate-500/20",
+    buttonClass:
+      "!bg-slate-800 hover:!bg-slate-900 !text-white dark:!bg-slate-200 dark:!text-slate-900 dark:hover:!bg-white shadow-md shadow-slate-500/20 border-0",
   },
 };
 
 export function getPlanTheme(planCode?: string | null): PlanTheme {
-  if (!planCode || !PLAN_THEMES[planCode]) {
-    return PLAN_THEMES[ESubscriptionPlan.Free];
-  }
-  return PLAN_THEMES[planCode];
+  if (!planCode) return PLAN_THEMES[ESubscriptionPlan.Free];
+  const normalized = planCode.toLowerCase();
+  return PLAN_THEMES[normalized] || PLAN_THEMES[ESubscriptionPlan.Free];
 }

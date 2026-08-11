@@ -42,19 +42,19 @@ export function KnowledgeBaseTab({
               >
                 {isReindexing ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Đang reindex...
                   </>
                 ) : (
                   <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
+                    <RefreshCw className="h-4 w-4" />
                     Reindex
                   </>
                 )}
               </Button>
             )}
             <Button onClick={onOpenAddDataSource} className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="h-4 w-4" />
               Thêm dữ liệu
             </Button>
           </div>

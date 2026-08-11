@@ -204,6 +204,14 @@ function formatCooldown(seconds: number) {
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
+function getSafeRedirect(rawRedirect: string | null): string {
+  if (!rawRedirect) return "/dashboard";
+  if (rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") && !rawRedirect.includes("\\")) {
+    return rawRedirect;
+  }
+  return "/dashboard";
+}
+
 function AuthPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -235,7 +243,7 @@ function AuthPageContent() {
 
   /* ---- redirect after auth ---- */
   useEffect(() => {
-    const targetRedirect = searchParams.get("redirect") || "/dashboard";
+    const targetRedirect = getSafeRedirect(searchParams.get("redirect"));
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {

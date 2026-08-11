@@ -87,13 +87,39 @@ export async function getWorkspaceCreditSummary(
   const activeClient = createAdminClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: wallet, error } = await (activeClient as any)
+  const { data: initialWallet, error } = await (activeClient as any)
     .from("wallets")
     .select("*")
     .eq("workspace_id", workspaceId)
     .maybeSingle();
 
-  if (error || !wallet) return null;
+  if (error) return null;
+
+  let wallet = initialWallet;
+
+  if (!wallet) {
+    console.log(
+      "[CreditDebug] Wallet missing for workspace, auto-creating initial wallet:",
+      workspaceId
+    );
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: createdWallet } = await (activeClient as any)
+        .from("wallets")
+        .insert({
+          workspace_id: workspaceId,
+          subscription_credits: 100,
+          payg_credits: 0,
+        })
+        .select("*")
+        .maybeSingle();
+      wallet = createdWallet;
+    } catch (insertErr) {
+      console.error("[CreditDebug] Failed to auto-create wallet:", insertErr);
+    }
+  }
+
+  if (!wallet) return null;
 
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
@@ -181,7 +207,7 @@ export async function deductWorkspaceCredits(
 
   for (let attempt = 1; attempt <= MAX_DEDUCTION_RETRIES; attempt += 1) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: wallet, error: walletError } = await (adminClient as any)
+    const { data: initialWallet, error: walletError } = await (adminClient as any)
       .from("wallets")
       .select("subscription_credits,payg_credits,total_credits,is_payg_enabled")
       .eq("workspace_id", workspaceId)
@@ -189,6 +215,30 @@ export async function deductWorkspaceCredits(
 
     if (walletError) {
       return { success: false, message: walletError.message };
+    }
+
+    let wallet = initialWallet;
+
+    if (!wallet) {
+      console.log(
+        "[CreditDebug] Wallet missing during deduction, auto-creating for workspace:",
+        workspaceId
+      );
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: createdWallet } = await (adminClient as any)
+          .from("wallets")
+          .insert({
+            workspace_id: workspaceId,
+            subscription_credits: 100,
+            payg_credits: 0,
+          })
+          .select("subscription_credits,payg_credits,total_credits,is_payg_enabled")
+          .maybeSingle();
+        wallet = createdWallet;
+      } catch (insertErr) {
+        console.error("[CreditDebug] Failed to auto-create wallet during deduction:", insertErr);
+      }
     }
 
     if (!wallet) {
@@ -316,6 +366,37 @@ export async function refundWorkspaceCredits(
   }
 }
 
+export async function resolveWorkspaceId(
+  client: ServiceClient,
+  bot: { user_id: string; workspace_id?: string | null }
+): Promise<string | null> {
+  console.log("[CreditDebug] Resolving workspaceId for bot:", {
+    user_id: bot.user_id,
+    workspace_id: bot.workspace_id,
+  });
+
+  if (bot.workspace_id) return bot.workspace_id;
+  if (!bot.user_id) return null;
+
+  try {
+    const adminClient = createAdminClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: member } = await (adminClient as any)
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("user_id", bot.user_id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    console.log("[CreditDebug] Fallback workspace_members query result:", member);
+    return member?.workspace_id ?? null;
+  } catch (err) {
+    console.error("Error resolving workspace ID for bot:", err);
+    return null;
+  }
+}
+
 export async function deductBotCredits(
   client: ServiceClient,
   bot: { user_id: string; workspace_id?: string | null },
@@ -325,14 +406,20 @@ export async function deductBotCredits(
     transactionDescription: string;
   }
 ): Promise<CreditDeductionResult> {
-  if (bot.workspace_id) {
-    return deductWorkspaceCredits(client, {
-      workspaceId: bot.workspace_id,
+  const workspaceId = await resolveWorkspaceId(client, bot);
+  console.log("[CreditDebug] deductBotCredits resolved workspaceId:", workspaceId);
+
+  if (workspaceId) {
+    const res = await deductWorkspaceCredits(client, {
+      workspaceId,
       creditAmount: params.creditAmount,
       transactionType: params.transactionType,
       transactionDescription: params.transactionDescription,
     });
+    console.log("[CreditDebug] deductWorkspaceCredits result:", res);
+    return res;
   }
+  console.warn("[CreditDebug] Bot has no workspace_id!");
   return { success: false, message: "Bot has no workspace, cannot deduct credits." };
 }
 
@@ -346,9 +433,10 @@ export async function refundBotCredits(
     transactionDescription: string;
   }
 ): Promise<void> {
-  if (bot.workspace_id) {
+  const workspaceId = await resolveWorkspaceId(client, bot);
+  if (workspaceId) {
     return refundWorkspaceCredits(client, {
-      workspaceId: bot.workspace_id,
+      workspaceId,
       deductedFromSubscription: params.deductedFromSubscription,
       deductedFromPayg: params.deductedFromPayg,
       transactionType: params.transactionType,

@@ -16,7 +16,8 @@
       chatIconPreset: 'messagecircle',
       chatIconUrl: null,
       chatIconColor: '#ffffff',
-      chatIconBgColor: '#3B82F6'
+      chatIconBgColor: '#3B82F6',
+      isVoiceEnabled: true
     }
   };
 
@@ -287,9 +288,13 @@
   }
 
   function hasVoiceAccess() {
-    var plan = (state.subscriptionPlan || '').toLowerCase();
-    return PAID_PLANS.indexOf(plan) !== -1;
+    var isVoiceEnabled =
+      config.settings.isVoiceEnabled !== false && config.settings.isVoiceEnabled !== 'false';
+    var plan = (state.subscriptionPlan || config.settings.subscriptionPlan || '').toLowerCase();
+    var isPaidPlan = plan !== '' && plan !== 'free';
+    return isVoiceEnabled && isPaidPlan;
   }
+
 
   function isVoiceSupported() {
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
@@ -981,10 +986,16 @@
         height: 0;
       }
       
-      .chatbotai-message { max-width: 85%; line-height: 1.5; font-size: 14px; }
-      .chatbotai-message.user { align-self: flex-end; }
-      .chatbotai-message.user div { background: ${config.settings.primaryColor}; color: ${getUserMessageTextColor(config.settings.primaryColor)}; padding: 12px 16px; border-radius: ${UI.bubbleRadius}px; border-bottom-right-radius: ${UI.bubbleTailRadius}px; }
-      .chatbotai-message.bot div { background: ${UI.bubbleBotBg}; color: ${config.settings.textColor}; padding: 12px 16px; border-radius: ${UI.bubbleRadius}px; border-bottom-left-radius: ${UI.bubbleTailRadius}px; }
+      .chatbotai-message-wrapper { position: relative; display: flex; flex-direction: column; max-width: 95%; }
+      .chatbotai-message-wrapper.user { align-self: flex-end; align-items: flex-end; }
+      .chatbotai-message-wrapper.bot { align-self: flex-start; align-items: flex-start; }
+      .chatbotai-message { width: 100%; line-height: 1.5; font-size: 14px; }
+      .chatbotai-message.user { display: flex; justify-content: flex-end; align-self: flex-end; }
+      .chatbotai-message.bot { align-self: flex-start; max-width: 95%; }
+
+
+      .chatbotai-message.user div { background: ${config.settings.primaryColor}; color: ${getUserMessageTextColor(config.settings.primaryColor)}; padding: 12px 16px; border-radius: ${UI.bubbleRadius}px; border-bottom-right-radius: ${UI.bubbleTailRadius}px; word-break: break-word; max-width: 100%; }
+      .chatbotai-message.bot div { background: ${UI.bubbleBotBg}; color: ${config.settings.textColor}; padding: 12px 16px; border-radius: ${UI.bubbleRadius}px; border-bottom-left-radius: ${UI.bubbleTailRadius}px; word-break: break-word; max-width: 100%; }
       .chatbotai-message.bot strong { font-weight: 600; }
       .chatbotai-message.bot a { color: ${config.settings.primaryColor}; text-decoration: underline; }
       .chatbotai-message.bot ul, .chatbotai-message.bot ol { list-style-position: outside; margin: 8px 0; padding-left: 20px; }
@@ -1016,12 +1027,13 @@
       #chatbotai-mic.voice-processing { animation: none !important; }
       .chatbotai-processing-mic { animation: chatbotai-mic-process 1.2s ease-in-out infinite; }
       @keyframes chatbotai-mic-process { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.15); opacity: 0.6; } }
-      .chatbotai-message-wrapper { position: relative; }
       .chatbotai-copy-btn { display: none !important; position: absolute; bottom: -22px; z-index: 10; align-items: center; justify-content: center; width: 26px; height: 22px; border: 1px solid #e5e7eb; border-radius: 5px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: pointer; color: #94a3b8; transition: all 0.15s; padding: 0; }
       .chatbotai-copy-btn:hover { color: #475569; border-color: #cbd5e1; }
       .chatbotai-message-wrapper:hover .chatbotai-copy-btn { display: flex !important; }
-      .chatbotai-message.user .chatbotai-copy-btn { right: 0; }
-      .chatbotai-message.bot .chatbotai-copy-btn { left: 0; }
+      .chatbotai-message-wrapper.user .chatbotai-copy-btn { right: 0; }
+      .chatbotai-message-wrapper.bot .chatbotai-copy-btn { left: 0; }
+      .chatbotai-copy-btn.copied { color: #16a34a; border-color: #bbf7d0; }
+
       .chatbotai-copy-btn.copied { color: #16a34a; border-color: #bbf7d0; }
     `;
     document.head.appendChild(style);
@@ -1439,7 +1451,8 @@ var note = document.getElementById('chatbotai-lead-note').value.trim();
   function addMessage(text, role, isVoice, isProcessing) {
     var messages = document.getElementById('chatbotai-messages');
     var wrapper = document.createElement('div');
-    wrapper.className = 'chatbotai-message-wrapper';
+    wrapper.className = 'chatbotai-message-wrapper ' + role;
+
 
     var div = document.createElement('div');
     div.className = 'chatbotai-message ' + role;
@@ -1608,7 +1621,8 @@ var note = document.getElementById('chatbotai-lead-note').value.trim();
     state.messages.forEach(function (msg) {
       var role = msg.role === 'assistant' ? 'bot' : msg.role;
       var wrapper = document.createElement('div');
-      wrapper.className = 'chatbotai-message-wrapper';
+      wrapper.className = 'chatbotai-message-wrapper ' + role;
+
 
       var div = document.createElement('div');
       div.className = 'chatbotai-message ' + role;

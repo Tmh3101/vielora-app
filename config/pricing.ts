@@ -73,4 +73,3 @@ export const policies: readonly PricingPolicy[] = [
 ];
 
 export * from "./plan-theme";
-

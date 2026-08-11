@@ -32,11 +32,13 @@ import { PaymentAction } from "@/lib/constants/payment";
 import { InvoiceForm, type InvoiceFormHandle } from "@/components/shared/InvoiceForm";
 import {
   calculateEnterprisePrice,
+  calculateEnterpriseUpgradePrice,
   ENTERPRISE_PRICE,
   clampValue,
 } from "@/config/pricing-enterprise";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { OrderSummaryCard } from "@/components/shared/OrderSummaryCard";
+import { calculateRemainingMonths } from "@/lib/helpers/payment-helpers";
 
 function formatVND(amount: number): string {
   if (amount === 0) return "0";
@@ -293,29 +295,116 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
     fetchProration();
   }, [user, action, supabase, mode, activeWorkspace]);
 
-  // Resolve Selected Plan (Support Enterprise Virtual Plan object to fix inactive button bug)
-  const selectedPlan = useMemo(() => {
-    if (mode !== "subscription") return null;
-    if (selectedPlanCode === ESubscriptionPlan.Enterprise) {
-      const bots = clampValue(
-        Number(queryBots || ENTERPRISE_PRICE.bots.min),
+  // Fetch Active Subscription for Workspace (if Enterprise active)
+  const [activeSub, setActiveSub] = useState<{
+    bots_limit_override: number | null;
+    monthly_credits_override: number | null;
+    current_period_end: string | null;
+    billing_cycle: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!activeWorkspace?.id || mode !== "subscription") return;
+    const fetchActiveSub = async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase as any)
+          .from("subscriptions")
+          .select(
+            "bots_limit_override, monthly_credits_override, current_period_end, billing_cycle, plans(code)"
+          )
+          .eq("workspace_id", activeWorkspace.id)
+          .eq("status", ESubscriptionStatus.Active)
+          .order("current_period_end", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data) {
+          const planObj = Array.isArray(data.plans) ? data.plans[0] : data.plans;
+          if (planObj?.code === ESubscriptionPlan.Enterprise) {
+            setActiveSub(data);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching active sub in checkout:", err);
+      }
+    };
+    fetchActiveSub();
+  }, [activeWorkspace?.id, supabase, mode]);
+
+  const isIncrementalUpgrade = useMemo(() => {
+    return (
+      selectedPlanCode === ESubscriptionPlan.Enterprise &&
+      (queryIsIncremental || Boolean(queryDeltaBots || queryDeltaCredits))
+    );
+  }, [selectedPlanCode, queryIsIncremental, queryDeltaBots, queryDeltaCredits]);
+
+  const deltaBotsVal = useMemo(() => Number(queryDeltaBots || 0), [queryDeltaBots]);
+  const deltaCreditsVal = useMemo(() => Number(queryDeltaCredits || 0), [queryDeltaCredits]);
+
+  const activeBots = activeSub?.bots_limit_override ?? ENTERPRISE_PRICE.bots.min;
+  const activeCredits = activeSub?.monthly_credits_override ?? ENTERPRISE_PRICE.monthlyCredits.min;
+
+  const resolvedBots = useMemo(() => {
+    if (selectedPlanCode !== ESubscriptionPlan.Enterprise) return 0;
+    if (isIncrementalUpgrade) {
+      return activeBots + deltaBotsVal;
+    }
+    if (queryBots) {
+      return clampValue(
+        Number(queryBots),
         ENTERPRISE_PRICE.bots.min,
         ENTERPRISE_PRICE.bots.max,
         ENTERPRISE_PRICE.bots.step
       );
-      const credits = clampValue(
-        Number(queryCredits || ENTERPRISE_PRICE.monthlyCredits.min),
+    }
+    return activeBots;
+  }, [selectedPlanCode, isIncrementalUpgrade, activeBots, deltaBotsVal, queryBots]);
+
+  const resolvedCredits = useMemo(() => {
+    if (selectedPlanCode !== ESubscriptionPlan.Enterprise) return 0;
+    if (isIncrementalUpgrade) {
+      return activeCredits + deltaCreditsVal;
+    }
+    if (queryCredits) {
+      return clampValue(
+        Number(queryCredits),
         ENTERPRISE_PRICE.monthlyCredits.min,
         ENTERPRISE_PRICE.monthlyCredits.max,
         ENTERPRISE_PRICE.monthlyCredits.step
       );
+    }
+    return activeCredits;
+  }, [selectedPlanCode, isIncrementalUpgrade, activeCredits, deltaCreditsVal, queryCredits]);
+
+  const remainingMonthsVal = useMemo(() => {
+    if (searchParams.get("remainingMonths")) {
+      return Number(searchParams.get("remainingMonths"));
+    }
+    if (activeSub?.current_period_end) {
+      return calculateRemainingMonths(activeSub.current_period_end);
+    }
+    return 1;
+  }, [searchParams, activeSub?.current_period_end]);
+
+  // Resolve Selected Plan (Support Enterprise Virtual Plan object)
+  const selectedPlan = useMemo(() => {
+    if (mode !== "subscription") return null;
+    if (selectedPlanCode === ESubscriptionPlan.Enterprise) {
+      let desc = "Gói Enterprise tự cấu hình theo yêu cầu";
+      if (isIncrementalUpgrade) {
+        desc = `Nâng cấp bổ sung (+${deltaBotsVal} bots, +${deltaCreditsVal.toLocaleString("vi-VN")} credits)`;
+      } else if (action === PaymentAction.Renew) {
+        desc = "Gia hạn gói Enterprise hiện tại";
+      }
+
       return {
         id: "enterprise-plan-virtual-id",
         code: ESubscriptionPlan.Enterprise,
         name: "Enterprise",
-        description: "Gói Enterprise tự cấu hình theo yêu cầu",
-        monthly_credits: credits,
-        bots_limit: bots,
+        description: desc,
+        monthly_credits: resolvedCredits,
+        bots_limit: resolvedBots,
         pricing: { VND: { monthly: 1900000, yearly: 19000000 } },
         is_active: true,
         created_at: "",
@@ -323,7 +412,17 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
       } as Tables<"plans">;
     }
     return plans.find((p) => p.code === selectedPlanCode) || null;
-  }, [mode, selectedPlanCode, plans, queryBots, queryCredits]);
+  }, [
+    mode,
+    selectedPlanCode,
+    plans,
+    isIncrementalUpgrade,
+    deltaBotsVal,
+    deltaCreditsVal,
+    action,
+    resolvedCredits,
+    resolvedBots,
+  ]);
 
   // Selected Credit Package
   const selectedPackage = useMemo(() => {
@@ -337,8 +436,6 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
       if (!selectedPlan) return 0;
       if (selectedPlanCode === ESubscriptionPlan.Enterprise) {
         if (queryIsIncremental || queryDeltaBots || queryDeltaCredits) {
-          const { calculateEnterpriseUpgradePrice } = require("@/config/pricing-enterprise");
-          const { calculateRemainingMonths } = require("@/lib/helpers/payment-helpers");
           const dBots = Number(queryDeltaBots || 0);
           const dCredits = Number(queryDeltaCredits || 0);
           // If we can get remaining months from query or default 1
@@ -348,13 +445,17 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
           return calculateEnterpriseUpgradePrice(dBots, dCredits, billingCycle, remMonths);
         }
         const bots = clampValue(
-          Number(queryBots || ENTERPRISE_PRICE.bots.min),
+          Number(queryBots || activeSub?.bots_limit_override || ENTERPRISE_PRICE.bots.min),
           ENTERPRISE_PRICE.bots.min,
           ENTERPRISE_PRICE.bots.max,
           ENTERPRISE_PRICE.bots.step
         );
         const credits = clampValue(
-          Number(queryCredits || ENTERPRISE_PRICE.monthlyCredits.min),
+          Number(
+            queryCredits ||
+              activeSub?.monthly_credits_override ||
+              ENTERPRISE_PRICE.monthlyCredits.min
+          ),
           ENTERPRISE_PRICE.monthlyCredits.min,
           ENTERPRISE_PRICE.monthlyCredits.max,
           ENTERPRISE_PRICE.monthlyCredits.step
@@ -373,8 +474,13 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
     billingCycle,
     queryBots,
     queryCredits,
+    queryDeltaBots,
+    queryDeltaCredits,
+    queryIsIncremental,
+    searchParams,
     selectedPackage,
     quantity,
+    activeSub,
   ]);
 
   const finalTotalPrice = Math.max(0, calculatedBasePrice - prorationDiscount);
@@ -793,24 +899,73 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
             {mode === "subscription" && selectedPlan && (
               <Card>
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-lg">Chi tiết gói {selectedPlan.name}</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Chi tiết gói {selectedPlan.name}</CardTitle>
+                    {selectedPlanCode === ESubscriptionPlan.Enterprise && isIncrementalUpgrade && (
+                      <Badge className="bg-primary font-semibold text-primary-foreground">
+                        Nâng cấp bổ sung
+                      </Badge>
+                    )}
+                    {selectedPlanCode === ESubscriptionPlan.Enterprise &&
+                      action === PaymentAction.Renew && (
+                        <Badge
+                          variant="outline"
+                          className="border-emerald-500/40 font-semibold text-emerald-600 dark:text-emerald-400"
+                        >
+                          Gia hạn gói
+                        </Badge>
+                      )}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-sm text-muted-foreground">Credits/tháng</p>
-                      <p className="text-lg font-semibold">
-                        {selectedPlan.monthly_credits.toLocaleString()}
-                      </p>
+                  {selectedPlanCode === ESubscriptionPlan.Enterprise && isIncrementalUpgrade ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <p className="text-xs text-muted-foreground">Bot cộng thêm</p>
+                          <p className="text-base font-bold text-primary">+{deltaBotsVal} bots</p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            (Tổng mới: {resolvedBots} bots)
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <p className="text-xs text-muted-foreground">Credits cộng thêm</p>
+                          <p className="text-base font-bold text-primary">
+                            +{deltaCreditsVal.toLocaleString("vi-VN")} credits
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            (Tổng mới: {resolvedCredits.toLocaleString("vi-VN")} cr/tháng)
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex justify-between rounded-lg bg-muted/40 p-3 text-xs">
+                        <span className="text-muted-foreground">Số tháng tính phí còn lại:</span>
+                        <span className="font-semibold text-foreground">
+                          {remainingMonthsVal} tháng
+                        </span>
+                      </div>
+                      <div className="flex justify-between rounded-lg bg-muted/40 p-3 text-xs">
+                        <span className="text-muted-foreground">Ngày hết hạn gói:</span>
+                        <span className="font-semibold text-primary">Giữ nguyên không đổi</span>
+                      </div>
                     </div>
-                    <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-sm text-muted-foreground">Số bot tối đa</p>
-                      <p className="text-lg font-semibold">{selectedPlan.bots_limit}</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="rounded-lg bg-muted/50 p-3">
+                        <p className="text-sm text-muted-foreground">Credits/tháng</p>
+                        <p className="text-lg font-semibold">
+                          {selectedPlan.monthly_credits.toLocaleString("vi-VN")}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-muted/50 p-3">
+                        <p className="text-sm text-muted-foreground">Số bot tối đa</p>
+                        <p className="text-lg font-semibold">{selectedPlan.bots_limit}</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="flex items-center justify-between space-x-10 rounded-lg bg-muted/50 p-3">
-                    <p className="text-sm text-muted-foreground">Thanh toán</p>
+                    <p className="text-sm text-muted-foreground">Thanh toán qua</p>
                     <Image
                       src="/images/partners/payos-logo.png"
                       alt="PayOS Logo"
@@ -887,44 +1042,67 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                   }
                   items={
                     mode === "subscription"
-                      ? [
-                          ...(selectedPlan
-                            ? [
-                                {
-                                  label: `Gói ${selectedPlan.name} (${
-                                    billingCycle === ESubscriptionCycle.Monthly ? "tháng" : "năm"
-                                  }):`,
-                                  value: `${formatVND(calculatedBasePrice)}đ`,
-                                },
-                                {
-                                  label: "Số lượng chatbot:",
-                                  value: `${selectedPlan.bots_limit} bots`,
-                                },
-                                {
-                                  label: "Credits hàng tháng:",
-                                  value: `${selectedPlan.monthly_credits.toLocaleString("vi-VN")} credits`,
-                                },
-                              ]
-                            : []),
-                          ...(prorationDiscount > 0
-                            ? [
-                                {
-                                  label: "Trừ bù gói cũ (còn dư):",
-                                  value: `- ${formatVND(prorationDiscount)}đ`,
-                                  isHighlighted: true,
-                                },
-                              ]
-                            : []),
-                          ...(billingCycle === ESubscriptionCycle.Yearly
-                            ? [
-                                {
-                                  label: "Ưu đãi thanh toán năm:",
-                                  value: "-17%",
-                                  isHighlighted: true,
-                                },
-                              ]
-                            : []),
-                        ]
+                      ? selectedPlanCode === ESubscriptionPlan.Enterprise && isIncrementalUpgrade
+                        ? [
+                            {
+                              label: "Cấu hình hiện tại:",
+                              value: `${activeBots} bots · ${activeCredits.toLocaleString("vi-VN")} credits`,
+                            },
+                            { label: "Bot cộng thêm:", value: `+${deltaBotsVal} bots` },
+                            {
+                              label: "Credits cộng thêm:",
+                              value: `+${deltaCreditsVal.toLocaleString("vi-VN")} credits`,
+                            },
+                            {
+                              label: "Cấu hình mới:",
+                              value: `${resolvedBots} bots · ${resolvedCredits.toLocaleString("vi-VN")} credits`,
+                              isHighlighted: true,
+                            },
+                            { label: "Số tháng còn lại:", value: `${remainingMonthsVal} tháng` },
+                            {
+                              label: "Ngày hết hạn gói:",
+                              value: "Giữ nguyên không đổi",
+                              isHighlighted: true,
+                            },
+                          ]
+                        : [
+                            ...(selectedPlan
+                              ? [
+                                  {
+                                    label: `Gói ${selectedPlan.name} (${
+                                      billingCycle === ESubscriptionCycle.Monthly ? "tháng" : "năm"
+                                    }):`,
+                                    value: `${formatVND(calculatedBasePrice)}đ`,
+                                  },
+                                  {
+                                    label: "Số lượng chatbot:",
+                                    value: `${selectedPlan.bots_limit} bots`,
+                                  },
+                                  {
+                                    label: "Credits hàng tháng:",
+                                    value: `${selectedPlan.monthly_credits.toLocaleString("vi-VN")} credits`,
+                                  },
+                                ]
+                              : []),
+                            ...(prorationDiscount > 0
+                              ? [
+                                  {
+                                    label: "Trừ bù gói cũ (còn dư):",
+                                    value: `- ${formatVND(prorationDiscount)}đ`,
+                                    isHighlighted: true,
+                                  },
+                                ]
+                              : []),
+                            ...(billingCycle === ESubscriptionCycle.Yearly
+                              ? [
+                                  {
+                                    label: "Ưu đãi thanh toán năm:",
+                                    value: "-17%",
+                                    isHighlighted: true,
+                                  },
+                                ]
+                              : []),
+                          ]
                       : [
                           ...(selectedPackage
                             ? [

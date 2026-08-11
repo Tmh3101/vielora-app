@@ -2,7 +2,7 @@
 
 import { useMemo, useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Send, X } from "lucide-react";
+import { Bot, Send, X, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -59,6 +59,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     rateLimitMessage,
     botInfo.botName
   );
+  const isVoiceEnabled = botInfo.settings.isVoiceEnabled !== false;
 
   // Focus ô input sau khi chatbot trả lời xong
   useEffect(() => {
@@ -259,6 +260,10 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
     if (!trimmed) return;
 
     if (isChatBlocked) {
+      console.warn(
+        "[DemoChatbotWidgetDebug] Chat is blocked, cannot send. blockedChatMessage:",
+        blockedChatMessage
+      );
       setInput("");
       appendBotMessage(blockedChatMessage || INSUFFICIENT_CREDITS_MESSAGE);
       return;
@@ -725,6 +730,19 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                         maxLength={MAX_CHAT_INPUT}
                         className="h-8 flex-1 text-xs"
                       />
+                      {isVoiceEnabled &&
+                        (botInfo.settings.subscriptionPlan || "pro") !== "free" &&
+                        !input.trim() && (
+                          <Button
+                            type="button"
+                            disabled
+                            size="sm"
+                            title="Trò chuyện bằng giọng nói"
+                            className="h-8 w-8 rounded-full bg-slate-100 p-0 text-slate-500 shadow-none"
+                          >
+                            <Mic className="h-3.5 w-3.5 text-slate-600" />
+                          </Button>
+                        )}
                       <Button
                         type="submit"
                         size="sm"

@@ -1,6 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { VOICE_STT_SYSTEM_PROMPT } from "@/lib/ai/prompt";
-
+import { VOICE_STT_SYSTEM_PROMPT, VOICE_STT_TITLE_SYSTEM_PROMPT } from "@/lib/ai/prompt";
 export interface TranscribeAudioOptions {
   base64Audio: string;
   mimeType: string;
@@ -61,4 +60,44 @@ export async function transcribeAudio({
   }
 
   return textResult;
+}
+
+/**
+ * Generate a concise suggested title based on transcribed text content
+ */
+export async function generateTitleFromText(text: string): Promise<string> {
+  if (!text || text.trim().length < 5) return "";
+  if (!process.env.GOOGLE_API_KEY) return "";
+
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+    const sttModel = process.env.STT_MODEL || "gemini-3.1-flash-lite";
+
+    const model = genAI.getGenerativeModel({
+      model: sttModel,
+      systemInstruction: VOICE_STT_TITLE_SYSTEM_PROMPT,
+    });
+    const response = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text }] }],
+      generationConfig: {
+        temperature: 0.2,
+      },
+    });
+
+    let title = response.response.text().trim();
+    title = title.replace(/^["'„«»]+|["'„«»]+$/g, "").trim();
+
+    if (!title) return "";
+
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, "0");
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const year = now.getFullYear();
+    const formattedDate = `${day}/${month}/${year}`;
+
+    return `${title} - ${formattedDate}`;
+  } catch (err) {
+    console.error("Lỗi tự động sinh tiêu đề từ giọng nói:", err);
+    return "";
+  }
 }

@@ -16,7 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Loader2, RefreshCw, Building2 } from "lucide-react";
-import { EPageSourceType, EPageStatus } from "@/types";
+import { EPageSourceType, EPageStatus, ESubscriptionPlan } from "@/types";
 import type { PageListItem } from "@/lib/services/page.service";
 
 interface WorkspaceKnowledgeItem {
@@ -361,6 +361,12 @@ export function WorkspaceKnowledgeClient({ initialWorkspaceId }: WorkspaceKnowle
         onOpenChange={setIsAddOpen}
         isSaving={isSaving}
         totalCredits={totalCredits}
+        workspaceId={workspaceId}
+        isPaidPlan={
+          activeWorkspace?.plans?.code
+            ? activeWorkspace.plans.code !== ESubscriptionPlan.Free
+            : false
+        }
         onConfirmManual={handleAdd}
         onConfirmFile={handleAddFile}
         onConfirmUrl={handleAddUrl}
@@ -373,6 +379,12 @@ export function WorkspaceKnowledgeClient({ initialWorkspaceId }: WorkspaceKnowle
         }}
         isSaving={isSaving}
         isEdit
+        workspaceId={workspaceId}
+        isPaidPlan={
+          activeWorkspace?.plans?.code
+            ? activeWorkspace.plans.code !== ESubscriptionPlan.Free
+            : false
+        }
         initialTitle={editingItem?.title ?? ""}
         initialContent={editingItem?.content ?? ""}
         onConfirmManual={(title, content) => {

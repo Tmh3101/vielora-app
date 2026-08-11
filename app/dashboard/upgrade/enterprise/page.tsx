@@ -91,7 +91,9 @@ export default function EnterpriseUpgradePage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data } = await (supabase as any)
           .from("subscriptions")
-          .select("id, billing_cycle, bots_limit_override, monthly_credits_override, current_period_end, plans(code, bots_limit, monthly_credits)")
+          .select(
+            "id, billing_cycle, bots_limit_override, monthly_credits_override, current_period_end, plans(code, bots_limit, monthly_credits)"
+          )
           .eq("workspace_id", activeWorkspace.id)
           .eq("status", "active")
           .order("current_period_end", { ascending: false })
@@ -117,15 +119,12 @@ export default function EnterpriseUpgradePage() {
     fetchSub();
   }, [activeWorkspace?.id, supabase]);
 
-  const isCurrentSubEnterprise =
-    currentSubscription?.plans?.code === ESubscriptionPlan.Enterprise;
+  const isCurrentSubEnterprise = currentSubscription?.plans?.code === ESubscriptionPlan.Enterprise;
 
-  const currentBots =
-    currentSubscription?.bots_limit_override ?? ENTERPRISE_PRICE.bots.min;
+  const currentBots = currentSubscription?.bots_limit_override ?? ENTERPRISE_PRICE.bots.min;
   const currentMonthlyCredits =
     currentSubscription?.monthly_credits_override ?? ENTERPRISE_PRICE.monthlyCredits.min;
-  const activeCycle =
-    (currentSubscription?.billing_cycle as ESubscriptionCycle) || billingCycle;
+  const activeCycle = (currentSubscription?.billing_cycle as ESubscriptionCycle) || billingCycle;
 
   const remainingMonths = useMemo(() => {
     if (!currentSubscription?.current_period_end) return 1;
@@ -232,18 +231,17 @@ export default function EnterpriseUpgradePage() {
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-5 lg:col-span-7">
             {/* Active Plan Banner (Sleek Slate/Grey Theme matching Enterprise & Free) */}
-            <Card className={`border ${enterpriseTheme.borderClass} ${enterpriseTheme.bgGradientClass}`}>
+            <Card
+              className={`border ${enterpriseTheme.borderClass} ${enterpriseTheme.bgGradientClass}`}
+            >
               <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Badge className="bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 font-semibold">
+                      <Badge className="bg-slate-800 font-semibold text-white dark:bg-slate-200 dark:text-slate-900">
                         Gói Enterprise đang hoạt động
                       </Badge>
-                      <Badge
-                        variant="outline"
-                        className={enterpriseTheme.badgeClass}
-                      >
+                      <Badge variant="outline" className={enterpriseTheme.badgeClass}>
                         Chu kỳ {activeCycle === ESubscriptionCycle.Monthly ? "Tháng" : "Năm"}
                       </Badge>
                     </div>
@@ -305,7 +303,10 @@ export default function EnterpriseUpgradePage() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant="outline" className="text-xs font-bold border-primary/30 bg-primary/5 text-primary">
+                      <Badge
+                        variant="outline"
+                        className="border-primary/30 bg-primary/5 text-xs font-bold text-primary"
+                      >
                         Mới: {currentBots + deltaBots} bots
                       </Badge>
                     </div>
@@ -367,7 +368,10 @@ export default function EnterpriseUpgradePage() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant="outline" className="text-xs font-bold border-primary/30 bg-primary/5 text-primary">
+                      <Badge
+                        variant="outline"
+                        className="border-primary/30 bg-primary/5 text-xs font-bold text-primary"
+                      >
                         Mới: {(currentMonthlyCredits + deltaCredits).toLocaleString("vi-VN")}{" "}
                         credits
                       </Badge>

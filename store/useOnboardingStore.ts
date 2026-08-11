@@ -5,12 +5,35 @@ import type { OnboardingSourceMode } from "@/lib/constants";
 import { ONBOARDING_SOURCE_MODE } from "@/lib/constants";
 import { CrawlScope } from "@/lib/constants";
 
+import type {
+  RawBulkRow,
+  ValidatedBulkRow,
+  BulkTemplateConfig,
+  BulkDryRunResult,
+  BulkRowResult,
+} from "@/lib/services/bulk-bot.service";
+
 export interface OnboardingState {
   step: number;
   botId: string | null;
   crawlScope: CrawlScopeType;
   sourceMode: OnboardingSourceMode;
   hasHydrated: boolean;
+  // Bulk state
+  isBulkMode: boolean;
+  bulkStep: number;
+  bulkRawRows: RawBulkRow[];
+  bulkValidatedRows: ValidatedBulkRow[];
+  bulkConfig: BulkTemplateConfig;
+  bulkDryRunResult: BulkDryRunResult | null;
+  bulkResults: BulkRowResult[];
+  setIsBulkMode: (isBulkMode: boolean) => void;
+  setBulkStep: (step: number) => void;
+  setBulkRawRows: (rows: RawBulkRow[]) => void;
+  setBulkValidatedRows: (rows: ValidatedBulkRow[]) => void;
+  setBulkConfig: (config: BulkTemplateConfig) => void;
+  setBulkDryRunResult: (result: BulkDryRunResult | null) => void;
+  setBulkResults: (results: BulkRowResult[]) => void;
   setStep: (step: number) => void;
   setBotId: (id: string | null) => void;
   setCrawlScope: (scope: CrawlScopeType) => void;
@@ -31,6 +54,23 @@ export const useOnboardingStore = create<OnboardingState>()(
       crawlScope: DEFAULT_CRAWL_SCOPE,
       sourceMode: DEFAULT_SOURCE_MODE,
       hasHydrated: false,
+      isBulkMode: false,
+      bulkStep: 1,
+      bulkRawRows: [],
+      bulkValidatedRows: [],
+      bulkConfig: {
+        primaryColor: "#3B82F6",
+        isPublic: false,
+      },
+      bulkDryRunResult: null,
+      bulkResults: [],
+      setIsBulkMode: (isBulkMode) => set({ isBulkMode }),
+      setBulkStep: (bulkStep) => set({ bulkStep }),
+      setBulkRawRows: (bulkRawRows) => set({ bulkRawRows }),
+      setBulkValidatedRows: (bulkValidatedRows) => set({ bulkValidatedRows }),
+      setBulkConfig: (bulkConfig) => set({ bulkConfig }),
+      setBulkDryRunResult: (bulkDryRunResult) => set({ bulkDryRunResult }),
+      setBulkResults: (bulkResults) => set({ bulkResults }),
       setStep: (step) => set({ step }),
       setBotId: (id) => set({ botId: id }),
       setCrawlScope: (crawlScope) => set({ crawlScope }),
@@ -42,6 +82,16 @@ export const useOnboardingStore = create<OnboardingState>()(
           botId: null,
           crawlScope: DEFAULT_CRAWL_SCOPE,
           sourceMode: DEFAULT_SOURCE_MODE,
+          isBulkMode: false,
+          bulkStep: 1,
+          bulkRawRows: [],
+          bulkValidatedRows: [],
+          bulkConfig: {
+            primaryColor: "#3B82F6",
+            isPublic: false,
+          },
+          bulkDryRunResult: null,
+          bulkResults: [],
         }),
     }),
     {

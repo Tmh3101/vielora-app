@@ -169,6 +169,9 @@ export async function POST(
         ...(widgetSettings.chatIconBgColor !== undefined && {
           chatIconBgColor: widgetSettings.chatIconBgColor,
         }),
+        ...(widgetSettings.isVoiceEnabled !== undefined && {
+          isVoiceEnabled: Boolean(widgetSettings.isVoiceEnabled),
+        }),
       };
     }
 

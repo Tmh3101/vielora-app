@@ -28,6 +28,7 @@ export interface SecurityContext {
     avatar_url: string | null;
     widget_settings: unknown;
     is_stopped?: boolean;
+    workspace_id?: string | null;
   };
 }
 

@@ -203,8 +203,16 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
               <BotsSection
                 indexedPagesByBot={indexedPagesByBot}
                 onCreateNew={handleClickCreateNewChatbot}
+                onImportCSV={() => {
+                  if (subscription && bots.length >= botsLimit) {
+                    setLimitDialogOpen(true);
+                    return;
+                  }
+                  router.push("/onboarding?mode=bulk");
+                }}
                 onOpenBot={(botId) => router.push(`/dashboard/bots/${botId}`)}
                 onDeleteBot={handleDeleteBot}
+                onRefresh={fetchData}
               />
             </>
           )}

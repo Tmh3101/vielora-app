@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { LogoLoader } from "@/components/ui/logo-loader";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,5 +24,15 @@ export default function OnboardingPage() {
     );
   }
 
-  return <OnboardingWizard userId={user.id} />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <LogoLoader size={60} />
+        </div>
+      }
+    >
+      <OnboardingWizard userId={user.id} />
+    </Suspense>
+  );
 }

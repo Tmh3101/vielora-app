@@ -192,9 +192,9 @@ export async function POST(request: NextRequest) {
       amount = pricing?.VND?.[billingCycle];
     }
 
-    if (amount === undefined || amount < 0) {
+    if (amount === undefined || amount <= 0 || plan.code === ESubscriptionPlan.Free) {
       return NextResponse.json(
-        { error: "Plan price invalid. Cannot create payment." },
+        { error: "Plan price invalid or plan is free. Cannot create payment." },
         { status: 400 }
       );
     }

@@ -21,7 +21,25 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bot, LayoutGrid, List, Loader2, Plus, Search, ArrowUpDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Bot,
+  LayoutGrid,
+  List,
+  Loader2,
+  Plus,
+  Search,
+  ArrowUpDown,
+  ChevronDown,
+  Upload,
+  RotateCw,
+} from "lucide-react";
+import { toast } from "sonner";
 import { useBotsList } from "@/hooks/dashboard/main/useBotsList";
 import { BotsGrid } from "@/components/dashboard/overview/BotsGrid";
 import { BotsTable } from "@/components/dashboard/overview/BotsTable";
@@ -49,15 +67,19 @@ function getVisiblePages(currentPage: number, totalPages: number): Array<number 
 interface BotsSectionProps {
   indexedPagesByBot: Record<string, number>;
   onCreateNew: () => void;
+  onImportCSV?: () => void;
   onOpenBot: (botId: string) => void;
   onDeleteBot: (botId: string, botName: string) => Promise<void>;
+  onRefresh?: () => Promise<void> | void;
 }
 
 export function BotsSection({
   indexedPagesByBot,
   onCreateNew,
+  onImportCSV,
   onOpenBot,
   onDeleteBot,
+  onRefresh,
 }: BotsSectionProps) {
   const {
     bots,
@@ -115,6 +137,16 @@ export function BotsSection({
     [onDeleteBot, refetch]
   );
 
+  const handleRefresh = useCallback(async () => {
+    try {
+      await Promise.all([refetch(), onRefresh ? Promise.resolve(onRefresh()) : Promise.resolve()]);
+      toast.success("Đã cập nhật danh sách chatbot mới nhất");
+    } catch (error) {
+      console.error("Error refreshing chatbot list:", error);
+      toast.error("Không thể làm mới danh sách. Vui lòng thử lại.");
+    }
+  }, [refetch, onRefresh]);
+
   return (
     <section>
       <div className="mb-6 flex items-center justify-between">
@@ -122,10 +154,44 @@ export function BotsSection({
           <h2 className="heading-premium text-xl font-bold">Chatbots của bạn</h2>
           <p className="text-sm text-muted-foreground">Quản lý và theo dõi chatbot</p>
         </div>
-        <Button onClick={onCreateNew} className="bg-gradient-primary btn-glow shadow-glow-sm">
-          <Plus className="mr-2 h-4 w-4" />
-          Tạo chatbot mới
-        </Button>
+        <div className="bg-gradient-primary btn-glow shadow-glow-sm group inline-flex items-center rounded-xl p-0.5 transition-all">
+          <Button
+            onClick={onCreateNew}
+            className="h-9 gap-1.5 rounded-l-lg rounded-r-none border-r border-white/20 bg-transparent px-3.5 text-xs font-semibold text-white shadow-none hover:bg-white/15 focus-visible:ring-0"
+          >
+            <Plus className="h-4 w-4" />
+            Tạo mới
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                className="h-9 w-8 rounded-l-none rounded-r-lg bg-transparent px-0 text-white shadow-none hover:bg-white/15 focus-visible:ring-0"
+                aria-label="Tùy chọn tạo bot"
+              >
+                <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="glass-md w-52 p-1.5 shadow-xl">
+              <DropdownMenuItem
+                onClick={onCreateNew}
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
+              >
+                <Plus className="h-4 w-4 text-primary" />
+                Tạo bot đơn
+              </DropdownMenuItem>
+              {onImportCSV && (
+                <DropdownMenuItem
+                  onClick={onImportCSV}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
+                >
+                  <Upload className="h-4 w-4 text-primary" />
+                  Import file CSV
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <Card className="mb-6">
@@ -186,6 +252,18 @@ export function BotsSection({
                 </SelectContent>
               </Select>
 
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isFetching}
+                title="Làm mới danh sách"
+                aria-label="Làm mới danh sách chatbot"
+                className="h-9 w-9 rounded-lg border transition-all hover:border-primary hover:bg-white hover:text-primary active:scale-95"
+              >
+                <RotateCw className={`h-4 w-4 ${isFetching ? "animate-spin text-primary" : ""}`} />
+              </Button>
+
               <div className="flex items-center rounded-lg border">
                 <Button
                   variant={viewMode === "grid" ? "secondary" : "ghost"}
@@ -231,7 +309,7 @@ export function BotsSection({
       ) : bots.length === 0 ? (
         <Card className="glass-lg py-16 text-center">
           <CardContent>
-            <div className="bg-gradient-primary/10 mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl">
+            <div className="bg-gradient-primary/10 mx-auto mb-2 flex h-20 w-20 items-center justify-center rounded-3xl">
               <Bot className="h-10 w-10 text-primary" />
             </div>
             <h3 className="mb-3 text-xl font-semibold">
@@ -240,14 +318,8 @@ export function BotsSection({
             <p className="mx-auto mb-6 max-w-sm text-muted-foreground">
               {searchQuery
                 ? `Không có chatbot nào tên "${searchQuery}". Thử tìm kiếm khác.`
-                : "Tạo chatbot đầu tiên để bắt đầu hỗ trợ khách hàng tự động 24/7"}
+                : "Tạo chatbot đầu tiên ngay bây giờ!"}
             </p>
-            {!searchQuery && (
-              <Button onClick={onCreateNew} className="bg-gradient-primary btn-glow">
-                <Plus className="mr-2 h-4 w-4" />
-                Tạo chatbot đầu tiên
-              </Button>
-            )}
           </CardContent>
         </Card>
       ) : (

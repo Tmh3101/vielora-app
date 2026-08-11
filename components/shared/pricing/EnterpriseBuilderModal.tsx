@@ -154,9 +154,7 @@ export function EnterpriseBuilderModal({
                 <Bot className="h-5 w-5 text-primary" />
                 <span className="text-sm font-semibold text-foreground">Số lượng Bots tối đa</span>
               </div>
-              <span className="text-lg font-bold text-primary">
-                {botsLimit} bots
-              </span>
+              <span className="text-lg font-bold text-primary">{botsLimit} bots</span>
             </div>
             <input
               type="range"

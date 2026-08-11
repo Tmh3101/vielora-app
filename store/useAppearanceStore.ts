@@ -29,6 +29,7 @@ export interface AppearanceState {
   rateLimitPerIp: string;
   slug: string;
   isPublic: boolean;
+  isVoiceEnabled: boolean;
   allowedDomains: string[];
   isSaving: boolean;
   isSavingRateLimit: boolean;
@@ -59,6 +60,7 @@ export interface AppearanceState {
   setAllowedDomains: (value: string[]) => void;
   setSlug: (value: string) => void;
   setIsPublic: (value: boolean) => void;
+  setIsVoiceEnabled: (value: boolean) => void;
   setIsSaving: (value: boolean) => void;
   setIsSavingRateLimit: (value: boolean) => void;
   setIsSavingSlugSettings: (value: boolean) => void;
@@ -91,6 +93,7 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
   rateLimitPerIp: "",
   slug: "",
   isPublic: false,
+  isVoiceEnabled: WIDGET_FALLBACK.IS_VOICE_ENABLED ?? true,
   allowedDomains: [],
   isSaving: false,
   isSavingRateLimit: false,
@@ -121,6 +124,7 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
   setAllowedDomains: (value) => set({ allowedDomains: value }),
   setSlug: (value) => set({ slug: value }),
   setIsPublic: (value) => set({ isPublic: value }),
+  setIsVoiceEnabled: (value) => set({ isVoiceEnabled: value }),
   setIsSaving: (value) => set({ isSaving: value }),
   setIsSavingRateLimit: (value) => set({ isSavingRateLimit: value }),
   setIsSavingSlugSettings: (value) => set({ isSavingSlugSettings: value }),
@@ -175,6 +179,10 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
         chatIconUrl: settings.chatIconUrl || null,
         chatIconColor: settings.chatIconColor || WIDGET_FALLBACK.CHAT_ICON_COLOR,
         chatIconBgColor: settings.chatIconBgColor || WIDGET_FALLBACK.CHAT_ICON_BG_COLOR,
+        isVoiceEnabled:
+          typeof settings.isVoiceEnabled === "boolean"
+            ? settings.isVoiceEnabled
+            : WIDGET_FALLBACK.IS_VOICE_ENABLED,
       });
     } else {
       set({
@@ -191,6 +199,7 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
         chatIconUrl: null,
         chatIconColor: WIDGET_FALLBACK.CHAT_ICON_COLOR,
         chatIconBgColor: WIDGET_FALLBACK.CHAT_ICON_BG_COLOR,
+        isVoiceEnabled: WIDGET_FALLBACK.IS_VOICE_ENABLED,
       });
     }
   },
@@ -216,6 +225,7 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
       rateLimitPerIp: "",
       slug: "",
       isPublic: false,
+      isVoiceEnabled: WIDGET_FALLBACK.IS_VOICE_ENABLED,
       allowedDomains: [],
       isSaving: false,
       isSavingRateLimit: false,

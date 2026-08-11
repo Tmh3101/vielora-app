@@ -44,11 +44,13 @@ import { MAX_SKILLS_PER_BOT } from "@/lib/config/ai-customization";
 import type { PersonalityOption, SkillOption } from "@/store/useAIConfigStore";
 
 export interface AIConfiguratorProps {
-  botId: string;
-  currentPlan: string;
-  initialPersonalityId: string | null;
-  initialSkillIds: string[];
+  botId?: string;
+  currentPlan?: string;
+  initialPersonalityId?: string | null;
+  initialSkillIds?: string[];
+  onConfigChange?: (personalityId: string | null, skillIds: string[]) => void;
   onSaved?: () => void;
+  showSaveButton?: boolean;
 }
 
 const personalityIcons: Record<string, typeof Sparkles> = {
@@ -82,10 +84,12 @@ function getIcon(name: string, type: "personality" | "skill", className: string)
 
 export function AIConfigurator({
   botId,
-  currentPlan,
-  initialPersonalityId,
-  initialSkillIds,
+  currentPlan = "standard",
+  initialPersonalityId = null,
+  initialSkillIds = [],
+  onConfigChange,
   onSaved,
+  showSaveButton = Boolean(botId),
 }: AIConfiguratorProps) {
   const { toast } = useToast();
   const store = useAIConfigStore();
@@ -105,7 +109,7 @@ export function AIConfigurator({
   }, [initializeFromBot, initialPersonalityId, memoizedInitialSkillIds]);
 
   useEffect(() => {
-    fetchCatalogs();
+    void fetchCatalogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -121,28 +125,24 @@ export function AIConfigurator({
     serializedInitialSkillIds,
   ]);
 
-  async function getAuthHeaders(): Promise<Record<string, string>> {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    if (!token) throw new Error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
-    return {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    };
-  }
-
   async function fetchCatalogs() {
     store.setIsLoading(true);
     try {
-      const headers = await getAuthHeaders();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
       const [persRes, skillRes] = await Promise.all([
         fetch("/api/bots/personalities", { headers }),
         fetch("/api/bots/skills", { headers }),
       ]);
       const persData = await persRes.json();
       const skillData = await skillRes.json();
-      if (persData.success) store.setPersonalityOptions(persData.data);
-      if (skillData.success) store.setSkillOptions(skillData.data);
+      if (persData.success && persData.data) store.setPersonalityOptions(persData.data);
+      if (skillData.success && skillData.data) store.setSkillOptions(skillData.data);
     } catch (err) {
       console.error("Failed to fetch AI catalogs:", err);
       toast({
@@ -156,9 +156,14 @@ export function AIConfigurator({
   }
 
   async function handleSave() {
+    if (!botId) return;
     store.setIsSaving(true);
     try {
-      const headers = await getAuthHeaders();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`/api/bots/${botId}/config`, {
         method: "PATCH",
         headers,
@@ -182,6 +187,23 @@ export function AIConfigurator({
     }
   }
 
+  const handleSelectPersonality = (pId: string | null) => {
+    store.setSelectedPersonalityId(pId);
+    onConfigChange?.(pId, store.selectedSkillIds);
+  };
+
+  const handleToggleSkill = (sId: string) => {
+    const isSelected = store.selectedSkillIds.includes(sId);
+    const newSkillIds = isSelected
+      ? store.selectedSkillIds.filter((id) => id !== sId)
+      : store.selectedSkillIds.length < MAX_SKILLS_PER_BOT
+        ? [...store.selectedSkillIds, sId]
+        : store.selectedSkillIds;
+
+    store.setSelectedSkillIds(newSkillIds);
+    onConfigChange?.(store.selectedPersonalityId, newSkillIds);
+  };
+
   if (isLocked) {
     return <LockedState />;
   }
@@ -190,7 +212,8 @@ export function AIConfigurator({
   const skillsFull = skillCount >= MAX_SKILLS_PER_BOT;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Personality Selection Card */}
       <Card className="overflow-hidden border-border/40 shadow-sm">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
         <CardHeader className="flex flex-col gap-4 space-y-0 pb-6 sm:flex-row sm:items-center sm:justify-between">
@@ -231,7 +254,7 @@ export function AIConfigurator({
                     key={p.id}
                     personality={p}
                     isSelected={isSelected}
-                    onSelect={() => store.setSelectedPersonalityId(isSelected ? null : p.id)}
+                    onSelect={() => handleSelectPersonality(isSelected ? null : p.id)}
                   />
                 );
               })}
@@ -240,6 +263,7 @@ export function AIConfigurator({
         </CardContent>
       </Card>
 
+      {/* Skill Selection Card */}
       <Card className="relative overflow-hidden border-border/40 shadow-sm">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
         <CardHeader className="flex flex-col gap-4 space-y-0 pb-6 sm:flex-row sm:items-center sm:justify-between">
@@ -287,7 +311,7 @@ export function AIConfigurator({
                     skill={s}
                     isSelected={isSelected}
                     cannotSelect={cannotSelect}
-                    onToggle={() => store.toggleSkill(s.id)}
+                    onToggle={() => handleToggleSkill(s.id)}
                   />
                 );
               })}
@@ -296,30 +320,33 @@ export function AIConfigurator({
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-between gap-4">
-        {hasChanges && (
-          <p className="pl-2 text-[13px] text-red-600">(*) Bạn có thay đổi chưa được lưu</p>
-        )}
-        <div className="flex-1" />
-        <Button
-          onClick={handleSave}
-          disabled={store.isSaving || !hasChanges}
-          size="lg"
-          className="min-w-[140px] gap-2"
-        >
-          {store.isSaving ? (
-            <>
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              Đang lưu...
-            </>
-          ) : (
-            <>
-              <Check className="h-4 w-4" />
-              Lưu thay đổi
-            </>
+      {/* Conditional Save Bar */}
+      {showSaveButton && (
+        <div className="flex items-center justify-between gap-4">
+          {hasChanges && (
+            <p className="pl-2 text-[13px] text-red-600">(*) Bạn có thay đổi chưa được lưu</p>
           )}
-        </Button>
-      </div>
+          <div className="flex-1" />
+          <Button
+            onClick={handleSave}
+            disabled={store.isSaving || !hasChanges}
+            size="lg"
+            className="min-w-[140px] gap-2"
+          >
+            {store.isSaving ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Đang lưu...
+              </>
+            ) : (
+              <>
+                <Check className="h-4 w-4" />
+                Lưu thay đổi
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

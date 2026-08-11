@@ -17,11 +17,11 @@ methodology: "BA/Tech Lead - Socratic questioning + structured spec"
 
 ## 📋 Executive Summary
 
-Transform the single-bot creation flow (wizard → `POST /api/bots/create`) into a **generic bulk-creation feature**: upload one CSV/Excel file containing N rows, map columns, dry-run validate every row, then batch-create bots (status=pending) with personality/skills applied in bulk and optional per-bot knowledge content fed into the existing indexing pipeline. Designed for any workspace (not Logic-Hub-specific), gated by the workspace owner's plan `bots_limit`, with a per-row success/error report and idempotent "re-import failed rows only".
+Transform the single-bot creation flow (wizard → `POST /api/bots/create`) into a **generic bulk-creation feature**: upload one CSV file containing N rows, map columns, dry-run validate every row, then batch-create bots (status=pending) with global configuration (primary color, personality, skills) applied in bulk and per-bot knowledge content fed into the existing indexing pipeline. Designed for any workspace (not Logic-Hub-specific), gated by the workspace owner's plan `bots_limit`, with a per-row success/error report and idempotent "re-import failed rows only".
 
 **Core Principle**: _Bulk creation is the single-bot creation flow applied N times inside one request, with all validation moved before any mutation._
 
-**Scope (Track A only)**: File import (CSV/XLSX) → dry-run → batch create → knowledge content (text column) → report. **Out of scope**: per-bot knowledge files (Track B), student account provisioning, avatar file uploads, enterprise subscription gating (comes later — only affects plan data, not code).
+**Scope (Track A only)**: File import (CSV only) → dry-run → batch create → knowledge content (text columns) → report. **Out of scope**: Excel (.xlsx) files, per-bot knowledge files (Track B), student account provisioning, avatar file uploads, enterprise subscription gating (comes later — only affects plan data, not code).
 
 ---
 
@@ -29,22 +29,22 @@ Transform the single-bot creation flow (wizard → `POST /api/bots/create`) into
 
 > **Original User Description** (verbatim, condensed):
 >
-> > "Logic Hub có hơn 100 học sinh, tạo bot đơn lẻ rất mất thời gian. Cần tạo bot hàng loạt, trước tiên chỉ cần trên file. Giới hạn số lượng bot dựa trên số bot còn lại của workspace. Thiết kế generic để bất kỳ ai cũng dùng được, không chỉ Logic Hub. Workspace quản lý toàn bộ tài khoản (không cần provisioning). Per-bot khác nhau: tên, avatar (nếu có), slug. Không cần per-bot: welcome message, màu sắc, câu hỏi gợi ý. Personality + skill phải thiết lập hàng loạt. Nguồn kiến thức: 1 cột text trong file import (Track A)."
+> > "Logic Hub có hơn 100 học sinh, tạo bot đơn lẻ rất mất thời gian. Cần tạo bot hàng loạt, chỉ cần trên file CSV. Giới hạn số lượng bot dựa trên số bot còn lại của workspace. Thiết kế generic để bất kỳ ai cũng dùng được. File CSV chỉ cần các cột bắt buộc: name, slug, knowledge_title, knowledge_content. Cấu hình chung cho lượt tạo: màu chủ đạo (primaryColor), tính cách (personality), kỹ năng (skills) sẽ áp dụng cho tất cả các bot trong lượt import."
 
 ### 1.1 Extracted Requirements (Structured)
 
-| ID    | Requirement                                                                            | Priority | Source                  |
-| ----- | -------------------------------------------------------------------------------------- | -------- | ----------------------- |
-| BR-01 | Upload 1 file (CSV/Excel) chứa nhiều bot, tạo tất cả trong 1 lần                       | P0       | User vision             |
-| BR-02 | Giới hạn số bot tạo theo quota còn lại của workspace (plan `bots_limit` − bot hiện có) | P0       | User vision             |
-| BR-03 | Generic: bất kỳ workspace nào cũng dùng được; không hardcode Logic Hub                 | P0       | User vision             |
-| BR-04 | Per-bot khác nhau: name, slug, avatar_url; phần còn lại dùng giá trị chung             | P0       | User vision             |
-| BR-05 | Personality + skills set hàng loạt (1 lần chọn cho tất cả dòng)                        | P0       | User vision             |
-| BR-06 | Knowledge per bot qua cột text (knowledge_title + knowledge_content)                   | P0       | User decision (Track A) |
-| BR-07 | Dry-run trước: preview từng dòng OK/lỗi kèm lý do, không mutate DB                     | P0       | BA analysis             |
-| BR-08 | Báo cáo N thành công / M lỗi; cho phép import lại chỉ các dòng lỗi                     | P1       | BA analysis             |
-| BR-09 | Không cần tạo tài khoản cho từng học sinh (workspace quản lý tất cả)                   | P1       | User vision             |
-| BR-10 | File mẫu (template download) để user điền đúng format                                  | P1       | BA analysis             |
+| ID    | Requirement                                                                              | Priority | Source                  |
+| ----- | ---------------------------------------------------------------------------------------- | -------- | ----------------------- |
+| BR-01 | Upload 1 file CSV chứa nhiều bot, tạo tất cả trong 1 lần                                 | P0       | User vision             |
+| BR-02 | Giới hạn số bot tạo theo quota còn lại của workspace (plan `bots_limit` − bot hiện có)   | P0       | User vision             |
+| BR-03 | Generic: bất kỳ workspace nào cũng dùng được; không hardcode Logic Hub                   | P0       | User vision             |
+| BR-04 | Per-bot khác nhau: name, slug, knowledge_title, knowledge_content (bắt buộc trong CSV)   | P0       | User vision             |
+| BR-05 | Cấu hình chung cho batch: Màu chủ đạo (primaryColor), Personality, Skills áp dụng tất cả | P0       | User vision             |
+| BR-06 | Knowledge per bot qua cột text (knowledge_title + knowledge_content)                     | P0       | User decision (Track A) |
+| BR-07 | Dry-run trước: preview từng dòng OK/lỗi kèm lý do, không mutate DB                       | P0       | BA analysis             |
+| BR-08 | Báo cáo N thành công / M lỗi; cho phép import lại chỉ các dòng lỗi                       | P1       | BA analysis             |
+| BR-09 | Không cần tạo tài khoản cho từng học sinh (workspace quản lý tất cả)                     | P1       | User vision             |
+| BR-10 | File mẫu CSV (template download) để user điền đúng format                                | P1       | BA analysis             |
 
 ---
 
@@ -109,13 +109,13 @@ pages (id, bot_id FK, url, title, content, content_hash, source_type, status, cr
 
 ### 3.2 Data Validation & File Parsing
 
-| Question                                                                | Analysis                                                           | Resolution                                                                                                                               |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Q4**: Format file nào? Chưa có lib parse CSV/Excel trong package.json | `xlsx` (SheetJS) là 1 dependency duy nhất đọc được cả CSV lẫn XLSX | **[Resolution]**: Thêm dependency `xlsx`; parse server-side, validate size ≤ 5MB, ≤ 500 dòng (`BULK_IMPORT_MAX_ROWS`)                    |
-| **Q5**: Cột lạ / thiếu cột / sai header?                                | File của user tùy ý → phải generic                                 | **[Resolution]**: Column-mapping UI (auto-detect header → cho chỉnh bằng dropdown); dòng thiếu `name` → error per-row                    |
-| **Q6**: Slug trống / trùng?                                             | `slug UNIQUE` global                                               | **[Resolution]**: sinh từ name + dedupe batch-local + DB check; dòng có slug tay bị trùng → error per-row (không tự sửa slug người dùng) |
-| **Q7**: `website_url` sai format / domain không cho phép?               | `validateAllowedDomains` có sẵn                                    | **[Resolution]**: validate từng dòng như bot đơn; dòng lỗi → error per-row, không chặn cả batch                                          |
-| **Q8**: Personality/skill name không tồn tại?                           | ai_personalities/ai_skills có UNIQUE name                          | **[Resolution]**: resolve tại bước template (trước dry-run): name sai → template error chặn cả batch (vì áp cho tất cả dòng)             |
+| Question                                                  | Analysis                                               | Resolution                                                                                                                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Q4**: Format file nào?                                  | Đọc file CSV bằng parser CSV client-side / server-side | **[Resolution]**: Parse file CSV, validate dung lượng file ≤ 10MB, không giới hạn số dòng (số bot được tạo chỉ bị giới hạn bởi Quota còn lại của Workspace) |
+| **Q5**: Cột lạ / thiếu cột / sai header?                  | File của user tùy ý → phải generic                     | **[Resolution]**: Column-mapping UI (auto-detect header → cho chỉnh bằng dropdown); dòng thiếu `name` → error per-row                                       |
+| **Q6**: Slug trống / trùng?                               | `slug UNIQUE` global                                   | **[Resolution]**: sinh từ name + dedupe batch-local + DB check; dòng có slug tay bị trùng → error per-row (không tự sửa slug người dùng)                    |
+| **Q7**: `website_url` sai format / domain không cho phép? | `validateAllowedDomains` có sẵn                        | **[Resolution]**: validate từng dòng như bot đơn; dòng lỗi → error per-row, không chặn cả batch                                                             |
+| **Q8**: Personality/skill name không tồn tại?             | ai_personalities/ai_skills có UNIQUE name              | **[Resolution]**: resolve tại bước template (trước dry-run): name sai → template error chặn cả batch (vì áp cho tất cả dòng)                                |
 
 ### 3.3 Knowledge & Indexing
 
@@ -144,22 +144,23 @@ pages (id, bot_id FK, url, title, content, content_hash, source_type, status, cr
 
 ## 🏛️ 4. Technical Architecture
 
-### 4.1 File Format Spec (CSV / XLSX)
+### 4.1 File Format Spec (CSV Only)
 
-Header row bắt buộc; cột không bắt buộc có thể bỏ. Ký tự phân tách CSV: `,` (BOM UTF-8 hỗ trợ).
+Header row bắt buộc. Định dạng duy nhất hỗ trợ: **CSV (`.csv`)** (hỗ trợ UTF-8 với BOM để hiển thị tiếng Việt trên Excel).
 
-| Column              | Required | Type   | Rule                                                                                                                 |
-| ------------------- | -------- | ------ | -------------------------------------------------------------------------------------------------------------------- |
-| `name`              | ✅       | string | 1–100 chars, non-empty                                                                                               |
-| `slug`              | ❌       | string | Pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$`; trống → auto-generate từ name                                                  |
-| `website_url`       | ❌       | string | http(s) hợp lệ + `validateAllowedDomains`; trống → file-mode (`manual-upload.local`)                                 |
-| `avatar_url`        | ❌       | string | http(s) hợp lệ (không bắt buộc, không validate existence)                                                            |
-| `personality`       | ❌       | string | Tên personality (resolve theo `ai_personalities.name`) — **giá trị chung từ template**, cột này là override tùy chọn |
-| `skills`            | ❌       | string | Tên skills phân cách `,` — **giá trị chung từ template**, cột này là override tùy chọn                               |
-| `knowledge_title`   | ❌       | string | ≤ 100 chars (`MAX_MANUAL_TITLE_LENGTH`); mặc định = bot name                                                         |
-| `knowledge_content` | ❌       | string | ≤ 10.000 chars (`MAX_MANUAL_CONTENT_LENGTH`); nếu có → tạo 1 page manual_text                                        |
+Tất cả 4 cột dưới đây đều là **BẮT BUỘC (Required)**:
 
-**Giới hạn**: ≤ 500 dòng/file, ≤ 5MB/file. File mẫu tải về: `docs/specs/templates/bulk-bot-import-template.csv` (header + 1 ví dụ).
+| Column              | Required | Type   | Rule                                                                     |
+| ------------------- | -------- | ------ | ------------------------------------------------------------------------ |
+| `name`              | ✅       | string | 1–100 chars, non-empty                                                   |
+| `slug`              | ✅       | string | Pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$`, non-empty, unique trong file và DB |
+| `knowledge_title`   | ✅       | string | 1–100 chars (`MAX_MANUAL_TITLE_LENGTH`), non-empty                       |
+| `knowledge_content` | ✅       | string | 1–10.000 chars (`MAX_MANUAL_CONTENT_LENGTH`), non-empty                  |
+
+> **Cấu hình chung cho Batch (Global Configuration)**:
+> Không nằm trong file CSV. Các thuộc tính: **Màu chủ đạo (`primaryColor`)**, **Tính cách (`personality`)**, **Kỹ năng (`skills`)** sẽ được chọn 1 lần duy nhất trên giao diện ở Bước 3. Khi bấm tạo, **tất cả bot** trong lượt import sẽ được áp dụng chung cấu hình này.
+
+**Giới hạn**: Dung lượng file ≤ 10MB, **không giới hạn số dòng** (tối đa tạo theo Quota bot khả dụng của Workspace). File mẫu tải về: `docs/specs/templates/bulk-bot-import-template.csv`.
 
 ### 4.2 API Contract
 
@@ -175,18 +176,16 @@ POST /api/bots/bulk-create
 interface BulkCreateRequest {
   workspaceId: string;
   template: {
-    personalityName?: string; // resolve → personality_id, áp cho tất cả dòng
-    skillNames?: string[]; // resolve → skill_ids, áp cho tất cả dòng
+    primaryColor?: string; // widget_settings.primaryColor, áp dụng chung cho tất cả bot
+    isPublic?: boolean; // bots.is_public (true = Công khai, false = Riêng tư), áp dụng chung
+    personalityName?: string; // resolve → personality_id, áp dụng chung cho tất cả bot
+    skillNames?: string[]; // resolve → skill_ids, áp dụng chung cho tất cả bot
   };
   rows: Array<{
     name: string;
-    slug?: string;
-    websiteUrl?: string;
-    avatarUrl?: string;
-    personalityName?: string; // override per-row (tùy chọn)
-    skillNames?: string[]; // override per-row (tùy chọn)
-    knowledgeTitle?: string;
-    knowledgeContent?: string;
+    slug: string;
+    knowledgeTitle: string;
+    knowledgeContent: string;
   }>;
   mode: "dry-run" | "create";
 }
@@ -253,9 +252,8 @@ interface BulkCreateRequest {
 ### 4.4 Config (thêm vào `lib/constants/bulk-import.ts`)
 
 ```typescript
-export const BULK_IMPORT_MAX_ROWS = 500;
-export const BULK_IMPORT_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-export const BULK_IMPORT_ALLOWED_EXTENSIONS = [".csv", ".xlsx"];
+export const BULK_IMPORT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+// Không giới hạn số dòng (BULK_IMPORT_MAX_ROWS), giới hạn theo Quota workspace còn lại
 ```
 
 ### 4.5 API Route Tree
@@ -265,6 +263,29 @@ export const BULK_IMPORT_ALLOWED_EXTENSIONS = [".csv", ".xlsx"];
 ├── POST /create          # (hiện trạng, giữ nguyên)
 └── POST /bulk-create     # (mới) dry-run | create
 ```
+
+### 4.6 Performance Strategy & Infrastructure Overload Prevention (Tối Ưu Hiệu Năng & Chống Quá Tải)
+
+Để đảm bảo hệ thống phản hồi cực nhanh (< 3-5 giây) và không bị đơ/treo hạ tầng khi người dùng tải lên file CSV 500 bot kèm khối lượng văn bản lớn, các cơ chế bảo vệ sau được triển khai bắt buộc:
+
+1. **DB Batch Chunking (Ghi dữ liệu hàng loạt)**:
+   - Thay vì 500 câu lệnh SQL `INSERT` riêng lẻ gây nghẽn kết nối Database, `createBotsBulk` gộp dữ liệu thành các **Chunks (50-100 dòng/chunk)** để chèn hàng loạt trong duy nhất 1 SQL transaction.
+
+2. **Decoupling AI Vector Embedding qua Hàng Đợi (BullMQ Redis Queue)**:
+   - Thao tác insert Bot và Page record vào PostgreSQL chỉ mất ~1-2 giây.
+   - Thao tác nặng và tốn thời gian nhất là **Vector Embedding** (tạo vector từ `knowledge_content` qua Gemini API và lưu vào PgVector) **KHÔNG CHẠY ĐỒNG BỘ** trong luồng API Request.
+   - API chỉ khởi tạo page và đẩy job vào hàng đợi Redis BullMQ (`addIndexerJob({ botId, pageId })`).
+   - Các **Background Workers** tự động rút job xử lý ngầm từ Redis queue với các cấu hình an toàn:
+     - **Concurrency Limit**: Giới hạn tối đa 5-10 embedding job xử lý song song per worker.
+     - **Rate Limit & Exponential Backoff**: Tự động giãn khoảng cách thời gian gọi Gemini AI API để không dính lỗi HTTP 429 Too Many Requests.
+     - **Auto-retry**: Thử lại tự động nếu mạng lỗi mà không làm thất thoát dữ liệu bot.
+
+3. **Quản Lý Bộ Nhớ RAM & Không Ghi File Rác**:
+   - File CSV được parse trực tiếp dưới dạng Buffer trong RAM và giải phóng ngay lập tức. Giới hạn `10MB` giúp Node.js process luôn an toàn, tránh lỗi nghẽn RAM (Out Of Memory).
+
+4. **Kịch Bản Xử Lý Khi Số Dòng CSV > Quota Bot Khả Dụng**:
+   - **Mức Dry-Run**: So sánh `validRows` với `remainingQuota` (`botsLimit` - `currentCount`). Nếu vượt quá, API trả về `blocked: true` cùng thông báo cụ thể (_"File chứa N bot nhưng workspace chỉ còn M lượt tạo khả dụng"_). Nút "Xác nhận tạo bot" bị **Vô hiệu hóa (Disabled)** trên UI.
+   - **Mức Server Enforcement**: API Create đếm lại `count(bots)` với khoá `SELECT ... FOR UPDATE` trên workspace row. Nếu `validRows > remainingQuota`, API từ chối ngay lập tức với `HTTP 400 Bad Request`.
 
 ---
 
@@ -280,43 +301,80 @@ export const BULK_IMPORT_ALLOWED_EXTENSIONS = [".csv", ".xlsx"];
 
 ---
 
-## 🎨 6. Frontend Spec
+## 🎨 6. Frontend Spec & User Experience (UX Flow)
 
-### 6.1 Entry Point
+### 6.1 Entry Point trên Dashboard Overview
 
-Nút **"Import nhiều bot"** (icon Upload) cạnh nút "Tạo bot" trên dashboard bots list → navigate `/dashboard/bots/import`. (Ẩn khi workspace hiện tại không có quyền owner/admin — check membership từ session.)
+- **Vị trí**: Nút **"Tạo bot mới"** ở vị trí góc trên Dashboard (`DashboardClient.tsx`).
+- **Thiết kế**: Chuyển thành **Split Button / Dropdown Button** với nút bấm chính kèm biểu tượng mũi tên xuống (Chevron) phía bên phải nút.
+- **Tùy chọn Menu Dropdown**:
+  1. **Tạo bot đơn lẻ** (Hành động mặc định khi bấm trực tiếp vào phần nút chính): Chuyển hướng tới `/onboarding` (Luồng tạo bot wizard chuẩn).
+  2. **Import file CSV** (Khi bấm mở menu Dropdown): Chuyển hướng tới `/onboarding?mode=bulk` (Chuyển trực tiếp tới Luồng tạo bot hàng loạt).
+- **Phân quyền**: Menu Dropdown chỉ hiển thị cho người dùng có quyền `owner` hoặc `admin` trong Workspace hiện tại (Check `workspace_members.role_id`).
 
-### 6.2 Page `/dashboard/bots/import` — 4 bước wizard
+### 6.2 Luồng Onboarding Wizard 4 Bước (`/onboarding?mode=bulk`)
 
 ```
-┌───────────────────────────────────────────────────────┐
-│ Bước 1: Upload file                                    │
-│  [Drop zone: CSV/XLSX, ≤5MB, ≤500 dòng]                │
-│  [⬇ Tải file mẫu]        [Workspace: ▼ (mặc định hiện tại)] │
-├───────────────────────────────────────────────────────┤
-│ Bước 2: Ánh xạ cột (generic)                           │
-│  Cột file → Field: name* [▼] slug [▼] website_url [▼]  │
-│  avatar_url [▼] knowledge_content [▼] (auto-detect)    │
-├───────────────────────────────────────────────────────┤
-│ Bước 3: Template chung + Preview                       │
-│  Tính cách: [▼]  Kỹ năng: [multi-select]               │
-│  ┌─────────────────────────────────────────────┐      │
-│  │ ✅ OK (98)  ⛔ Lỗi (2)   | Tên | Slug | ...  │      │
-│  │ Quota: sẽ tạo 98 / còn 88 ⚠️ VƯỢT QUOTA      │      │
-│  └─────────────────────────────────────────────┘      │
-├───────────────────────────────────────────────────────┤
-│ Bước 4: Xác nhận → Progress → Báo cáo                 │
-│  ✅ 98 bot đã tạo  ⛔ 2 lỗi (kèm lý do từng dòng)       │
-│  [Chỉ import lại các dòng lỗi]                         │
-└───────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│ STEP 1: Nhập & Kiểm Tra File CSV                                  │
+│  • Hiển thị format CSV mẫu yêu cầu (name*, slug*, title*, content*)│
+│  • Nút [⬇ Tải file mẫu CSV]                                       │
+│  • Drop zone upload file (.csv, ≤10MB, ko giới hạn dòng)           │
+│  • Hiển thị bảng tóm tắt kết quả kiểm tra dòng (Valid / Invalid)  │
+│  👉 [Tiếp tục sang Step 2] (Chỉ bật khi file hợp lệ)              │
+├───────────────────────────────────────────────────────────────────┤
+│ STEP 2: Cấu Hình Chung & Preview                                  │
+│  • Màu sắc chủ đạo: [ColorPicker]                                 │
+│  • Chế độ công khai: [Toggle: Công khai / Riêng tư]               │
+│  • Tính cách: [Dropdown]  Kỹ năng: [MultiSelect]                  │
+│  • Bảng xem trước dữ liệu + Kiểm tra Quota/Credit Workspace        │
+│  👉 [Tạo bot ngay] (Bị khóa nếu vượt Quota / hết Credit)          │
+├───────────────────────────────────────────────────────────────────┤
+│ STEP 3: Tiến Độ Tạo Bot Real-time                                 │
+│  • Thanh Progress Bar (%) chạy Real-time (0% → 100%)              │
+│  • Thông số live: "Đã tạo 15 / 50 bots..." + status badge         │
+│  • Chia Sub-batches (10-20 bots/request) gửi song song ngầm       │
+│  👉 Auto-advance sang Step 4 khi hoàn tất 100%                    │
+├───────────────────────────────────────────────────────────────────┤
+│ STEP 4: Hoàn Thành & Báo Cáo Kết Quả                              │
+│  • Summary Dashboard: ✅ N bot đã tạo  ⛔ M dòng thất bại        │
+│  • Chi tiết lỗi từng dòng + Nút [Chỉ import lại các dòng lỗi]     │
+│  • Nút [Về trang Dashboard]                                       │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-**Behavior**:
+**Mô tả chi tiết từng bước**:
 
-- Bước 1→2: file được gửi lên parse server-side (1 API call nhỏ `POST /api/bots/bulk-parse` trả header + rows gọn) — _hoặc_ parse client-side bằng `xlsx` (đơn giản hơn, không cần thêm route; **chọn parse client-side**, `xlsx` chạy được ở browser) → gửi rows JSON thẳng tới bulk-create.
-- Bước 3: gọi `dry-run` (auto khi đủ mapping + template) → bảng preview + quota/credit summary; nút Xác nhận disabled khi `blocked: true`.
-- Bước 4: gọi `create` → progress thanh (đếm theo response từng phần nếu stream; Phase 1: chờ response nguyên khối) → báo cáo + "re-import failed rows only".
-- Quota/credit summary hiển thị cảnh báo rõ ràng trước confirm (không để user vượt quota mới biết).
+- **Step 1 (Nhập & Kiểm tra File CSV)**:
+  - Hiển thị bảng mô tả cấu trúc file CSV tiêu chuẩn gồm 4 cột bắt buộc: `name`, `slug`, `knowledge_title`, `knowledge_content`.
+  - Nút tải file mẫu `bulk-bot-import-template.csv`.
+  - Khung Drag & Drop tải file CSV. Khi người dùng thả file:
+    - Client parse dữ liệu bằng CSV parser nhẹ.
+    - Thực hiện kiểm tra sơ bộ (Check định dạng MIME `text/csv`, kích thước file ≤ 10MB, kiểm tra trùng lặp `slug` nội bộ trong file, kiểm tra các ô rỗng).
+    - Hiển thị bảng tổng quan: _Tổng số dòng_, _Số dòng hợp lệ_, _Số dòng phát hiện lỗi_.
+    - Nút **"Tiếp tục sang Bước 2"** chỉ sáng khi có ít nhất 1 dòng hợp lệ.
+
+- **Step 2 (Cấu hình chung & Preview Quota)**:
+  - Cho phép người dùng thiết lập thuộc tính dùng chung cho toàn bộ N bot:
+    - **Màu sắc chủ đạo (`primaryColor`)**: Color Picker chọn màu giao diện chat widget.
+    - **Chế độ công khai (`isPublic`)**: Switch Toggle chọn `Công khai` (`true`) hoặc `Riêng tư` (`false`).
+    - **Tính cách (`personality`)**: Select dropdown chọn tính cách AI.
+    - **Kỹ năng (`skills`)**: Multi-select dropdown chọn các kỹ năng AI đi kèm.
+  - Gọi API `POST /api/bots/bulk-create` với `mode: "dry-run"` để kiểm tra Quota còn lại của Workspace và tổng số Credits cần dùng cho các trang kiến thức.
+  - Nút **"Tạo bot ngay"** sẽ bị disabled nếu API trả về `blocked: true`.
+
+- **Step 3 (Tiến độ tạo bot Real-time)**:
+  - Để tránh timeout HTTP và hiển thị tiến độ mượt mà, Client chia danh sách dòng hợp lệ thành các **Sub-batches (mỗi batch 10-20 dòng)** và gọi `POST /api/bots/bulk-create` với `mode: "create"`.
+  - Hiển thị màn hình theo dõi Real-time:
+    - Thanh Progress bar động (tính % dựa trên số bot đã tạo thành công / tổng số bot).
+    - Dòng chữ live: `Đang khởi tạo bot: "Bot Toán 10" (15/50)...`
+    - Bộ đếm realtime số bot thành công và thất bại.
+  - Khi tất cả sub-batches hoàn tất, tự động chuyển tiếp sang **Step 4**.
+
+- **Step 4 (Hoàn thành & Báo cáo kết quả)**:
+  - Báo cáo tổng kết toàn bộ lượt import: Số bot đã tạo thành công + đẩy vào hàng đợi Embedding (`Indexing`), số dòng lỗi (nếu có).
+  - Cung cấp tính năng **"Chỉ import lại các dòng lỗi"**: Tự động giữ lại các dòng thất bại ở Step 1 để người dùng chỉnh sửa và thử lại nhanh chóng.
+  - Nút **"Về trang Dashboard"** quay lại danh sách Bot.
 
 ### 6.3 Permissions Matrix
 
@@ -332,7 +390,7 @@ Nút **"Import nhiều bot"** (icon Upload) cạnh nút "Tạo bot" trên dashbo
 
 | Scenario                                               | Handling                                                                                 |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| File > 500 dòng hoặc > 5MB                             | Reject ngay ở bước 1, message rõ                                                         |
+| File > 10MB                                            | Reject ngay ở bước 1, message rõ "File vượt quá 10MB"                                    |
 | Dòng thiếu `name`                                      | Error per-row "name is required"                                                         |
 | `slug` tay trùng với DB                                | Error per-row "slug already exists" (không tự sửa)                                       |
 | `slug` trống                                           | Auto-generate: slugify(name) → trùng thì `-2`, `-3` (batch-local + DB check)             |
@@ -400,7 +458,7 @@ Nút **"Import nhiều bot"** (icon Upload) cạnh nút "Tạo bot" trên dashbo
 | Parse + validate 500 dòng         | < 2s                                              |
 | Create 100 bot (insert + enqueue) | < 10s                                             |
 | Không có N+1 query trầm trọng     | Gom: 1 query fetch existing slugs, 1 batch insert |
-| Memory                            | Không giữ file > 5MB trong RAM lâu hơn request    |
+| Memory                            | Không giữ file > 10MB trong RAM lâu hơn request   |
 
 ---
 
