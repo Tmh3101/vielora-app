@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import Script from "next/script";
 import { createServerClient } from "@/lib/supabase/server";
@@ -14,6 +14,26 @@ function getRequestOrigin(): string {
   return `${protocol}://${host}`;
 }
 
+export async function generateViewport({
+  params,
+}: {
+  params: Promise<{ botSlug: string }>;
+}): Promise<Viewport> {
+  const { botSlug } = await params;
+  try {
+    const supabase = await createServerClient();
+    const bot = await getPublicBotBranding(supabase, botSlug);
+    const themeColor = getPublicBotThemeColor(bot?.widget_settings ?? null);
+    return {
+      themeColor,
+    };
+  } catch {
+    return {
+      themeColor: "#0f172a",
+    };
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -27,7 +47,6 @@ export async function generateMetadata({
     const bot = await getPublicBotBranding(supabase, botSlug);
     const pwaVersion = getPublicBotPwaVersion(bot?.pwa_updated_at);
     const title = bot?.name?.trim() || botSlug;
-    const themeColor = getPublicBotThemeColor(bot?.widget_settings ?? null);
     const manifestHref = `/public-bot/${botSlug}/manifest`;
     const appleTouchIconPath = getPublicBotAppleTouchIconPath(botSlug, pwaVersion);
 
@@ -37,7 +56,6 @@ export async function generateMetadata({
         absolute: title,
       },
       manifest: manifestHref,
-      themeColor,
       icons: {
         icon: appleTouchIconPath,
         shortcut: appleTouchIconPath,
@@ -67,7 +85,6 @@ export async function generateMetadata({
         absolute: botSlug,
       },
       manifest: manifestHref,
-      themeColor: "#0f172a",
       icons: {
         icon: appleTouchIconPath,
         shortcut: appleTouchIconPath,

@@ -1,5 +1,9 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { VOICE_STT_SYSTEM_PROMPT, VOICE_STT_TITLE_SYSTEM_PROMPT } from "@/lib/ai/prompt";
+import {
+  VOICE_STT_SYSTEM_PROMPT,
+  VOICE_STT_TITLE_SYSTEM_PROMPT,
+  VOICE_NOTE_FORMAT_SYSTEM_PROMPT,
+} from "@/lib/ai/prompt";
 export interface TranscribeAudioOptions {
   base64Audio: string;
   mimeType: string;
@@ -99,5 +103,56 @@ export async function generateTitleFromText(text: string): Promise<string> {
   } catch (err) {
     console.error("Lỗi tự động sinh tiêu đề từ giọng nói:", err);
     return "";
+  }
+}
+
+export interface FormattedVoiceNote {
+  title: string;
+  contentHtml: string;
+  content?: string;
+}
+
+/**
+ * Format a raw transcribed voice note into a clean structured HTML note
+ * (fix spelling, restructure into headings/lists, preserve meaning).
+ * Returns { title, contentHtml } suitable for the note editor.
+ */
+export async function formatVoiceNote(rawText: string): Promise<FormattedVoiceNote> {
+  const fallback = (text: string): FormattedVoiceNote => ({
+    title: "",
+    contentHtml: `<p>${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`,
+  });
+
+  if (!rawText || rawText.trim().length < 2) return fallback(rawText || "");
+  if (!process.env.GOOGLE_API_KEY) return fallback(rawText);
+
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: process.env.STT_MODEL || "gemini-3.1-flash-lite",
+      systemInstruction: VOICE_NOTE_FORMAT_SYSTEM_PROMPT,
+    });
+
+    const response = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: rawText }] }],
+      generationConfig: { temperature: 0.2 },
+    });
+
+    let raw = response.response.text().trim();
+    // Strip markdown code fences if the model wrapped the JSON
+    raw = raw
+      .replace(/^```(?:json)?/i, "")
+      .replace(/```$/i, "")
+      .trim();
+
+    const parsed = JSON.parse(raw) as Partial<FormattedVoiceNote>;
+    const title = (parsed.title || "").toString().trim();
+    const contentHtml = (parsed.contentHtml || parsed.content || "").toString().trim();
+
+    if (!contentHtml) return fallback(rawText);
+    return { title, contentHtml };
+  } catch (err) {
+    console.error("Lỗi định dạng ghi chú giọng nói:", err);
+    return fallback(rawText);
   }
 }

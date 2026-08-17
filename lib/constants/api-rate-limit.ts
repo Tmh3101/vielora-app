@@ -25,6 +25,11 @@ export const API_RATE_LIMITS: Record<string, ApiRateLimitConfig> = {
     maxRequests: 5,
     message: "Too many requests. Please try again later.",
   },
+  groupMessage: {
+    windowMs: 60 * 1000,
+    maxRequests: 30,
+    message: "Nhóm đang gửi tin nhắn quá nhanh. Vui lòng thử lại sau.",
+  },
 } as const;
 
 export const CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes

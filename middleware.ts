@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import {
   LOCAL_ROOT,
   PRODUCTION_ROOT,
+  getRootDomain,
   RESERVED_SUBDOMAINS as RESERVED_SUBDOMAINS_LIST,
   RESERVED_PATHS,
 } from "@/config";
@@ -45,7 +46,7 @@ function getHostname(host: string | null): string {
 }
 
 function getMainDomain(): string {
-  return process.env.NODE_ENV === "production" ? PRODUCTION_ROOT : `${LOCAL_ROOT}:3000`;
+  return process.env.NODE_ENV === "production" ? getRootDomain() : `${LOCAL_ROOT}:3000`;
 }
 
 function getSubdomainForRoot(hostname: string, rootDomain: string): string | null {
@@ -74,8 +75,11 @@ function isValidBotSlug(slug: string): boolean {
 
 function getBotSubdomain(host: string | null): string | null {
   const hostname = getHostname(host);
+  const rootDomain = getRootDomain();
   const slug =
-    getSubdomainForRoot(hostname, LOCAL_ROOT) ?? getSubdomainForRoot(hostname, PRODUCTION_ROOT);
+    getSubdomainForRoot(hostname, LOCAL_ROOT) ??
+    getSubdomainForRoot(hostname, rootDomain) ??
+    getSubdomainForRoot(hostname, PRODUCTION_ROOT);
   if (slug && !isValidBotSlug(slug)) return null;
   return slug;
 }

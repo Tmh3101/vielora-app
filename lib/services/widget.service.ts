@@ -173,3 +173,45 @@ async function _fetchInitBot(botId: string): Promise<BotInfo> {
     return getFallbackBotInfo();
   }
 }
+
+export interface TranscribeVoiceAudioParams {
+  blob: Blob;
+  botId?: string;
+  userId?: string;
+  isStandaloneChat?: boolean;
+}
+
+export interface TranscribeVoiceAudioResponse {
+  success: boolean;
+  text?: string;
+  message?: string;
+}
+
+export async function transcribeVoiceAudioApi({
+  blob,
+  botId,
+  userId,
+  isStandaloneChat = true,
+}: TranscribeVoiceAudioParams): Promise<TranscribeVoiceAudioResponse> {
+  const formData = new FormData();
+  formData.append("file", blob, "recording.webm");
+
+  const headers: Record<string, string> = {};
+  if (isStandaloneChat) {
+    headers["x-standalone-chat"] = "true";
+  }
+  if (botId) {
+    headers["x-bot-id"] = botId;
+  }
+  if (userId) {
+    headers["x-visitor-id"] = userId;
+  }
+
+  const res = await fetch("/api/widget/voice", {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  return await res.json();
+}

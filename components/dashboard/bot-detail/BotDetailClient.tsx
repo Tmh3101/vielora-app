@@ -29,6 +29,7 @@ import {
   Bot,
   UserPlus,
   Menu,
+  Users,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -59,6 +60,7 @@ import { IntegrationTab } from "@/components/dashboard/bot-detail/tabs/Integrati
 import { SettingsTab } from "@/components/dashboard/bot-detail/tabs/SettingsTab";
 import { AIConfigTab } from "@/components/dashboard/bot-detail/tabs/AIConfigTab";
 import { LeadsTab } from "@/components/dashboard/bot-detail/tabs/LeadsTab";
+import { GroupTab } from "@/components/dashboard/bot-detail/tabs/GroupTab";
 import { getEmbededScript } from "@/lib/helpers";
 import type { Tables } from "@/lib/supabase/types";
 
@@ -247,6 +249,7 @@ export function BotDetailClient({
     { id: BotDetailDashboardTabs.AI, label: "Tùy chỉnh", icon: Sparkles },
     { id: BotDetailDashboardTabs.LEADS, label: "Liên hệ", icon: UserPlus },
     { id: BotDetailDashboardTabs.INSTALL, label: "Cài đặt Widget", icon: Code },
+    { id: BotDetailDashboardTabs.GROUP, label: "Nhóm chat", icon: Users },
     { id: BotDetailDashboardTabs.SETTINGS, label: "Cài đặt", icon: Settings },
   ];
 
@@ -541,6 +544,14 @@ export function BotDetailClient({
                 />
               )}
             </BotSkillIdsFetcher>
+          )}
+
+          {/* Group Tab */}
+          {activeTab === BotDetailDashboardTabs.GROUP && (
+            <GroupTab
+              bot={bot}
+              onNavigateToSettings={() => setActiveTab(BotDetailDashboardTabs.SETTINGS)}
+            />
           )}
 
           {/* Leads Tab */}

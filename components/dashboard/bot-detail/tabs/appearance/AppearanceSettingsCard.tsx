@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { WIDGET_LIMITS } from "@/config";
+import { WIDGET_LIMITS, SUGGESTED_QUESTIONS_ALLOWED_PLANS } from "@/config";
 import {
   Crown,
   ImageIcon,
@@ -104,7 +104,7 @@ export function AppearanceSettingsCard({
   const setChatIconColor = useAppearanceStore((s) => s.setChatIconColor);
 
   const canUseSuggestedQuestions =
-    !!currentPlan && [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro].includes(currentPlan);
+    !!currentPlan && SUGGESTED_QUESTIONS_ALLOWED_PLANS.includes(currentPlan);
   const botNameError = editBotName.trim().length === 0 ? "Tên Bot không được để trống" : null;
   const primaryColorError = isHexColor(primaryColor.trim()) ? null : "Mã Hex hợp lệ dạng #RRGGBB";
   const solidColorError =
@@ -589,7 +589,7 @@ export function AppearanceSettingsCard({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                       <Crown className="h-4 w-4 text-amber-500" />
-                      <span>Tính năng gói Standard / Pro</span>
+                      <span>Tính năng dành cho các gói trả phí (Standard / Pro / Enterprise)</span>
                     </div>
                     <Link
                       href="/dashboard/upgrade"

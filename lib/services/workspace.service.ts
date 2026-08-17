@@ -289,7 +289,19 @@ export class WorkspaceService {
     const rawUsername = userEmail.split("@")[0] || "user";
     const cleanBase = rawUsername.toLowerCase().replace(/[^a-z0-9]/g, "") || "ws";
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const slug = `${cleanBase}-${randomSuffix}`;
+    let slug = `${cleanBase}-${randomSuffix}`;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingSlug } = await (supabase as any)
+      .from("workspaces")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+
+    if (existingSlug) {
+      slug = `${cleanBase}-${Date.now().toString().slice(-6)}`;
+    }
+
     const name = `Workspace của ${rawUsername}`;
 
     const newWs = await WorkspaceService.createWorkspace(userId, { name, slug });

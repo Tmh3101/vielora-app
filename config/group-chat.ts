@@ -1,0 +1,7 @@
+export const GROUP_CHAT_CONFIG = {
+  MAX_MEMBERS_PER_GROUP: 5,
+  GROUP_NOTES_ENABLED: true, // Master feature toggle for Group Notes
+  MAX_NOTE_TITLE_LENGTH: 100,
+  MAX_NOTE_CONTENT_LENGTH: 1000,
+  NOTES_PAGE_SIZE: 20,
+};

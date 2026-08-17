@@ -195,3 +195,14 @@ export enum EWorkspaceStatus {
   Suspended = "suspended",
   Deleted = "deleted",
 }
+
+export enum EGroupChatStatus {
+  Active = "active",
+  Disabled = "disabled",
+}
+
+export enum EGroupSenderType {
+  User = "user",
+  Bot = "bot",
+  System = "system",
+}

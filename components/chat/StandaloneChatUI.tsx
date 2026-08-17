@@ -23,6 +23,7 @@ import {
   INSUFFICIENT_CREDITS_MESSAGE,
   ChatResponseType,
 } from "@/lib/constants/chat";
+import { MAX_CHAT_INPUT } from "@/config/rag";
 import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
 import type { BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
 import { EMessageRole, EWidgetBackgroundType } from "@/types/enums";
@@ -40,6 +41,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { VOICE_RECORDING_DURATION } from "@/config/voice-chat";
+import { ChatTabSwitcher } from "@/components/chat/ChatTabSwitcher";
+import { getLastTabPreference } from "@/lib/helpers/group-tab-preference";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const LeadForm = dynamic(() => import("@/components/chat/LeadForm").then((mod) => mod.LeadForm), {
   ssr: false,
@@ -126,8 +130,39 @@ export function StandaloneChatUI({
   useEffect(() => {
     if (typeof window !== "undefined") {
       setShareUrl(window.location.href);
+
+      // Check last tab preference and redirect to group if user is a member
+      if (bot.id && bot.slug) {
+        const pref = getLastTabPreference(bot.id);
+        if (pref === "group") {
+          const checkAndRedirect = async () => {
+            try {
+              const supabase = createBrowserSupabaseClient();
+              const {
+                data: { user },
+              } = await supabase.auth.getUser();
+
+              if (user) {
+                const res = await fetch(`/api/bots/${bot.id}/group`);
+                if (res.ok) {
+                  const json = await res.json();
+                  if (
+                    json.success &&
+                    json.data?.members?.some((m: { user_id: string }) => m.user_id === user.id)
+                  ) {
+                    window.location.replace(`/public-bot/${bot.slug}/group`);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Error during last-tab redirect:", err);
+            }
+          };
+          checkAndRedirect();
+        }
+      }
     }
-  }, []);
+  }, [bot.id, bot.slug]);
 
   // Tích hợp nút Micro kế bên nút Gửi (Send) trong form input chat
   const {
@@ -442,14 +477,24 @@ export function StandaloneChatUI({
 
   const headerInfo = (
     <>
-      <Avatar className="h-10 w-10 rounded-2xl border-2 border-white/30 shadow-sm transition-shadow">
+      <Avatar className="h-10 w-10 shrink-0 rounded-2xl border-2 border-white/30 shadow-sm transition-shadow">
         <AvatarImage src={bot.avatar_url || undefined} alt={bot.name} className="object-cover" />
         <AvatarFallback className="rounded-2xl bg-white/10 text-white">
           <Bot className="h-6 w-6" />
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-lg font-semibold leading-tight">{bot.name}</h1>
+        <div className="flex items-center gap-1.5">
+          <h1 className="truncate text-lg font-semibold leading-tight">{bot.name}</h1>
+          {bot.slug && (
+            <ChatTabSwitcher
+              botId={bot.id}
+              botSlug={bot.slug}
+              activeTab="chat"
+              className="h-5.5 w-5.5 rounded-md bg-white/15 hover:bg-white/25 active:scale-95"
+            />
+          )}
+        </div>
         <p className="truncate text-sm opacity-90">
           {insufficientCredits
             ? "Tạm dừng do hết credits"
@@ -637,8 +682,10 @@ export function StandaloneChatUI({
     const messageToSend = (overrideInput || input).trim();
     if (!messageToSend || isLoading || !visitorId) return;
 
-    if (messageToSend.length > 200) {
-      appendAssistantMessage("Tin nhắn quá dài (tối đa 200 ký tự). Vui lòng rút gọn nội dung.");
+    if (messageToSend.length > MAX_CHAT_INPUT) {
+      appendAssistantMessage(
+        `Tin nhắn quá dài (tối đa ${MAX_CHAT_INPUT} ký tự). Vui lòng rút gọn nội dung.`
+      );
       return;
     }
 
@@ -816,7 +863,10 @@ export function StandaloneChatUI({
       `}</style>
 
       {/* Header */}
-      <div className="sticky top-0 z-20">
+      <div
+        className="sticky top-0 z-20 shadow-sm"
+        style={{ backgroundColor: primaryColor, color: headerTextColor }}
+      >
         {isMobile ? (
           <PWAInstallRoot
             appName={bot.name}
@@ -824,10 +874,7 @@ export function StandaloneChatUI({
             headerForeground={headerTextColor}
             pwaVersion={pwaVersion}
           >
-            <div
-              className="flex items-center gap-3 px-6 py-4 shadow-sm"
-              style={{ backgroundColor: primaryColor, color: headerTextColor }}
-            >
+            <div className="mx-auto flex max-w-3xl items-center gap-3 px-6 py-4">
               {headerInfo}
               <div className="flex items-center gap-2">
                 <PWAInstallHeaderButton />
@@ -836,10 +883,7 @@ export function StandaloneChatUI({
             </div>
           </PWAInstallRoot>
         ) : (
-          <div
-            className="flex items-center gap-3 px-6 py-4 shadow-sm"
-            style={{ backgroundColor: primaryColor, color: headerTextColor }}
-          >
+          <div className="mx-auto flex max-w-3xl items-center gap-3 px-6 py-4">
             {headerInfo}
             <div className="flex items-center gap-2">{shareDialog}</div>
           </div>
@@ -1111,7 +1155,7 @@ export function StandaloneChatUI({
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={insufficientCredits ? "Bot đã hết credits" : "Nhập tin nhắn..."}
                 disabled={isLoading || isChatBlocked || showLeadForm || isSttLoading}
-                maxLength={200}
+                maxLength={MAX_CHAT_INPUT}
                 className="flex-1 rounded-2xl"
               />
               {isVoiceEnabled &&

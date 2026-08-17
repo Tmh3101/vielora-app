@@ -239,6 +239,12 @@ current_conversations as (
   where c.bot_id = p_bot_id
     and c.started_at >= b.current_from
     and c.started_at <= b.current_to
+  union all
+  select g.id, g.created_at as started_at
+  from public.group_chats g, bounds b
+  where g.bot_id = p_bot_id
+    and g.created_at >= b.current_from
+    and g.created_at <= b.current_to
 ),
 previous_conversations as (
   select c.id, c.started_at
@@ -246,6 +252,12 @@ previous_conversations as (
   where c.bot_id = p_bot_id
     and c.started_at >= b.previous_from
     and c.started_at <= b.previous_to
+  union all
+  select g.id, g.created_at as started_at
+  from public.group_chats g, bounds b
+  where g.bot_id = p_bot_id
+    and g.created_at >= b.previous_from
+    and g.created_at <= b.previous_to
 ),
 current_messages as (
   select m.id, m.conversation_id, m.content, m.created_at, m.role, m.no_answer
@@ -255,6 +267,17 @@ current_messages as (
   where c.bot_id = p_bot_id
     and m.created_at >= b.current_from
     and m.created_at <= b.current_to
+  union all
+  select gm.id, gm.group_id as conversation_id, gm.content, gm.created_at,
+         case when gm.sender_type = 'bot' then 'assistant' else 'user' end as role,
+         false as no_answer
+  from public.group_messages gm
+  inner join public.group_chats gc on gc.id = gm.group_id
+  cross join bounds b
+  where gc.bot_id = p_bot_id
+    and gm.deleted_at is null
+    and gm.created_at >= b.current_from
+    and gm.created_at <= b.current_to
 ),
 previous_messages as (
   select m.id, m.conversation_id, m.created_at, m.role, m.no_answer
@@ -264,22 +287,57 @@ previous_messages as (
   where c.bot_id = p_bot_id
     and m.created_at >= b.previous_from
     and m.created_at <= b.previous_to
+  union all
+  select gm.id, gm.group_id as conversation_id, gm.created_at,
+         case when gm.sender_type = 'bot' then 'assistant' else 'user' end as role,
+         false as no_answer
+  from public.group_messages gm
+  inner join public.group_chats gc on gc.id = gm.group_id
+  cross join bounds b
+  where gc.bot_id = p_bot_id
+    and gm.deleted_at is null
+    and gm.created_at >= b.previous_from
+    and gm.created_at <= b.previous_to
 ),
 current_usage as (
-  select coalesce(sum(coalesce(ul.count, 1)), 0)::int as value
-  from public.usage_logs ul, bounds b
-  where ul.bot_id = p_bot_id
-    and ul.action = 'chat_message'
-    and ul.created_at >= b.current_from
-    and ul.created_at <= b.current_to
+  select greatest(
+    coalesce(
+      (
+        select sum(coalesce(ul.count, 1))::int
+        from public.usage_logs ul, bounds b
+        where ul.bot_id = p_bot_id
+          and ul.action = 'chat_message'
+          and ul.created_at >= b.current_from
+          and ul.created_at <= b.current_to
+      ),
+      0
+    ),
+    (
+      select count(*)::int
+      from current_messages
+      where role = 'assistant'
+    )
+  )::int as value
 ),
 previous_usage as (
-  select coalesce(sum(coalesce(ul.count, 1)), 0)::int as value
-  from public.usage_logs ul, bounds b
-  where ul.bot_id = p_bot_id
-    and ul.action = 'chat_message'
-    and ul.created_at >= b.previous_from
-    and ul.created_at <= b.previous_to
+  select greatest(
+    coalesce(
+      (
+        select sum(coalesce(ul.count, 1))::int
+        from public.usage_logs ul, bounds b
+        where ul.bot_id = p_bot_id
+          and ul.action = 'chat_message'
+          and ul.created_at >= b.previous_from
+          and ul.created_at <= b.previous_to
+      ),
+      0
+    ),
+    (
+      select count(*)::int
+      from previous_messages
+      where role = 'assistant'
+    )
+  )::int as value
 ),
 kpi_values as (
   select

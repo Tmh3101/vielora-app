@@ -1402,3 +1402,326 @@ UPDATE public.subscriptions s
 SET workspace_id = w.id
 FROM public.workspaces w
 WHERE s.workspace_id IS NULL AND w.owner_id = s.user_id;
+
+-- ============================================================================
+-- GROUP CHAT CORE SCHEMA (spec §3.1-3.6)
+-- ============================================================================
+
+DO $$ BEGIN
+  CREATE TYPE public.group_message_sender_type AS ENUM ('user', 'bot', 'system');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS public.group_chats (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  bot_id uuid NOT NULL,
+  status text DEFAULT 'active' NOT NULL,
+  created_by uuid NOT NULL,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  updated_at timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT group_chats_pkey PRIMARY KEY (id),
+  CONSTRAINT group_chats_bot_id_key UNIQUE (bot_id),
+  CONSTRAINT group_chats_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.bots(id) ON DELETE CASCADE,
+  CONSTRAINT group_chats_status_check CHECK (status IN ('active', 'disabled'))
+);
+
+DROP TRIGGER IF EXISTS update_group_chats_updated_at ON public.group_chats;
+CREATE TRIGGER update_group_chats_updated_at
+  BEFORE UPDATE ON public.group_chats
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS public.group_members (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  group_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  email text NOT NULL,
+  role_label text NULL,
+  can_pin_knowledge boolean DEFAULT false NOT NULL,
+  can_create_note boolean DEFAULT false NOT NULL,
+  invited_by uuid NOT NULL,
+  last_read_at timestamptz NULL,
+  joined_at timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT group_members_pkey PRIMARY KEY (id),
+  CONSTRAINT group_members_group_user_unique UNIQUE (group_id, user_id),
+  CONSTRAINT group_members_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.group_chats(id) ON DELETE CASCADE,
+  CONSTRAINT group_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON public.group_members (group_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON public.group_members (user_id);
+
+CREATE OR REPLACE FUNCTION public.enforce_group_member_limit()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $function$
+BEGIN
+  IF (SELECT COUNT(*) FROM public.group_members WHERE group_id = NEW.group_id) >= 5 THEN
+    RAISE EXCEPTION 'GROUP_MEMBER_LIMIT_REACHED';
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_enforce_group_member_limit ON public.group_members;
+CREATE TRIGGER trg_enforce_group_member_limit
+  BEFORE INSERT ON public.group_members
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_group_member_limit();
+
+CREATE TABLE IF NOT EXISTS public.group_messages (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  group_id uuid NOT NULL,
+  sender_type public.group_message_sender_type DEFAULT 'user' NOT NULL,
+  sender_id uuid NULL,
+  content text NOT NULL,
+  reply_to_id uuid NULL,
+  mentions uuid[] DEFAULT '{}' NOT NULL,
+  should_bot_reply boolean DEFAULT true NOT NULL,
+  no_answer boolean NULL,
+  deleted_at timestamptz NULL,
+  deleted_by uuid NULL,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT group_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT group_messages_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.group_chats(id) ON DELETE CASCADE,
+  CONSTRAINT group_messages_reply_to_id_fkey FOREIGN KEY (reply_to_id) REFERENCES public.group_messages(id) ON DELETE SET NULL,
+  CONSTRAINT group_messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES auth.users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_group_messages_group_created ON public.group_messages (group_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_group_messages_reply_to ON public.group_messages (reply_to_id) WHERE reply_to_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_group_messages_mentions ON public.group_messages USING gin (mentions);
+
+CREATE TABLE IF NOT EXISTS public.chat_knowledge (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  bot_id uuid NOT NULL,
+  group_id uuid NOT NULL,
+  message_id uuid NULL,
+  question text NOT NULL,
+  answer text NULL,
+  pinned_by uuid NOT NULL,
+  document_id uuid NULL,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT chat_knowledge_pkey PRIMARY KEY (id),
+  CONSTRAINT chat_knowledge_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.bots(id) ON DELETE CASCADE,
+  CONSTRAINT chat_knowledge_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.group_chats(id) ON DELETE CASCADE,
+  CONSTRAINT chat_knowledge_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.group_messages(id) ON DELETE SET NULL,
+  CONSTRAINT chat_knowledge_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_knowledge_bot_id ON public.chat_knowledge (bot_id);
+
+CREATE TABLE IF NOT EXISTS public.group_chat_insights (
+  bot_id uuid NOT NULL,
+  group_id uuid NOT NULL,
+  summary text DEFAULT '' NOT NULL,
+  document_id uuid NULL,
+  last_summarized_message_at timestamptz NULL,
+  updated_at timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT group_chat_insights_pkey PRIMARY KEY (bot_id),
+  CONSTRAINT group_chat_insights_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.bots(id) ON DELETE CASCADE,
+  CONSTRAINT group_chat_insights_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.group_chats(id) ON DELETE CASCADE,
+  CONSTRAINT group_chat_insights_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.group_notes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id uuid NOT NULL REFERENCES public.group_chats(id) ON DELETE CASCADE,
+  bot_id uuid NOT NULL REFERENCES public.bots(id) ON DELETE CASCADE,
+  created_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  content_html text NOT NULL,
+  content_text text NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  archived_at timestamptz NULL,
+  collapsed boolean NOT NULL DEFAULT false,
+  document_id uuid NULL REFERENCES public.documents(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_group_notes_group_id_created
+  ON public.group_notes (group_id, created_at DESC);
+
+-- UNIQUE partial index: hard backstop guaranteeing at most 1 active note per group
+-- even under concurrent inserts (row-level trigger alone can race). Review B1/R2.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_group_notes_single_active
+  ON public.group_notes (group_id)
+  WHERE is_active = true;
+
+CREATE INDEX IF NOT EXISTS idx_group_notes_bot_id
+  ON public.group_notes (bot_id);
+
+CREATE INDEX IF NOT EXISTS idx_group_notes_document_id
+  ON public.group_notes (document_id);
+
+CREATE OR REPLACE FUNCTION public.enforce_single_active_note()
+RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF NEW.is_active = true THEN
+    UPDATE public.group_notes
+    SET is_active = false,
+        archived_at = COALESCE(archived_at, now()),
+        updated_at = now()
+    WHERE group_id = NEW.group_id
+      AND id <> COALESCE(NEW.id, '00000000-0000-0000-0000-000000000000'::uuid)
+      AND is_active = true;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_enforce_single_active_note ON public.group_notes;
+CREATE TRIGGER trg_enforce_single_active_note
+  BEFORE INSERT OR UPDATE OF is_active ON public.group_notes
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_single_active_note();
+
+CREATE OR REPLACE FUNCTION public.handle_group_notes_updated_at()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_group_notes_updated_at ON public.group_notes;
+CREATE TRIGGER trg_group_notes_updated_at
+  BEFORE UPDATE ON public.group_notes
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_group_notes_updated_at();
+
+-- ============================================================================
+-- GROUP CHAT RLS & REALTIME (spec §3.8-3.9)
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.is_bot_manager(p_bot_id uuid, p_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.bots b
+    WHERE b.id = p_bot_id
+      AND (
+        b.user_id = p_user_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.workspace_members wm
+          JOIN public.workspace_roles wr ON wr.id = wm.role_id
+          WHERE wm.workspace_id = b.workspace_id
+            AND wm.user_id = p_user_id
+            AND wm.status = 'active'
+            AND wr.hierarchy >= 80
+        )
+      )
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_group_member(p_group_id uuid, p_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.group_members WHERE group_id = p_group_id AND user_id = p_user_id
+  );
+$$;
+
+ALTER TABLE public.group_chats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.group_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_knowledge ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.group_chat_insights ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.group_notes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "group_chats_manager_all" ON public.group_chats;
+CREATE POLICY "group_chats_manager_all" ON public.group_chats FOR ALL
+  USING (public.is_bot_manager(bot_id, auth.uid()))
+  WITH CHECK (public.is_bot_manager(bot_id, auth.uid()));
+
+DROP POLICY IF EXISTS "group_chats_member_select" ON public.group_chats;
+CREATE POLICY "group_chats_member_select" ON public.group_chats FOR SELECT
+  USING (public.is_group_member(id, auth.uid()));
+
+DROP POLICY IF EXISTS "group_members_manager_all" ON public.group_members;
+CREATE POLICY "group_members_manager_all" ON public.group_members FOR ALL
+  USING (public.is_bot_manager((SELECT bot_id FROM public.group_chats WHERE id = group_id), auth.uid()))
+  WITH CHECK (public.is_bot_manager((SELECT bot_id FROM public.group_chats WHERE id = group_id), auth.uid()));
+
+DROP POLICY IF EXISTS "group_members_self_select" ON public.group_members;
+CREATE POLICY "group_members_self_select" ON public.group_members FOR SELECT
+  USING (public.is_group_member(group_id, auth.uid()));
+
+DROP POLICY IF EXISTS "group_members_self_leave" ON public.group_members;
+CREATE POLICY "group_members_self_leave" ON public.group_members FOR DELETE
+  USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "group_messages_member_select" ON public.group_messages;
+CREATE POLICY "group_messages_member_select" ON public.group_messages FOR SELECT
+  USING (public.is_group_member(group_id, auth.uid())
+    OR public.is_bot_manager((SELECT bot_id FROM public.group_chats WHERE id = group_id), auth.uid()));
+
+DROP POLICY IF EXISTS "group_messages_member_insert" ON public.group_messages;
+CREATE POLICY "group_messages_member_insert" ON public.group_messages FOR INSERT
+  WITH CHECK (public.is_group_member(group_id, auth.uid()) AND sender_type = 'user' AND sender_id = auth.uid());
+
+DROP POLICY IF EXISTS "chat_knowledge_manager_all" ON public.chat_knowledge;
+CREATE POLICY "chat_knowledge_manager_all" ON public.chat_knowledge FOR ALL
+  USING (public.is_bot_manager(bot_id, auth.uid()))
+  WITH CHECK (public.is_bot_manager(bot_id, auth.uid()));
+
+DROP POLICY IF EXISTS "group_chat_insights_manager_select" ON public.group_chat_insights;
+CREATE POLICY "group_chat_insights_manager_select" ON public.group_chat_insights FOR SELECT
+  USING (public.is_bot_manager(bot_id, auth.uid()));
+
+DROP POLICY IF EXISTS "group_notes_member_select" ON public.group_notes;
+CREATE POLICY "group_notes_member_select" ON public.group_notes
+  FOR SELECT
+  USING (
+    public.is_group_member(group_id, auth.uid())
+  );
+
+DROP POLICY IF EXISTS "group_notes_manager_or_authorized_write" ON public.group_notes;
+CREATE POLICY "group_notes_manager_or_authorized_write" ON public.group_notes
+  FOR ALL
+  USING (
+    public.is_bot_manager((SELECT bot_id FROM public.group_chats WHERE id = group_id), auth.uid())
+    OR EXISTS (
+      SELECT 1 FROM public.group_members gm
+      WHERE gm.group_id = group_notes.group_id
+        AND gm.user_id = auth.uid()
+        AND gm.can_create_note = true
+    )
+  )
+  WITH CHECK (
+    public.is_bot_manager((SELECT bot_id FROM public.group_chats WHERE id = group_id), auth.uid())
+    OR EXISTS (
+      SELECT 1 FROM public.group_members gm
+      WHERE gm.group_id = group_notes.group_id
+        AND gm.user_id = auth.uid()
+        AND gm.can_create_note = true
+    )
+  );
+
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.group_messages;
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'group_notes'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.group_notes;
+  END IF;
+END $$;
+
+

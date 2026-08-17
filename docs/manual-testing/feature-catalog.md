@@ -34,13 +34,18 @@
 
 # LỊCH SỬ THAY ĐỔI
 
-| Phiên bản | Ngày       | Tác giả    | Người duyệt | Thay đổi                                                                                |
-| --------- | ---------- | ---------- | ----------- | --------------------------------------------------------------------------------------- |
-| 1.0       | 26/07/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Bản đầu — phong cách kỹ thuật                                                           |
-| 2.0       | 26/07/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Viết lại theo nghiệp vụ, bỏ jargon kỹ thuật                                             |
-| 3.0       | 26/07/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Bổ sung môi trường/tài khoản, tình huống thiếu, quy tắc nghiệp vụ chính xác             |
-| 4.0       | 26/07/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Nâng cấp bố cục chuẩn doanh nghiệp: trang bìa, mục lục, header/footer, phân cấp heading |
-| 4.1       | 09/08/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Bổ sung Cách C — Tạo bot hàng loạt từ CSV vào F13, rút gọn bố cục                       |
+| Phiên bản | Ngày       | Tác giả    | Người duyệt | Thay đổi                                                                                                                                                                                                                                                                                                                                                                               |
+| --------- | ---------- | ---------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0       | 26/07/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Bản đầu — phong cách kỹ thuật                                                                                                                                                                                                                                                                                                                                                          |
+| 2.0       | 26/07/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Viết lại theo nghiệp vụ, bỏ jargon kỹ thuật                                                                                                                                                                                                                                                                                                                                            |
+| 3.0       | 26/07/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Bổ sung môi trường/tài khoản, tình huống thiếu, quy tắc nghiệp vụ chính xác                                                                                                                                                                                                                                                                                                            |
+| 4.0       | 26/07/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Nâng cấp bố cục chuẩn doanh nghiệp: trang bìa, mục lục, header/footer, phân cấp heading                                                                                                                                                                                                                                                                                                |
+| 4.1       | 09/08/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Bổ sung Cách C — Tạo bot hàng loạt từ CSV vào F13, rút gọn bố cục                                                                                                                                                                                                                                                                                                                      |
+| 4.2       | 14/08/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | Cập nhật NHÓM 7 & NHÓM 9 theo subscription-flow.md (F38-F43.1, F44-F46, F49, F51) — bản nháp, một số điểm Enterprise chưa chuẩn                                                                                                                                                                                                                                                        |
+| 4.3       | 14/08/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | SỬA LẠI luồng Enterprise chuẩn hóa theo code: F39 tách Mua/Nâng cấp/Gia hạn; Enterprise tự cấu hình bot(50-2000)+credit(10k-100k) tự tính tiền; gia hạn cùng chu kỳ + chỉ 1 lần (≤35 ngày tháng / ≤370 ngày năm); nâng cấp cùng chu kỳ có bù credit từ ngày nâng cấp; F42 nâng cấp cấu hình Enterprise không reset chu kỳ, tính theo đơn giá × tháng còn lại; F43.1 ma trận hiệu chỉnh |
+| 4.4       | 14/08/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | BỔ SUNG NHÓM 15 — GROUP CHAT (F60-F69): tạo nhóm, mời/thêm thành viên (giới hạn 5), tự động tạo tài khoản khách + Magic Link, màn hình từ chối truy cập, gửi/reply/voice + toggle AI, realtime & tin chưa đọc, ghim kiến thức vào RAG, bật/tắt nhóm, rời/xóa thành viên, báo cáo tóm tắt hàng ngày (Insights)                                                                          |
+| 4.5       | 14/08/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | SỬA LẠI F66 (Ghim kiến thức): bổ sung trừ 1 credit khi ghim, hoàn credit nếu lỗi, báo không đủ credit, bỏ ghim xóa cả embedding RAG; SỬA F69 (Tóm tắt hàng ngày): rõ cron 2h sáng, lưu 2 nơi (Insights + documents làm kiến thức bot/RAG), không cố định 3-5 ý, giới hạn 30 tin/loại đã xóa, upsert không trùng                                                                        |
+| 4.6       | 17/08/2026 | [ĐIỀN TÊN] | [ĐIỀN TÊN]  | BỔ SUNG GROUP NOTES & VOICE-TO-NOTE vào NHÓM 15: F70 Tạo ghi chú (1 credit, single-active, nạp RAG, banner + thông báo); F71 Sửa ghi chú (upsert RAG, -1 credit); F72 Xóa ghi chú (xóa RAG, hoàn +1 credit); F73 Pin/Unpin ghi chú; F74 Phân quyền can_create_note (2 nơi: drawer nhóm & MemberList bot-detail); F75 Tab "Ghi chú" (active+archived, phân trang 20); F76 Voice-to-Note (mic trong editor, STT 1 credit + AI format, lưu 1 credit AddKnowledge, không auto-save) |
 
 ---
 
@@ -327,7 +332,7 @@ Tại bước 1 có **3 cách tạo bot**:
 - Không đủ credits (Cách B) → chặn, báo số file tối đa tải được.
 - File sai định dạng / quá lớn (Cách B) → từ chối.
 - File không phải .csv / quá 10MB (Cách C) → từ chối: "Vui lòng tải lên file đúng định dạng .csv" / "Dung lượng file vượt quá giới hạn 10MB".
-- Dòng thiếu tên, slug sai định dạng, trùng slug trong file, nội dung kiến thức >10.000 ký tự (Cách C) → dòng lỗi kèm lý do tiếng Việt.
+- Dòng thiếu tên, slug sai định dạng, trùng slug trong file, nội dung kiến thức vượt quá 10.000 ký tự (Cách C) → dòng lỗi kèm lý do tiếng Việt.
 - Vượt giới hạn bot của gói / thiếu credits (Cách C) → chặn ở bước 2, báo rõ số còn thiếu.
 - Mất mạng / đóng tab giữa chừng (Cách C) → bot đã xử lý xong vẫn được tạo, bot chưa xử lý thì không — kiểm tra lại không có bot lỗi dở dang.
 - **Xóa bot (tình huống bắt buộc phủ)**: Sau khi xóa bot, bot biến mất khỏi danh sách; kiến thức, khách hàng tiềm năng, lịch sử trò chuyện của bot xử lý như thế nào (xóa theo hay giữ lại) — xác nhận hành vi và ghi nhận kết quả.
@@ -667,90 +672,156 @@ Tại bước 1 có **3 cách tạo bot**:
 
 ## F38. Xem gói hiện tại
 
-**Mô tả**: Trang "Thanh toán" hiển thị gói đang dùng, ngày hết hạn, giới hạn bot, và số dư credits (credits gói + credits nạp thêm).
+**Mô tả**: Trang "Thanh toán" hiển thị gói đang dùng, ngày hết hạn, giới hạn bot tối đa, số dư credits (credits gói + credits nạp thêm), và thời gian còn lại tính bằng ngày.
 
-**Kết quả mong đợi**: Thông tin đúng với workspace đang chọn.
+**Kết quả mong đợi**: Thông tin hiển thị đúng với workspace. Số dư credits cập nhật real-time sau mỗi thao tác (tạo bot, hệ thống trừ credits).
 
-📷 **Ảnh minh họa**: Trang "Thanh toán" — gói hiện tại, ngày hết hạn, giới hạn bot, số dư credits — chụp màn hình và thay thế dòng này bằng hình.
+**Ghi chú cho tester**: Ghi chép số credits trước/sau mỗi thao tác liên quan (F13, F22-F23) để kiểm chứng trừ đúng số lượng.
 
-## F39. Nâng cấp / Mua gói
+📷 **Ảnh minh họa**: Trang "Thanh toán" — gói, ngày hết hạn, giới hạn bot, số dư credits — chụp màn hình và thay thế dòng này bằng hình.
 
-**Mô tả**: Chọn gói và chu kỳ (tháng / năm) → thanh toán qua cổng PayOS (chuyển khoản QR, ATM, thẻ).
+## F39. Mua gói / Nâng cấp / Gia hạn
+
+**Mô tả**: Khách quản lý gói cước qua trang "Thanh toán". Có 3 nghiệp vụ: **Mua gói lần đầu**, **Nâng cấp/Chuyển gói**, **Gia hạn**.
+
+### F39.1. Mua gói lần đầu (Standard / Pro / Enterprise)
 
 **Thao tác kiểm thử**:
 
 1. Vào trang "Thanh toán" → chọn gói.
-2. Chọn chu kỳ thanh toán.
-3. Nhấn nút thanh toán → chuyển sang trang thanh toán PayOS.
-4. Thanh toán thành công.
+2. Chọn chu kỳ: **1 tháng** hoặc **1 năm**.
+3. (Riêng Enterprise) Nhập cấu hình: số lượng bot (50–2.000) và credits/tháng (10.000–100.000). Hệ thống **tự động tính tiền** ngay khi thay đổi cấu hình.
+4. Nhấn thanh toán → trang PayOS → chọn hình thức (QR, ATM, thẻ) → thanh toán.
 
-**Kết quả mong đợi**: Thanh toán xong → gói được nâng cấp, credits gói được cộng vào ví, quay lại trang kết quả thành công.
+**Kết quả mong đợi**:
+
+- **Standard / Pro**: giá niêm yết cố định theo tháng/năm, thanh toán bình thường.
+- **Enterprise (tự động tính)**: giá = **1.490.000đ (phí nền) + (số bot − 50) × 10.000đ + (credits − 10.000) / 1.000 × 100.000đ**; gói năm = giá tháng × 10 (trả 10 tháng/năm). Khách chỉ cần chọn cấu hình, số tiền hiện ra tự động, thanh toán như bình thường.
+
+**Yêu cầu nhập liệu**:
+
+| Trường                           | Bắt buộc | Quy tắc                     |
+| -------------------------------- | :------: | --------------------------- |
+| Gói cước                         |    ✅    | Standard / Pro / Enterprise |
+| Chu kỳ                           |    ✅    | Tháng hoặc Năm              |
+| Số bot (riêng Enterprise)        |    ✅    | 50–2.000                    |
+| Credits/tháng (riêng Enterprise) |    ✅    | 10.000–100.000              |
+
+### F39.2. Nâng cấp / Chuyển gói (Standard ↔ Pro, hoặc lên Enterprise)
+
+**Thao tác kiểm thử**:
+
+1. Đang dùng gói trả phí → chọn gói mới + chu kỳ mới (cùng chu kỳ hiện tại: tháng theo tháng, năm theo năm).
+2. Hệ thống tính: **giá gói mới − tiền bù trừ** (bù trừ theo lượng credits còn lại của chu kỳ hiện tại).
+3. Thanh toán phần chênh lệch → kích hoạt gói mới.
+
+**Kết quả mong đợi**:
+
+- Chu kỳ **bắt đầu lại từ ngày nâng cấp** (thời gian còn lại của gói cũ không bảo lưu, chỉ quy đổi qua tiền bù credit).
+- Credits được cấp lại theo hạn mức gói mới.
+- Tiền bù = (credits còn lại trong kỳ / tổng credits của gói cũ trong chu kỳ) × giá gói cũ đã trả.
 
 **Trường hợp ngoại lệ**:
 
-- Chọn gói Doanh nghiệp → hiện thông báo liên hệ bộ phận bán hàng (contact@vielora.vn).
-- Chọn gói Miễn phí → thông báo gói miễn phí chỉ tự động áp dụng khi gói trả phí hết hạn.
-- Gia hạn sai chu kỳ → báo chọn đúng chu kỳ.
-- Hủy thanh toán giữa chừng → gói không đổi, không bị trừ tiền.
+- Chọn trùng gói đang dùng (không phải Enterprise) → từ chối: "You are already on this plan".
+- Hủy thanh toán giữa chừng → gói không đổi, không trừ tiền.
+- Thanh toán một giao dịch **hai lần** (webhook + trang kết quả cùng lúc) → hệ thống chống trùng, chỉ tính 1 lần.
 
-**Ghi chú cho tester**:
+### F39.3. Gia hạn gói
 
-- Thanh toán phụ thuộc môi trường — xem mục **MÔI TRƯỜNG KIỂM THỬ** (Sandbox PayOS hay thật).
-- Nếu dùng PayOS sandbox: dùng **thẻ test / QR test** theo hướng dẫn của PayOS — _[ĐIỀN: link hướng dẫn thẻ test sandbox]_.
-- Test luôn trường hợp **thanh toán thành công** và **hủy thanh toán** (quay lại trang kết quả tương ứng).
+**Thao tác kiểm thử**:
 
-📷 **Ảnh minh họa**: Trang chọn gói (Free/Standard/Pro/Enterprise) + trang thanh toán PayOS — chụp màn hình và thay thế dòng này bằng hình.
+1. Trước khi hết hạn (hoặc sau khi hết hạn) → chọn "Gia hạn".
+2. Chọn chu kỳ: **phải cùng chu kỳ gói hiện tại** (đang tháng → gia hạn tháng, đang năm → gia hạn năm).
+3. Thanh toán full giá gói → kích hoạt.
+
+**Kết quả mong đợi**:
+
+- Gia hạn **đúng gói trả phí hiện tại** (standard → standard, pro → pro, enterprise → enterprise cùng cấu hình).
+- Thời gian được **cộng dồn**: tháng thêm 1 tháng, năm thêm 1 năm (tính từ ngày kết thúc chu kỳ cũ).
+- **Chỉ gia hạn được 1 lần** cho đến khi bắt đầu chu kỳ mới — nếu đã có chu kỳ tiếp theo (còn hơn 35 ngày với gói tháng / hơn 370 ngày với gói năm) → báo "Bạn đã có sẵn chu kỳ tiếp theo", không gia hạn được nữa.
+- Credits: giữ nguyên (không reset) nếu còn hạn; cấp lại đầy đủ nếu đã hết hạn lâu.
+
+**Trường hợp ngoại lệ**:
+
+- Enterprise chọn gia hạn khác chu kỳ hiện tại → từ chối: "Không thể gia hạn khác chu kỳ. Gói hiện tại của bạn là chu kỳ Tháng/Năm".
+- Hủy thanh toán → gói không đổi.
+
+**Ghi chú cho tester**: Thanh toán phụ thuộc môi trường (Sandbox PayOS hay thật) — xem mục **MÔI TRƯỜNG KIỂM THỬ**. Nếu dùng sandbox: dùng thẻ test/QR test của PayOS — _[ĐIỀN: link hướng dẫn]_. Test cả thanh toán thành công và hủy thanh toán.
+
+📷 **Ảnh minh họa**: Trang chọn gói + cấu hình Enterprise (slider/numer bot & credit + số tiền tự động) + trang thanh toán PayOS — chụp màn hình và thay thế dòng này bằng hình.
 
 ## F40. Nạp thêm credits
 
-**Mô tả**: Mua thêm credits dùng dần (không giới hạn thời gian) khi credits gói đã dùng hết.
+**Mô tả**: Mua thêm credits dùng dần — không thời hạn, không reset khi gói đổi/kế hạn.
 
-**Kết quả mong đợi**: Thanh toán xong → credits nạp thêm xuất hiện trong ví.
+**Thao tác kiểm thử**: Vào "Thanh toán" → "Nạp thêm credits" → chọn gói (vd: 5.000 credits) → thanh toán PayOS → xác nhận.
 
-📷 **Ảnh minh họa**: Trang nạp thêm credits (chọn gói credits) — chụp màn hình và thay thế dòng này bằng hình.
+**Kết quả mong đợi**: Thanh toán xong → số dư credits tăng đúng; lịch sử ghi nhận giao dịch.
 
-## F41. Khi gói hết hạn
+**Trường hợp ngoại lệ**: Không đủ credits nhưng có đang nạp thêm → hệ thống gợi ý nạp credit trước khi thực hiện.
 
-**Mô tả**: Hệ thống tự động xử lý khi gói trả phí hết hạn.
+📷 **Ảnh minh họa**: Trang nạp thêm credits — chọn gói số lượng credits — chụp màn hình và thay thế dòng này bằng hình.
 
-**Kết quả mong đợi**: Gói chuyển về Miễn phí, credits tháng được làm mới theo quy định, các bot vượt giới hạn gói miễn phí bị tạm dừng.
+## F41. Hậu kiểm gia hạn gói
+
+**Mô tả**: Sau khi gia hạn (theo F39.3), kiểm tra trạng thái gói.
+
+**Kết quả mong đợi**:
+
+- Ngày hết hạn được **cộng dồn** đúng chu kỳ (tháng +1 tháng, năm +1 năm tính từ ngày kết thúc cũ).
+- Credits **giữ nguyên** nếu gia hạn khi còn hạn; chỉ cấp lại khi gói đã hết hạn lâu.
+- Không thể gia hạn lần 2 cho đến khi bắt đầu chu kỳ mới (còn hơn 35 ngày tháng / hơn 370 ngày năm → báo "đã có sẵn chu kỳ tiếp theo").
 
 **Trường hợp ngoại lệ**:
 
-- Trước khi hết hạn 3 ngày, **tất cả thành viên trong workspace** nhận email nhắc: "Gói X sắp hết hạn trong Y ngày" kèm nút gia hạn.
+- Trước khi hết hạn **1-3 ngày**, toàn bộ thành viên nhận email: "Gói X sắp hết hạn trong Y ngày" kèm nút gia hạn.
 
-**Ghi chú cho tester**:
+**Ghi chú cho tester**: Test "gói hết hạn" **không thể chờ thật** — liên hệ admin đặt ngày hết hạn tài khoản test về gần nhất. — _[ĐIỀN: tài khoản test / quy trình nhờ admin đặt hạn]_.
 
-- Test "gói hết hạn" **không thể chờ thời gian thật** — liên hệ quản trị hệ thống để **đặt ngày hết hạn của tài khoản test về ngày gần (1-3 ngày tới)** hoặc dùng tài khoản có gói sắp hết hạn. — _[ĐIỀN: tài khoản test có subscription sắp hết hạn / quy trình nhờ admin đặt hạn]_.
-- Kiểm tra email nhắc hết hạn ở hộp thư test (xem mục MÔI TRƯỜNG KIỂM THỬ).
+📷 **Ảnh minh họa**: Trang "Thanh toán" sau gia hạn — ngày hết hạn mới cộng dồn — chụp màn hình và thay thế dòng này bằng hình.
 
-📷 **Ảnh minh họa**: Email nhắc hết hạn gói (hộp thư) — nội dung + nút gia hạn — chụp màn hình và thay thế dòng này bằng hình.
+## F42. Nâng cấp cấu hình gói Enterprise (không reset chu kỳ)
 
-## F42. Lịch sử thanh toán
+**Mô tả**: Áp dụng cho khách **đang là Enterprise** muốn tăng thêm bot / credits — **không thay đổi ngày hết hạn, không reset chu kỳ**.
 
-**Mô tả**: Trang lịch sử liệt kê các lần thanh toán của workspace (gói, số tiền, ngày, người thanh toán, trạng thái hóa đơn).
+**Thao tác kiểm thử**: "Thanh toán" → "Mở rộng gói Doanh nghiệp" → nhập số bot thêm / credits thêm → hệ thống tính tiền → thanh toán PayOS → xác nhận.
 
-**Kết quả mong đợi**: Hiển thị đầy đủ các giao dịch của workspace — kể cả giao dịch do thành viên khác trong workspace thực hiện. Khi thành viên rời workspace, các giao dịch họ từng thanh toán vẫn được giữ trong lịch sử.
+**Kết quả mong đợi**:
 
-📷 **Ảnh minh họa**: Trang lịch sử thanh toán (danh sách giao dịch + thông tin người trả + trạng thái hóa đơn) — chụp màn hình và thay thế dòng này bằng hình.
+- Ngày hết hạn **giữ nguyên** (khác với nâng cấp gói thường ở F39.2).
+- Giới hạn cấu hình (số bot tối đa, credits/tháng) được **tăng đúng số đã đăng ký**.
+- Credits bổ sung được **cộng ngay vào ví**, không chờ reset; không áp dụng bù trừ.
+- Tiền phải trả = (số bot thêm × 10.000đ + credits thêm / 1.000 × 100.000đ) × **số tháng còn lại** (làm tròn lên, tối thiểu 1 tháng); gói năm áp dụng hệ số 10/12.
 
-## F43. Tra cứu mã số thuế
+**Trường hợp ngoại lệ**:
 
-**Mô tả**: Khi cần xuất hóa đơn, nhập mã số thuế công ty → hệ thống tự tra cứu và điền tên, địa chỉ công ty.
+- Không nhập bot/credit thêm → từ chối: "Vui lòng chọn số lượng bot hoặc credit cần nâng cấp bổ sung".
+- Gói còn 10 ngày (dưới 1 tháng) → vẫn tính tròn 1 tháng (không tính theo ngày).
 
-**Kết quả mong đợi**: Nhập mã số thuế hợp lệ → tự điền thông tin công ty vào biểu mẫu hóa đơn.
+## F43. Lịch sử thanh toán
 
-**Tình huống cần phủ**:
+**Mô tả**: Liệt kê giao dịch của workspace (gói, số tiền, ngày, người trả, trạng thái hóa đơn).
 
-- MST **sai định dạng** (vd: có chữ, thiếu số) → báo lỗi định dạng.
-- MST **không tồn tại** trong hệ thống tra cứu → thông báo không tìm thấy, không tự điền.
-- MST hợp lệ → điền đúng tên/địa chỉ công ty (đối chiếu với đăng ký kinh doanh).
+**Kết quả mong đợi**: Hiển thị đầy đủ — kể cả giao dịch do thành viên khác thực hiện. Khi thành viên rời workspace, giao dịch họ từng trả vẫn giữ lại.
 
----
+📷 **Ảnh minh họa**: Trang lịch sử thanh toán (giao dịch + người trả + trạng thái hóa đơn) — chụp màn hình và thay thế dòng này bằng hình.
 
-# NHÓM 8 — HÓA ĐƠN
+### F43.1. Ma trận luồng thanh toán (tham khảo)
 
-📷 **Ảnh minh họa**: Form tra cứu mã số thuế (nhập MST + kết quả tự điền công ty) — chụp màn hình và thay thế dòng này bằng hình.
+> Tóm tắt quy tắc cho từng kịch bản — tester đối chiếu kết quả thực tế với bảng này.
+
+| Kịch bản                       | Thanh toán                                                               | Chu kỳ mới                       | Credit             | Ghi chú                                                |
+| ------------------------------ | ------------------------------------------------------------------------ | -------------------------------- | ------------------ | ------------------------------------------------------ |
+| Mua gói lần đầu (Standard/Pro) | Full giá niêm yết                                                        | Từ hôm nay                       | Cấp đủ             | —                                                      |
+| Mua gói Enterprise (lần đầu)   | Tự động: 1.490.000 + (bot−50)×10.000 + (credit−10k)/1k×100.000; năm ×10  | Từ hôm nay                       | Cấp đủ             | Bot 50–2.000, credit 10k–100k, thanh toán bình thường  |
+| Gia hạn (còn hạn)              | Full giá                                                                 | Cộng dồn (tháng+1tháng/năm+1năm) | Giữ nguyên         | Cùng chu kỳ hiện tại; chỉ gia hạn 1 lần đến chu kỳ mới |
+| Gia hạn (đã hết hạn)           | Full giá                                                                 | Từ hôm nay                       | Cấp đủ             | —                                                      |
+| Nâng cấp / Chuyển gói          | Giá mới − bù credit còn lại                                              | Từ ngày nâng cấp                 | Reset theo gói mới | Cùng chu kỳ; bù theo credit còn lại của kỳ hiện tại    |
+| Nâng cấp cấu hình Enterprise   | (bot thêm×10.000 + credit thêm/1k×100.000) × tháng còn lại (tối thiểu 1) | **Giữ nguyên**                   | Cộng thêm ngay     | Không reset chu kỳ; credit cộng ngay; năm ×10/12       |
+| Gói hết hạn không gia hạn      | —                                                                        | Tự về Free                       | Về mức Free        | Bot bị dừng, email thông báo                           |
+
+⚠️ **Ràng buộc cần test**: (1) Gia hạn chỉ cùng chu kỳ — Enterprise chọn khác chu kỳ → từ chối. (2) Chỉ gia hạn được 1 lần: còn hơn 35 ngày (tháng) / hơn 370 ngày (năm) → báo "đã có sẵn chu kỳ tiếp theo". (3) Nâng cấp cấu hình Enterprise không đổi ngày hết hạn, chỉ tăng giới hạn + tính tiền theo đơn giá cấu hình × tháng còn lại.
 
 ## F44. Hóa đơn tự động
 
@@ -777,7 +848,22 @@ Tại bước 1 có **3 cách tạo bot**:
 
 ## F46. Tra cứu hóa đơn
 
-**Mô tả**: Hóa đơn có mã tra cứu, có thể tra trên cổng tra cứu hóa đơn điện tử.
+**Mô tả**: Mỗi hóa đơn có mã tra cứu (lookup code) và link tra cứu trên cổng hóa đơn điện tử — khách chủ động kiểm tra.
+
+**Thao tác kiểm thử**:
+
+1. Vào lịch sử thanh toán → chọn giao dịch đã có hóa đơn "đã phát hành".
+2. Sao chép mã tra cứu / nhấn link tra cứu.
+3. Mở cổng tra cứu hóa đơn điện tử → nhập mã → xem chi tiết.
+
+**Kết quả mong đợi**: Tra cứu ra đúng hóa đơn (số tiền, ngày, bên bán/mua khớp với giao dịch).
+
+**Trường hợp ngoại lệ**:
+
+- Hóa đơn chưa phát hành → chưa có mã tra cứu.
+- Mã tra cứu sai → cổng báo "không tìm thấy hóa đơn".
+
+📷 **Ảnh minh họa**: Lịch sử thanh toán — mã tra cứu + link cổng tra cứu hóa đơn — chụp màn hình và thay thế dòng này bằng hình.
 
 ---
 
@@ -799,7 +885,7 @@ Tại bước 1 có **3 cách tạo bot**:
 
 ## F49. Email nhắc hết hạn gói
 
-**Kết quả mong đợi**: 3 ngày trước khi hết hạn, tất cả thành viên workspace nhận email nhắc gia hạn.
+**Kết quả mong đợi**: 1-3 ngày trước khi hết hạn, tất cả thành viên workspace nhận email nhắc gia hạn (chi tiết gói, ngày hết hạn, nút gia hạn).
 
 📷 **Ảnh minh họa**: Email nhắc hết hạn gói (hộp thư) — chi tiết gói + ngày hết hạn — chụp màn hình và thay thế dòng này bằng hình.
 
@@ -811,7 +897,15 @@ Tại bước 1 có **3 cách tạo bot**:
 
 ## F51. Email hóa đơn
 
-**Kết quả mong đợi**: Nhận email chứa thông tin hóa đơn và mã tra cứu.
+**Mô tả**: Sau khi hóa đơn được phát hành, khách nhận email chứa thông tin hóa đơn (số tiền, ngày, mã số thuế bên mua) và mã tra cứu kèm link tra cứu.
+
+**Kết quả mong đợi**: Email đến hộp thư người thanh toán (và thành viên liên quan) — đầy đủ thông tin hóa đơn + mã tra cứu.
+
+**Trường hợp ngoại lệ**:
+
+- Hóa đơn phát hành thất bại → không có email, ghi nhận trạng thái trong lịch sử thanh toán.
+
+📷 **Ảnh minh họa**: Email hóa đơn (hộp thư) — thông tin hóa đơn + mã tra cứu + link — chụp màn hình và thay thế dòng này bằng hình.
 
 ---
 
@@ -914,6 +1008,382 @@ Tại bước 1 có **3 cách tạo bot**:
 
 ---
 
+# NHÓM 15 — NHÓM CHAT (GROUP CHAT)
+
+> **Khái niệm**: Nhóm chat cho phép **nhiều người cùng chat chung với một Bot AI** trong một "phòng" riêng, thay vì mỗi người phải chat riêng. Chủ sở hữu Bot (Owner) tạo nhóm, mời thành viên qua email, và quản lý nhóm từ trang quản trị. Thành viên có thể **tạo Ghi chú nhóm** (tóm tắt kiến thức quan trọng, lưu riêng khỏi luồng chat), **ghim** các câu hỏi–trả lời hay vào kho tri thức (RAG) của Bot, và Manager nhận báo cáo tóm tắt hàng ngày.
+> **Vai trò trong nhóm**: (1) **Chủ sở hữu Bot (Owner)** — tạo/sửa/xóa nhóm, mời thành viên, cấp quyền tạo ghi chú (`can_create_note`) và ghim (`can_pin_knowledge`); (2) **Thành viên được mời** — chat, reply, voice, tạo/sửa ghi chú (nếu được cấp `can_create_note`), ghim (nếu được cấp); (3) **Người ngoài (chưa là thành viên)** — bị từ chối truy cập.
+> **Ghi chú nhóm (Group Note)**: là các "thẻ ghi chú" do thành viên tạo để lưu tóm tắt / kiến thức cần nhớ của nhóm — KHÁC với tin nhắn chat và KHÁC với Ghim kiến thức (Pin → RAG). Mỗi nhóm chỉ có **1 ghi chú đang hoạt động (active)** tại một thời điểm; tạo ghi chú mới sẽ tự động đưa ghi chú cũ về trạng thái "đã lưu trữ" (archived) nhưng vẫn giữ trong RAG. Ghi chú tiêu tốn **1 credit workspace** khi tạo, và được **hoàn 1 credit** khi xóa.
+> **Điều kiện**: Tính năng Group Chat chỉ mở khi Bot thuộc **gói Pro trở lên** và Bot đã bật **trang chat độc lập** (có slug công khai).
+
+## F60. Tạo nhóm chat
+
+**Mô tả**: Chủ sở hữu Bot tạo một nhóm chat để tập hợp nhiều người cùng trò chuyện với Bot AI.
+
+**Thao tác kiểm thử**:
+
+1. Vào Dashboard → chọn Bot → tab **"Nhóm"** (Group).
+2. Nếu Bot chưa có nhóm, nhấn nút **"Tạo nhóm chat"**.
+3. Xác nhận tạo.
+
+**Kết quả mong đợi**: Nhóm được tạo tự động, giao diện chuyển sang màn hình nhóm chat (trống, chờ tin nhắn). Bot xuất hiện trong nhóm với vai trò trả lời tự động.
+
+**Trường hợp ngoại lệ**:
+
+- Bot chưa thuộc gói Pro → hệ thống báo **"Tính năng nhóm chat yêu cầu gói Pro"** và đưa tới trang nâng cấp (không tạo được).
+- Bot chưa bật trang chat độc lập (chưa có slug) → báo cần bật chat độc lập trước khi tạo nhóm.
+
+📷 **Ảnh minh họa**: Tab "Nhóm" trong bot-detail + nút "Tạo nhóm chat" + màn hình nhóm trống sau khi tạo — chụp màn hình và thay thế dòng này bằng hình.
+
+## F61. Mời thành viên vào nhóm
+
+**Mô tả**: Chủ sở hữu mời đồng nghiệp/khách hàng vào nhóm qua email. Mỗi nhóm **tối đa 5 thành viên**.
+
+**Thao tác kiểm thử**:
+
+1. Tại tab Nhóm → phần quản lý thành viên, nhấn **"Mời thành viên"**.
+2. Nhập email người được mời.
+3. Nhấn gửi lời mời.
+
+**Kết quả mong đợi**: Người được mời nhận email chứa link truy cập trực tiếp vào đúng nhóm. Thành viên xuất hiện trong danh sách thành viên (hoặc "đang chờ" nếu chưa vào).
+
+**Trường hợp ngoại lệ**:
+
+- Đã đạt giới hạn 5 thành viên → báo **"Đã đạt giới hạn 5 thành viên cho mỗi nhóm"**, không mời thêm.
+- Email đã là thành viên → báo **"Email này đã là thành viên của nhóm"**.
+- Đã gửi lời mời cho email này rồi → báo **"Đã gửi lời mời trước đó"**.
+- Người gửi không phải Chủ sở hữu Bot → không được phép mời.
+
+📷 **Ảnh minh họa**: Form "Mời thành viên nhóm" (nhập email) + thông báo giới hạn 5 người — chụp màn hình và thay thế dòng này bằng hình.
+
+## F62. Tự động tạo tài khoản khách + Magic Link
+
+**Mô tả**: Nếu email được mời **chưa có tài khoản Vielora**, hệ thống tự động tạo tài khoản và gửi link đăng nhập (Magic Link) — người nhận không cần đăng ký thủ công.
+
+**Thao tác kiểm thử**:
+
+1. Owner mời một email chưa từng có tài khoản Vielora.
+2. Người nhận mở email mời → nhấn link.
+3. Hệ thống tự đăng nhập và đưa vào nhóm.
+
+**Kết quả mong đợi**: Tài khoản được tạo tự động (chưa xác nhận mật khẩu), đăng nhập thành công qua Magic Link, người dùng vào được nhóm chat ngay.
+
+**Trường hợp ngoại lệ**:
+
+- Link hết hạn / đã dùng → hiển thị thông báo "liên kết xác thực đã được sử dụng hoặc hết hạn", đề nghị Owner mời lại hoặc đăng nhập bằng email.
+
+📷 **Ảnh minh họa**: Email mời nhóm gửi cho người chưa có tài khoản (có Magic Link) + màn hình nhóm sau khi click link — chụp màn hình và thay thế dòng này bằng hình.
+
+## F63. Màn hình "Yêu cầu lời mời" (từ chối truy cập)
+
+**Mô tả**: Người chưa đăng nhập hoặc không phải thành viên truy cập đường dẫn nhóm → thấy màn hình rõ ràng thay vì lỗi 404.
+
+**Thao tác kiểm thử**:
+
+1. Mở đường dẫn nhóm (`/public-bot/ten-bot/group`) khi chưa đăng nhập HOẶC khi đã đăng nhập bằng tài khoản không nằm trong nhóm.
+2. Quan sát màn hình.
+
+**Kết quả mong đợi**: Hiển thị màn hình **"Yêu cầu Lời mời Tham gia"** — giải thích nhóm riêng tư chỉ dành cho thành viên được mời. Có các nút: **Đăng nhập tài khoản** (nếu chưa login), **Chuyển đổi tài khoản** (nếu login sai email), và **Về trang Chat AI**.
+
+**Trường hợp ngoại lệ**:
+
+- Link xác thực trong email hết hạn (OTP expired) → toast thông báo "Liên kết xác thực đã hết hạn", hướng đăng nhập bằng email.
+
+📷 **Ảnh minh họa**: Màn hình "Yêu cầu Lời mời Tham gia" (email hiện tại + 2 nút đăng nhập/chuyển tài khoản) — chụp màn hình và thay thế dòng này bằng hình.
+
+## F64. Gửi tin nhắn, Reply, Voice & Toggle AI trả lời
+
+**Mô tả**: Thành viên chat trong nhóm: gửi text, trả lời (quote) một tin, nhắn giọng nói (chuyển thành text tự động), và tự quyết định có cho Bot trả lời hay không.
+
+**Thao tác kiểm thử**:
+
+1. Nhập tin nhắn vào ô soạn → nhấn Enter (hoặc nút gửi) để gửi.
+2. Di chuột lên một tin nhắn → bấm nút **Reply** để trả lời riêng tin đó.
+3. Bấm nút **mic** để thu âm giọng nói → hệ thống tự nhận diện và gửi.
+4. Bấm nút **Bot** (toggle) để bật/tắt chế độ "AI trả lời tự động".
+
+**Yêu cầu nhập liệu**:
+
+| Trường       | Bắt buộc | Quy tắc                    |
+| ------------ | :------: | -------------------------- |
+| Nội dung tin |    ✅    | Tối đa 1000 ký tự/tin nhắn |
+
+**Kết quả mong đợi**:
+
+- Tin nhắn hiện ngay trong nhóm (thấy cả mình và người khác realtime).
+- Khi toggle **Bật**, Bot tự động trả lời (tiêu tốn 1 credit/lần).
+- Khi toggle **Tắt**, Bot không trả lời (dùng để nói chuyện nội bộ giữa người).
+- Voice: sau khi thu âm xong, text được gửi tự động (không cần bấm gửi).
+- Tin được reply hiển thị banner "Đang trả lời [tên]" kèm trích dẫn.
+
+**Trường hợp ngoại lệ**:
+
+- Nhóm bị tắt (disabled) → không gửi được, chỉ xem lịch sử.
+- Mất mạng → tin nhắn được xếp hàng, tự động gửi lại khi có kết nối.
+- Nội dung vượt 1000 ký tự → bị chặn (không cho nhập thêm).
+
+📷 **Ảnh minh họa**: Ô soạn tin nhóm (nút Bot toggle + mic + gửi) + banner reply + tin nhắn voice đã chuyển text — chụp màn hình và thay thế dòng này bằng hình.
+
+## F65. Tin nhắn realtime & phân biệt chưa đọc
+
+**Mô tả**: Tin mới xuất hiện ngay lập tức; hệ thống đánh dấu và phân biệt các tin thành viên **chưa đọc**.
+
+**Kết quả mong đợi**:
+
+- Tin nhắn mới (của người khác hoặc Bot) hiện realtime không cần refresh.
+- Vạch ngăn **"Tin chưa đọc"** + số đếm hiển thị tại tin đầu tiên chưa đọc.
+- Tự động cuộn xuống dưới khi có tin mới/bot reply (nếu đang ở gần cuối).
+- Khi thành viên xem đến cuối → tự động đánh dấu đã đọc.
+
+**Tình huống cần phủ**:
+
+- **Cuộn lên tải tin cũ**: kéo lên đầu → hệ thống tự động tải thêm tin cũ, vị trí cuộn được giữ nguyên (không nhảy).
+- **Mất kết nối realtime**: nếu kênh realtime fail, hệ thống tự động thăm dò (polling) mỗi 5 giây (chỉ khi tab đang mở) để cập nhật tin mới.
+- **Offline banner**: khi mất mạng, hiển thị thanh cảnh báo ngoại tuyến.
+
+📷 **Ảnh minh họa**: Vạch "Tin chưa đọc" + đếm + auto-scroll + thanh offline — chụp màn hình và thay thế dòng này bằng hình.
+
+## F66. Ghim kiến thức (Pin → RAG)
+
+**Mô tả**: Thành viên được cấp quyền có thể **ghim một câu hỏi–trả lời hay** vào kho kiến thức của Bot — Bot sẽ nhớ và dùng để trả lời thông minh hơn ở các hội thoại sau (nạp vào RAG).
+
+**Thao tác kiểm thử**:
+
+1. Di chuột lên một tin nhắn (của Bot, hoặc của user có Bot đã reply) → bấm nút **Ghim**.
+2. Xác nhận ghim.
+
+**Kết quả mong đợi**:
+
+- Hệ thống tự động tách **Câu hỏi** (từ user) và **Câu trả lời** (từ Bot), tạo embedding và nạp vào kho RAG (`documents`, `source = chat_pin`). Lần sau Bot tự dùng tri thức này để trả lời.
+- **Tiêu tốn 1 credit** workspace khi ghim thành công (transaction `AddKnowledge`).
+- Owner xem/danh sách kiến thức đã ghim qua Dashboard (Pinned Knowledge).
+
+**Trường hợp ngoại lệ**:
+
+- Thành viên **không có quyền ghim** (`can_pin_knowledge = false`) → không thấy nút Ghim (API trả 403).
+- Tin đã được ghim rồi → báo **"Tin nhắn đã được ghim"** (`GROUP_ALREADY_PINNED_CODE`), không ghim trùng.
+- **Không đủ credit** → báo lỗi, không ghim (không trừ credit).
+- Nếu ghim thất bại ở bước lưu DB → **tự động hoàn lại 1 credit** đã trừ.
+- **Bỏ ghim (Owner)**: xóa cả bản ghi `chat_knowledge` và embedding tương ứng trong `documents` — Bot không còn dùng tri thức đó.
+
+📷 **Ảnh minh họa**: Nút Ghim trên tin nhắn (chỉ hiện khi có quyền) + danh sách Pinned Knowledge trên Dashboard + thông báo trừ credit — chụp màn hình và thay thế dòng này bằng hình.
+
+## F67. Bật / tắt nhóm (chế độ chỉ đọc)
+
+**Mô tả**: Chủ sở hữu tạm dừng hoặc bật lại nhóm chat.
+
+**Thao tác kiểm thử**:
+
+1. Dashboard → Bot → tab Nhóm → chuyển trạng thái (active / disabled).
+
+**Kết quả mong đợi**:
+
+- Khi **tắt (disabled)**: thành viên không gửi được tin nhắn, chỉ xem lịch sử; Bot không trả lời.
+- Khi **bật lại**: mọi người chat bình thường.
+
+📷 **Ảnh minh họa**: Toggle trạng thái nhóm (active/disabled) trên Dashboard — chụp màn hình và thay thế dòng này bằng hình.
+
+## F68. Rời nhóm / Xóa thành viên
+
+**Mô tả**: Thành viên tự rời nhóm, hoặc Chủ sở hữu xóa thành viên khỏi nhóm.
+
+**Thao tác kiểm thử**:
+
+1. Mở danh sách thành viên (drawer) → bấm **"Rời nhóm"** (thành viên) hoặc nút xóa (Owner).
+2. Xác nhận.
+
+**Kết quả mong đợi**:
+
+- Thành viên rời → không còn thấy nhóm trong danh sách của mình.
+- Owner xóa thành viên → người bị xóa mất quyền truy cập nhóm ngay.
+
+📷 **Ảnh minh họa**: Drawer thành viên nhóm (nút "Rời nhóm" + xóa thành viên) — chụp màn hình và thay thế dòng này bằng hình.
+
+## F69. Báo cáo tóm tắt hàng ngày (Insights)
+
+**Mô tả**: Hệ thống tự động tóm tắt cuộc hội thoại nhóm trong 24 giờ qua, chạy mỗi ngày lúc **2h sáng** (cron `0 2 * * *`), và lưu kết quả vào **2 nơi**: (1) bảng `group_chat_insights` để Manager xem trên Dashboard, (2) bảng `documents` (`source = daily_group_summary`) để **dùng làm kiến thức bot** (RAG) — Bot tự tham khảo khi trả lời sau này.
+
+**Thao tác kiểm thử**:
+
+1. Mở Dashboard → Bot → tab Nhóm → phần **Insights (Tóm tắt)**.
+2. Xem tóm tắt của ngày hôm trước.
+3. (Kiểm tra kiến thức bot) Hỏi Bot một nội dung đã nhắc đến trong chat ngày hôm trước → Bot trả lời dựa trên bản tóm tắt đã lưu.
+
+**Kết quả mong đợi**:
+
+- Hiển thị tóm tắt các **chủ đề thảo luận chính** bằng tiếng Việt của cuộc hội thoại nhóm trong 24h qua (số lượng ý tùy nội dung, không cố định 3–5).
+- Bản tóm tắt được nạp vào RAG (`documents`) → Bot dùng làm kiến thức trả lời.
+- Nếu ngày đó đã có tóm tắt → **cập nhật (upsert)**, không tạo trùng.
+
+**Tình huống cần phủ**:
+
+- Nhóm có **ít hơn 2 tin nhắn** trong 24h → hệ thống bỏ qua, không tạo tóm tắt (không lỗi).
+- Chỉ lấy **tối đa 30 tin nhắn gần nhất** và **loại bỏ tin đã xóa** (`deleted_at`).
+- Nhóm không ở trạng thái Active → không tóm tắt.
+- Owner kiểm tra được tóm tắt cập nhật qua ngày (cron chạy hàng ngày lúc 2h sáng).
+
+📷 **Ảnh minh họa**: Phần Insights trên Dashboard nhóm (tóm tắt ngày) + minh chứng Bot trả lời dựa trên tóm tắt đã lưu — chụp màn hình và thay thế dòng này bằng hình.
+
+## F70. Tạo ghi chú nhóm (Group Note)
+
+**Mô tả**: Thành viên được cấp quyền tạo ghi chú (Owner hoặc thành viên có `can_create_note = true`) tạo một "thẻ ghi chú" tóm tắt kiến thức quan trọng của nhóm — lưu riêng khỏi luồng chat, và được nạp vào kho tri thức Bot (RAG) để Bot tham khảo khi trả lời.
+
+**Thao tác kiểm thử**:
+
+1. Mở nhóm chat → nhấn nút **"+ Ghi chú"** (chỉ hiện khi người dùng có quyền tạo ghi chú).
+2. Nhập **Tiêu đề** và **Nội dung** (rich text editor) cho ghi chú.
+3. Nhấn **"Lưu"**.
+
+**Yêu cầu nhập liệu**:
+
+| Trường    | Bắt buộc | Quy tắc                                  |
+| --------- | :------: | ---------------------------------------- |
+| Tiêu đề   |    ✅    | Tối đa 100 ký tự                         |
+| Nội dung  |    ✅    | Tối đa 5000 ký tự (rich text / markdown) |
+
+**Kết quả mong đợi**:
+
+- Ghi chú được tạo, hiển thị dạng **banner** (NoteBanner) ở đầu nhóm chat.
+- Hệ thống gửi **thông báo hệ thống** trong nhóm: "**[tên] đã tạo ghi chú: [tiêu đề]**".
+- Nội dung ghi chú được **nạp vào RAG** (`documents`, `source = group_note`) → Bot dùng làm kiến thức trả lời.
+- **Tiêu tốn 1 credit workspace** khi tạo thành công (transaction `AddKnowledge`).
+- Nếu trước đó nhóm đã có ghi chú active → ghi chú cũ tự động chuyển sang **"đã lưu trữ" (archived)** nhưng vẫn giữ trong RAG (mỗi nhóm chỉ 1 active tại 1 thời điểm).
+
+**Trường hợp ngoại lệ**:
+
+- Người dùng **không có quyền tạo ghi chú** (`can_create_note = false`) → không thấy nút "+ Ghi chú" (API trả 403).
+- **Không đủ credit** → báo lỗi, không tạo (không trừ credit).
+- Thiếu Tiêu đề / Nội dung → nút Lưu bị vô hiệu hóa.
+
+📷 **Ảnh minh họa**: Nút "+ Ghi chú" + modal tạo ghi chú (tiêu đề + rich text) + banner ghi chú sau khi lưu + thông báo hệ thống — chụp màn hình và thay thế dòng này bằng hình.
+
+## F71. Sửa / cập nhật ghi chú
+
+**Mô tả**: Người tạo ghi chú (hoặc Owner) chỉnh sửa tiêu đề / nội dung ghi chú đã tạo.
+
+**Thao tác kiểm thử**:
+
+1. Tại banner ghi chú → nhấn nút **"Sửa"**.
+2. Thay đổi Tiêu đề / Nội dung.
+3. Nhấn **"Lưu"**.
+
+**Kết quả mong đợi**:
+
+- Ghi chú được cập nhật, banner hiển thị nội dung mới.
+- RAG được **cập nhật (upsert)** — embedding cũ bị thay thế bằng embedding mới (không tạo bản ghi trùng).
+- **Tiêu tốn thêm 1 credit workspace** khi cập nhật (transaction `AddKnowledge`) — kiểm chứng số credit giảm đúng.
+
+**Trường hợp ngoại lệ**:
+
+- Thành viên **không phải người tạo và không phải Owner** → không thấy nút Sửa (API trả 403).
+- **Không đủ credit** khi cập nhật → báo lỗi, không lưu (không trừ credit).
+
+📷 **Ảnh minh họa**: Modal sửa ghi chú + thông báo trừ credit khi cập nhật — chụp màn hình và thay thế dòng này bằng hình.
+
+## F72. Xóa ghi chú & hoàn credit
+
+**Mô tả**: Người tạo ghi chú (hoặc Owner) xóa ghi chú khỏi nhóm.
+
+**Thao tác kiểm thử**:
+
+1. Tại banner ghi chú → nhấn nút **"Xóa"** → xác nhận trong hộp thoại **"Xóa ghi chú"**.
+2. Quan sát số credit workspace trước/sau.
+
+**Kết quả mong đợi**:
+
+- Ghi chú bị xóa khỏi banner và danh sách.
+- Embedding tương ứng trong RAG (`documents`) bị **xóa hoàn toàn** → Bot không còn dùng tri thức đó.
+- **Hoàn lại 1 credit workspace** (refund transaction `AddKnowledgeRefund`) — số credit tăng đúng 1 đơn vị so với trước khi xóa.
+- Hệ thống gửi thông báo hệ thống: "**[tên] đã xóa ghi chú**".
+
+**Trường hợp ngoại lệ**:
+
+- Xóa thất bại ở bước xóa DB/RAG → **tự động hoàn lại credit** đã trừ (nếu có trừ trước).
+- Thành viên không có quyền → không thấy nút Xóa.
+
+📷 **Ảnh minh họa**: Hộp thoại xác nhận "Xóa ghi chú" + thông báo hoàn credit — chụp màn hình và thay thế dòng này bằng hình.
+
+## F73. Ghim / bỏ ghim ghi chú (Pin / Unpin)
+
+**Mô tả**: Khi có nhiều ghi chú (active + archived), Owner hoặc người tạo có thể **ghim** một ghi chú để nó luôn hiển thị ở đầu nhóm (ưu tiên trên các ghi chú khác).
+
+**Thao tác kiểm thử**:
+
+1. Mở tab **"Ghi chú"** trong drawer nhóm → tìm ghi chú cần ghim → nhấn biểu tượng **ghim**.
+2. Quay lại nhóm chat → quan sát banner.
+
+**Kết quả mong đợi**:
+
+- Ghi chú được ghim hiển thị **đầu tiên** (trên ghi chú active chưa ghim).
+- Bỏ ghim → ghi chú về vị trí mặc định (theo thời gian tạo).
+
+📷 **Ảnh minh họa**: Tab "Ghi chú" với nút ghim + banner ghi chú đã ghim ở đầu — chụp màn hình và thay thế dòng này bằng hình.
+
+## F74. Phân quyền tạo ghi chú (can_create_note)
+
+**Mô tả**: Chủ sở hữu Bot cấp / thu quyền tạo ghi chú cho từng thành viên — từ 2 nơi: (1) Tab "Thành viên" trong drawer nhóm chat, hoặc (2) Trang quản lý Bot → chi tiết nhóm → danh sách thành viên (MemberList).
+
+**Thao tác kiểm thử**:
+
+1. Tại danh sách thành viên → tìm thành viên → bật/tắt toggle **"Tạo ghi chú"** (cạnh toggle "Ghim kiến thức KT").
+2. Đăng nhập bằng tài khoản thành viên đó → kiểm tra nút "+ Ghi chú" có hiện hay không.
+
+**Kết quả mong đợi**:
+
+- Bật quyền → thành viên thấy nút "+ Ghi chú" và có thể tạo/sửa/xóa ghi chú.
+- Tắt quyền → nút "+ Ghi chú" biến mất; nếu truy cập API tạo ghi chú → trả **403**.
+
+**Trường hợp ngoại lệ**:
+
+- Chỉ Owner mới được cấp quyền (thành viên thường không thể tự bật cho mình).
+
+📷 **Ảnh minh họa**: Toggle "Tạo ghi chú" trong danh sách thành viên (cả 2 nơi: drawer nhóm & MemberList bot-detail) + badge "Được tạo ghi chú" — chụp màn hình và thay thế dòng này bằng hình.
+
+## F75. Xem danh sách ghi chú (tab "Ghi chú")
+
+**Mô tả**: Thành viên xem lại tất cả ghi chú của nhóm (cả active và đã lưu trữ) qua tab chuyên biệt trong drawer nhóm.
+
+**Thao tác kiểm thử**:
+
+1. Mở drawer nhóm → chuyển sang tab **"Ghi chú"** (cạnh tab "Thành viên").
+2. Quan sát danh sách, cuộn xuống khi có nhiều ghi chú.
+
+**Kết quả mong đợi**:
+
+- Danh sách hiển thị tất cả ghi chú (active + archived), có nhãn phân biệt trạng thái.
+- Phân trang **20 ghi chú / trang** — khi cuộn đến cuối, hệ thống tự tải trang tiếp theo (load more).
+
+📷 **Ảnh minh họa**: Tab "Ghi chú" liệt kê ghi chú (active + archived) + phân trang — chụp màn hình và thay thế dòng này bằng hình.
+
+## F76. Tạo ghi chú bằng giọng nói (Voice-to-Note)
+
+**Mô tả**: Thay vì gõ, người dùng bấm mic trong editor ghi chú, đọc nội dung — hệ thống tự nhận dạng (STT), **AI định dạng lại** (chỉnh chính tả, cấu trúc hóa thành tiêu đề + nội dung sạch) và hiển thị lên editor để người dùng sửa trước khi lưu. KHÔNG tự động lưu.
+
+**Thao tác kiểm thử**:
+
+1. Mở editor ghi chú (nút "+ Ghi chú") → bấm nút **mic** (bên trong editor, scope Bot).
+2. Đọc nội dung cần ghi chú (tối đa 180 giây).
+3. Dừng thu âm → chờ hệ thống xử lý (thấy trạng thái "Đang định dạng ghi chú…").
+4. Quan sát: **Tiêu đề** và **Nội dung** được điền tự động (đã chỉnh sửa chính tả, cấu trúc markdown).
+5. Sửa nếu cần → nhấn **"Lưu"**.
+
+**Kết quả mong đợi**:
+
+- Bước STT tiêu tốn **1 credit** (transaction STT).
+- Bước lưu ghi chú tiêu tốn **1 credit AddKnowledge** (tổng 2 credit cho 1 voice-note).
+- Nội dung AI định dạng: **sửa chính tả**, **cấu trúc hóa** (heading / bullet / markdown sạch), **giữ nguyên nghĩa** (không bịa thêm).
+- Hiển thị vào ô Tiêu đề + rich text editor — **chưa lưu** cho đến khi user bấm Lưu.
+- Nếu AI không thể phân tích → fallback: điền text thô để user tự sửa.
+
+**Trường hợp ngoại lệ**:
+
+- **Không đủ credit STT** → báo lỗi, không thể tạo voice-note.
+- Thu âm quá 180s → hệ thống tự dừng / báo giới hạn.
+- Mất mạng trong lúc STT → báo lỗi, cho thử lại.
+
+📷 **Ảnh minh họa**: Nút mic trong editor ghi chú + trạng thái "Đang định dạng" + kết quả tiêu đề/nội dung được AI điền sẵn — chụp màn hình và thay thế dòng này bằng hình.
+
+---
+
 # PHỤ LỤC A — BẢNG PHÂN QUYỀN
 
 | Hoạt động               | Chủ sở hữu (Owner) | Quản trị viên (Admin) |
@@ -937,6 +1407,7 @@ Tại bước 1 có **3 cách tạo bot**:
 | Thành viên          | `/ten-workspace/settings/members`    |
 | Chấp nhận lời mời   | `/auth/accept-invite?token=...`      |
 | Trang chat bot      | `/chat/ten-bot`                      |
+| Trang nhóm chat     | `/public-bot/ten-bot/group`          |
 
 ---
 

@@ -38,24 +38,42 @@ export async function GET(request: Request) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      // Send welcome email for new users (created within last 5 minutes)
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        if (user?.email && user.created_at) {
-          const createdAt = new Date(user.created_at).getTime();
-          const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-          if (createdAt > fiveMinutesAgo) {
-            const fullName =
-              (user.user_metadata?.full_name as string) ||
-              (user.user_metadata?.name as string) ||
-              user.email.split("@")[0];
-            await sendWelcomeEmail(user.email, fullName);
+
+        if (user?.id && user?.email) {
+          const { createAdminClient } = await import("@/lib/supabase/server");
+          const { WorkspaceService } = await import("@/lib/services/workspace.service");
+          const adminClient = createAdminClient();
+
+          // 1. Ensure user has a default workspace created
+          await WorkspaceService.getOrCreateDefaultWorkspace(user.id);
+
+          // 2. Reconcile pre-created group_members records by email
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (adminClient as any)
+            .from("group_members")
+            .update({ user_id: user.id })
+            .eq("email", user.email.toLowerCase())
+            .neq("user_id", user.id);
+
+          // 3. Send welcome email for new users (created within last 5 minutes)
+          if (user.created_at) {
+            const createdAt = new Date(user.created_at).getTime();
+            const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+            if (createdAt > fiveMinutesAgo) {
+              const fullName =
+                (user.user_metadata?.full_name as string) ||
+                (user.user_metadata?.name as string) ||
+                user.email.split("@")[0];
+              await sendWelcomeEmail(user.email, fullName);
+            }
           }
         }
-      } catch {
-        // Welcome email is non-critical — don't block auth flow
+      } catch (err) {
+        console.error("[AuthCallback] Session init error:", err);
       }
 
       return NextResponse.redirect(new URL(next, appUrl));

@@ -271,7 +271,7 @@ function PaymentResultPageContent() {
                   <div className="mt-8 border-t border-border/60 pt-4 text-center">
                     <p className="text-xs text-muted-foreground">
                       Cần hỗ trợ?{" "}
-                      <a href="mailto:contact@titops.com" className="text-primary hover:underline">
+                      <a href="mailto:contact@vielora.vn" className="text-primary hover:underline">
                         Liên hệ support
                       </a>
                     </p>
@@ -324,7 +324,7 @@ function PaymentResultPageContent() {
               <div className="mt-8 border-t border-border/60 pt-4 text-center">
                 <p className="text-xs text-muted-foreground">
                   Cần hỗ trợ?{" "}
-                  <a href="mailto:contact@titops.com" className="text-primary hover:underline">
+                  <a href="mailto:contact@vielora.vn" className="text-primary hover:underline">
                     Liên hệ support
                   </a>
                 </p>

@@ -229,7 +229,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
 
         const subQuery = supabase
           .from("subscriptions")
-          .select("*, plans(monthly_credits, pricing)")
+          .select("*, plans(code, monthly_credits, pricing)")
           .eq("status", ESubscriptionStatus.Active);
         const { data: subData } = workspaceId
           ? await subQuery.eq("workspace_id", workspaceId).maybeSingle()
@@ -245,46 +245,61 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
           Array.isArray(plansData) ? plansData[0] : plansData
         ) as Tables<"plans"> | null;
 
-        if (!planData || !planData.monthly_credits) return;
+        if (!planData || planData.code === "free") return;
 
         const now = new Date();
         const periodEnd = new Date(sub.current_period_end);
         if (now >= periodEnd) return;
 
-        const walletQuery = supabase.from("wallets").select("subscription_credits");
+        let pricePaid = 0;
+        if (planData.code === "enterprise") {
+          const { calculateEnterprisePrice, ENTERPRISE_PRICE } =
+            await import("@/config/pricing-enterprise");
+          const bots = sub.bots_limit_override ?? ENTERPRISE_PRICE.bots.min;
+          const credits = sub.monthly_credits_override ?? ENTERPRISE_PRICE.monthlyCredits.min;
+          pricePaid = calculateEnterprisePrice(
+            bots,
+            credits,
+            (sub.billing_cycle as ESubscriptionCycle) || ESubscriptionCycle.Monthly
+          );
+        } else {
+          const pricing = planData.pricing as Record<string, Record<string, number>> | null;
+          pricePaid = pricing?.VND?.[sub.billing_cycle || ESubscriptionCycle.Monthly] ?? 0;
+        }
+        if (pricePaid <= 0) return;
+
+        const isYearly = sub.billing_cycle === ESubscriptionCycle.Yearly;
+        const periodDurationMs = (isYearly ? 365 : 30) * 24 * 60 * 60 * 1000;
+        const periodStart = sub.current_period_start
+          ? new Date(sub.current_period_start)
+          : new Date(periodEnd.getTime() - periodDurationMs);
+
+        const totalTimeMs = Math.max(1, periodEnd.getTime() - periodStart.getTime());
+        const remainingTimeMs = Math.max(0, periodEnd.getTime() - now.getTime());
+        const timeRatio = Math.min(1, Math.max(0, remainingTimeMs / totalTimeMs));
+        const timeBasedDiscount = Math.floor(pricePaid * timeRatio);
+
+        const walletQuery = supabase.from("wallets").select("subscription_credits, credits");
         const { data: walletData } = workspaceId
           ? await walletQuery.eq("workspace_id", workspaceId).maybeSingle()
           : await walletQuery.eq("user_id", user.id).maybeSingle();
 
-        const wallet = walletData as Tables<"wallets"> | null;
-        const currentCredits = wallet?.subscription_credits ?? 0;
-        const pricing = planData.pricing as Record<string, Record<string, number>> | null;
-        const pricePaid = pricing?.VND?.[sub.billing_cycle || ESubscriptionCycle.Monthly] ?? 0;
-        if (pricePaid <= 0) return;
+        const wallet = walletData as (Tables<"wallets"> & { credits?: number }) | null;
+        const currentCredits = (wallet?.subscription_credits ?? 0) + (wallet?.credits ?? 0);
+        const effectiveMonthlyCredits =
+          sub.monthly_credits_override ?? planData.monthly_credits ?? 0;
+        const totalCreditsPeriod = effectiveMonthlyCredits * (isYearly ? 12 : 1);
+        const creditRatio =
+          totalCreditsPeriod > 0
+            ? Math.min(1, Math.max(0, currentCredits / totalCreditsPeriod))
+            : 0;
+        const creditBasedDiscount = Math.floor(pricePaid * creditRatio);
 
-        const isYearly = sub.billing_cycle === ESubscriptionCycle.Yearly;
-        const totalCreditsPeriod = planData.monthly_credits * (isYearly ? 12 : 1);
-
-        let fullMonthsLeft = 0;
-        if (sub.next_credit_reset_at) {
-          const nextReset = new Date(sub.next_credit_reset_at);
-          if (nextReset < periodEnd && nextReset >= now) {
-            const monthsDiff =
-              (periodEnd.getFullYear() - nextReset.getFullYear()) * 12 +
-              (periodEnd.getMonth() - nextReset.getMonth());
-            fullMonthsLeft = Math.max(0, monthsDiff);
-          } else if (nextReset >= periodEnd) {
-            fullMonthsLeft = 0;
-          } else if (nextReset < now && isYearly) {
-            const remainingTime = periodEnd.getTime() - now.getTime();
-            fullMonthsLeft = Math.floor(remainingTime / (1000 * 60 * 60 * 24 * 30));
-          }
-        }
-
-        const remainingCredits =
-          fullMonthsLeft * planData.monthly_credits + Math.max(0, currentCredits);
-        const discount = Math.floor((remainingCredits / totalCreditsPeriod) * pricePaid);
-        setProrationDiscount(discount);
+        const finalDiscount = Math.min(
+          Math.floor(pricePaid * 0.95),
+          Math.max(timeBasedDiscount, creditBasedDiscount)
+        );
+        setProrationDiscount(finalDiscount);
       } catch (e) {
         console.error(e);
       } finally {
@@ -295,7 +310,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
     fetchProration();
   }, [user, action, supabase, mode, activeWorkspace]);
 
-  // Fetch Active Subscription for Workspace (if Enterprise active)
+  // Fetch Active Subscription for Workspace
   const [activeSub, setActiveSub] = useState<{
     bots_limit_override: number | null;
     monthly_credits_override: number | null;
@@ -320,10 +335,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
           .maybeSingle();
 
         if (data) {
-          const planObj = Array.isArray(data.plans) ? data.plans[0] : data.plans;
-          if (planObj?.code === ESubscriptionPlan.Enterprise) {
-            setActiveSub(data);
-          }
+          setActiveSub(data);
         }
       } catch (err) {
         console.error("Error fetching active sub in checkout:", err);

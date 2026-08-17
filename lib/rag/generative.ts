@@ -173,6 +173,11 @@ export async function generateChatResponse(
       userMessage = `${lastUserMsg?.parts[0].text}\n\n${userMessage}`;
     }
 
+    // Google Generative AI SDK requires that the first message in history MUST have role 'user'
+    while (mergedHistory.length > 0 && mergedHistory[0].role !== MessageRole.USER) {
+      mergedHistory.shift();
+    }
+
     const chat = model.startChat({
       history: mergedHistory,
       generationConfig: GENERATION_CONFIG,

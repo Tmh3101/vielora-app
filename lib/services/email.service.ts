@@ -613,3 +613,35 @@ export async function sendWorkspaceInvitationEmail(
     html
   );
 }
+
+export interface GroupInviteEmailData {
+  botName: string;
+  invitedByName: string;
+  actionUrl?: string;
+  groupUrl?: string;
+  isNewAccount: boolean;
+}
+
+export async function sendGroupInviteEmail(
+  to: string,
+  data: GroupInviteEmailData
+): Promise<boolean> {
+  const targetUrl = data.actionUrl || data.groupUrl;
+  const accountNote = data.isNewAccount
+    ? paragraph(
+        "Tài khoản của bạn đã được tự động khởi tạo trên hệ thống Vielora. Nhấn vào nút bên dưới để xác thực và truy cập ngay:"
+      )
+    : paragraph("Nhấn vào nút bên dưới để truy cập cuộc trò chuyện nhóm:");
+
+  const body =
+    paragraph(
+      `<strong>${data.invitedByName}</strong> đã thêm bạn vào nhóm chat của bot <strong>${data.botName}</strong> trên Vielora.`
+    ) +
+    infoTable(infoRow("Chatbot", data.botName) + infoRow("Người mời", data.invitedByName)) +
+    accountNote +
+    (targetUrl ? ctaButton("Vào nhóm chat ngay →", targetUrl) : "");
+
+  const html = emailLayout("💬 Bạn đã được thêm vào nhóm chat", `Nhóm chat ${data.botName}`, body);
+
+  return sendEmail(to, `[Vielora] Lời mời tham gia nhóm chat bot "${data.botName}"`, html);
+}

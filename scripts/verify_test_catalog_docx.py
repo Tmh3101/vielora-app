@@ -16,7 +16,7 @@ diff_first_page = sec.different_first_page_header_footer
 
 hdr_text = " | ".join(p.text for p in sec.header.paragraphs if p.text.strip())
 ftr_text = " | ".join(p.text for p in sec.footer.paragraphs if p.text.strip())
-hdr_has_title = "Vielora" in hdr_text and "4.1" in hdr_text
+hdr_has_title = "Vielora" in hdr_text and "4.5" in hdr_text
 ftr_has_field = "PAGE" in sec.footer._element.xml and "NUMPAGES" in sec.footer._element.xml
 ftr_has_conf = "nội bộ" in ftr_text
 
@@ -76,9 +76,9 @@ checks = {
     "Group la H1 khong phai Title": len(title_style) == 0,
     "Page breaks giua cac nhom": page_breaks_ok,
     "Cover co ma tai lieu": "VL-DOC-TEST-001" in text,
-    "Version 4.1": "4.1" in text,
+    "Version 4.5": "4.5" in text,
     "Bang kiem soat 5 cot": any(len(t.rows[0].cells) == 5 for t in doc.tables),
-    "F01-F59 day du": "F01" in text and "F59" in text,
+    "F01-F69 day du": "F01" in text and "F69" in text,
     "Co lap du lieu": "cô lập dữ liệu" in text.lower(),
     "Placeholder dien": "[ĐIỀN" in text,
     "Khong con jargon": "BullMQ" not in text and "/api/" not in text,

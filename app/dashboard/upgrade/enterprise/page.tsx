@@ -599,7 +599,7 @@ export default function EnterpriseUpgradePage() {
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
-                  <span>Bao gồm 10 bot cơ bản</span>
+                  <span>Bao gồm {ENTERPRISE_PRICE.bots.min} bot cơ bản</span>
                   <span className="font-medium text-foreground">
                     +{formatVND(ENTERPRISE_PRICE.perBotPerMonth)}đ/tháng mỗi bot thêm
                   </span>
@@ -697,7 +697,10 @@ export default function EnterpriseUpgradePage() {
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
-                  <span>Bao gồm 20.000 credits cơ bản</span>
+                  <span>
+                    Bao gồm {ENTERPRISE_PRICE.monthlyCredits.min.toLocaleString("vi-VN")} credits cơ
+                    bản
+                  </span>
                   <span className="font-medium text-foreground">
                     +{formatVND(ENTERPRISE_PRICE.perCreditUnitPerMonth)}đ/tháng mỗi 1.000 credits
                   </span>

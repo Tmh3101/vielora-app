@@ -5,3 +5,4 @@ export * from "./utils";
 export * from "./enums";
 export * from "./job-tracker";
 export * from "./pricing";
+export * from "./group-chat";

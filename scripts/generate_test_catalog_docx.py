@@ -19,11 +19,11 @@ PRIMARY = RGBColor(0x1F, 0x4E, 0x79)   # Navy
 SECONDARY = RGBColor(0x5A, 0x5A, 0x5A)  # Slate Gray
 TEXT = RGBColor(0x33, 0x33, 0x33)        # Charcoal
 HDR_FILL = "1F4E79"
-VERSION = "4.1"
+VERSION = "4.6"
 DOC_TITLE = "Hướng Dẫn Kiểm Thử Thủ Công"
 DOC_SUBTITLE = "Vielora — Nền tảng SaaS Chatbot AI cho website"
 DOC_CODE = "VL-DOC-TEST-001"
-DOC_DATE = "09/08/2026"
+DOC_DATE = "17/08/2026"
 
 def init_styles(doc):
     def set_style(name, size, color, bold=True, italic=False):

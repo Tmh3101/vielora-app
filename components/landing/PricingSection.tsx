@@ -215,7 +215,7 @@ const PricingSection = () => {
           <p className="text-muted-foreground">
             Có câu hỏi?{" "}
             <a
-              href="mailto:contact@titops.com"
+              href="mailto:contact@vielora.vn"
               className="link-underline text-primary hover:underline"
             >
               liên hệ chúng tôi

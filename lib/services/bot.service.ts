@@ -1112,6 +1112,7 @@ export async function getBotForWidgetServer(
 
 export interface PublicBotData {
   id: string;
+  slug: string | null;
   name: string;
   avatar_url: string | null;
   widget_settings: Json;
@@ -1131,7 +1132,9 @@ export async function getBotBySlug(
   const normalizedSlug = slug.toLowerCase();
   const { data, error } = await client
     .from("bots")
-    .select("id, name, avatar_url, widget_settings, is_public, is_stopped, status, pwa_updated_at")
+    .select(
+      "id, slug, name, avatar_url, widget_settings, is_public, is_stopped, status, pwa_updated_at"
+    )
     .eq("slug", normalizedSlug)
     .eq("is_public", true)
     .maybeSingle();

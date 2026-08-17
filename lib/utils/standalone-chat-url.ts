@@ -1,4 +1,4 @@
-import { LOCAL_ROOT, PRODUCTION_ROOT } from "@/config";
+import { LOCAL_ROOT, PRODUCTION_ROOT, getRootDomain } from "@/config";
 
 export interface StandaloneChatUrlParts {
   prefix: string;
@@ -15,7 +15,13 @@ function getDisplayHostname(appUrl: string): string {
 }
 
 function isVieloraRootHostname(hostname: string): boolean {
-  return hostname === PRODUCTION_ROOT || hostname === LOCAL_ROOT;
+  const rootDomain = getRootDomain();
+  return (
+    hostname === rootDomain ||
+    hostname === PRODUCTION_ROOT ||
+    hostname === LOCAL_ROOT ||
+    hostname.endsWith(`.${rootDomain}`)
+  );
 }
 
 export function getStandaloneChatAppUrl(): string {
@@ -61,4 +67,20 @@ export function getStandaloneChatUrlParts(appUrl: string, slug: string): Standal
       href: slug ? `${appUrl.replace(/\/$/, "")}/chat/${slug}` : "",
     };
   }
+}
+
+export function getGroupChatUrl(slug: string): string {
+  const appUrl = getStandaloneChatAppUrl();
+
+  if (process.env.NODE_ENV === "production") {
+    try {
+      const url = new URL(appUrl);
+      return `${url.protocol}//${slug}.${url.host}/group`;
+    } catch {
+      const rootDomain = getRootDomain();
+      return `https://${slug}.${rootDomain}/group`;
+    }
+  }
+
+  return `${appUrl}/public-bot/${slug}/group`;
 }

@@ -35,6 +35,12 @@ current_conversations AS (
   WHERE c.bot_id = p_bot_id
     AND c.started_at >= b.current_from
     AND c.started_at <= b.current_to
+  UNION ALL
+  SELECT g.id, g.created_at AS started_at
+  FROM public.group_chats g, bounds b
+  WHERE g.bot_id = p_bot_id
+    AND g.created_at >= b.current_from
+    AND g.created_at <= b.current_to
 ),
 previous_conversations AS (
   SELECT c.id, c.started_at
@@ -42,6 +48,12 @@ previous_conversations AS (
   WHERE c.bot_id = p_bot_id
     AND c.started_at >= b.previous_from
     AND c.started_at <= b.previous_to
+  UNION ALL
+  SELECT g.id, g.created_at AS started_at
+  FROM public.group_chats g, bounds b
+  WHERE g.bot_id = p_bot_id
+    AND g.created_at >= b.previous_from
+    AND g.created_at <= b.previous_to
 ),
 current_messages AS (
   SELECT m.id, m.conversation_id, m.content, m.created_at, m.role, m.no_answer
@@ -51,6 +63,17 @@ current_messages AS (
   WHERE c.bot_id = p_bot_id
     AND m.created_at >= b.current_from
     AND m.created_at <= b.current_to
+  UNION ALL
+  SELECT gm.id, gm.group_id AS conversation_id, gm.content, gm.created_at,
+         CASE WHEN gm.sender_type = 'bot' THEN 'assistant' ELSE 'user' END AS role,
+         FALSE AS no_answer
+  FROM public.group_messages gm
+  INNER JOIN public.group_chats gc ON gc.id = gm.group_id
+  CROSS JOIN bounds b
+  WHERE gc.bot_id = p_bot_id
+    AND gm.deleted_at IS NULL
+    AND gm.created_at >= b.current_from
+    AND gm.created_at <= b.current_to
 ),
 previous_messages AS (
   SELECT m.id, m.conversation_id, m.created_at, m.role, m.no_answer
@@ -60,22 +83,57 @@ previous_messages AS (
   WHERE c.bot_id = p_bot_id
     AND m.created_at >= b.previous_from
     AND m.created_at <= b.previous_to
+  UNION ALL
+  SELECT gm.id, gm.group_id AS conversation_id, gm.created_at,
+         CASE WHEN gm.sender_type = 'bot' THEN 'assistant' ELSE 'user' END AS role,
+         FALSE AS no_answer
+  FROM public.group_messages gm
+  INNER JOIN public.group_chats gc ON gc.id = gm.group_id
+  CROSS JOIN bounds b
+  WHERE gc.bot_id = p_bot_id
+    AND gm.deleted_at IS NULL
+    AND gm.created_at >= b.previous_from
+    AND gm.created_at <= b.previous_to
 ),
 current_usage AS (
-  SELECT COALESCE(SUM(COALESCE(ul.count, 1)), 0)::int AS value
-  FROM public.usage_logs ul, bounds b
-  WHERE ul.bot_id = p_bot_id
-    AND ul.action = 'chat_message'
-    AND ul.created_at >= b.current_from
-    AND ul.created_at <= b.current_to
+  SELECT GREATEST(
+    COALESCE(
+      (
+        SELECT SUM(COALESCE(ul.count, 1))::int
+        FROM public.usage_logs ul, bounds b
+        WHERE ul.bot_id = p_bot_id
+          AND ul.action = 'chat_message'
+          AND ul.created_at >= b.current_from
+          AND ul.created_at <= b.current_to
+      ),
+      0
+    ),
+    (
+      SELECT COUNT(*)::int
+      FROM current_messages
+      WHERE role = 'assistant'
+    )
+  )::int AS value
 ),
 previous_usage AS (
-  SELECT COALESCE(SUM(COALESCE(ul.count, 1)), 0)::int AS value
-  FROM public.usage_logs ul, bounds b
-  WHERE ul.bot_id = p_bot_id
-    AND ul.action = 'chat_message'
-    AND ul.created_at >= b.previous_from
-    AND ul.created_at <= b.previous_to
+  SELECT GREATEST(
+    COALESCE(
+      (
+        SELECT SUM(COALESCE(ul.count, 1))::int
+        FROM public.usage_logs ul, bounds b
+        WHERE ul.bot_id = p_bot_id
+          AND ul.action = 'chat_message'
+          AND ul.created_at >= b.previous_from
+          AND ul.created_at <= b.previous_to
+      ),
+      0
+    ),
+    (
+      SELECT COUNT(*)::int
+      FROM previous_messages
+      WHERE role = 'assistant'
+    )
+  )::int AS value
 ),
 kpi_values AS (
   SELECT

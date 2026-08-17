@@ -101,8 +101,11 @@ export const GENERATION_CONFIG = {
   maxOutputTokens: 768,
 };
 
-// Limit the maximum length of user chat input
-export const MAX_CHAT_INPUT = 200;
+// Limit the maximum length of user chat input (standalone / widget chat)
+export const MAX_CHAT_INPUT = 400;
+
+// Limit the maximum length of user chat input for group chat
+export const MAX_GROUP_CHAT_INPUT = 1000;
 
 // Batch and retry configuration for embedding generation
 export const BATCH_SIZE = 50;

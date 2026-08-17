@@ -38,6 +38,7 @@ import {
   Languages,
   BarChart3,
   ShieldCheck,
+  Calculator,
   Briefcase,
 } from "lucide-react";
 import { MAX_SKILLS_PER_BOT } from "@/lib/config/ai-customization";
@@ -71,6 +72,7 @@ const skillIcons: Record<string, typeof Brain> = {
   "Phân tích dữ liệu": BarChart3,
   "Chăm sóc sức khỏe": ShieldCheck,
   "Huấn luyện phỏng vấn": Users,
+  "Định giá": Calculator,
 };
 
 function getIcon(name: string, type: "personality" | "skill", className: string) {

@@ -24,7 +24,11 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const workspaces = await WorkspaceService.getUserWorkspaces(user.id);
+    let workspaces = await WorkspaceService.getUserWorkspaces(user.id);
+    if (!workspaces || workspaces.length === 0) {
+      await WorkspaceService.getOrCreateDefaultWorkspace(user.id);
+      workspaces = await WorkspaceService.getUserWorkspaces(user.id);
+    }
     return NextResponse.json({ workspaces });
   } catch (err: unknown) {
     return NextResponse.json(

@@ -16,6 +16,10 @@
 
 Vielora is an AI chatbot platform for creating, training, customizing, and deploying website assistants. It combines website crawling, manual knowledge, file ingestion, and single-URL knowledge with a RAG pipeline so chatbots can answer from the owner's approved content.
 
+## 🚀 Version 2.7.0 Highlights
+
+- **Group Chat Feature**: Multi-user private group chat for Pro/Enterprise bots (up to 5 members per group), real-time message broadcasting, unread receipts, knowledge pinning to bot RAG, daily LLM conversation summaries, inline PWA auth, offline queueing, and plan-gate downgrade management. See [Group Chat Spec](docs/specs/group-chat.md) and [Implementation Log](docs/group-chat-implement-plan/group-chat-implementation-log.md).
+
 ## 🚀 Version 2.6.0 Highlights
 
 - **Multi-tenant Workspace System**: Workspace-based architecture with path-based routing (`vielora.vn/{slug}`), member roles (Owner/Admin/Member/Viewer), and email invitation flow with token-based acceptance.

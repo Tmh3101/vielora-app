@@ -18,6 +18,7 @@ import { getWorkspaceCreditSummary, resolveWorkspaceId } from "@/lib/services/cr
 import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { getBotStatusInfo, isMissingBotError } from "@/lib/helpers";
 import { CONVERSATION_MAX_AGE, WIDGET_FALLBACK } from "@/config/widget";
+import { SUGGESTED_QUESTIONS_ALLOWED_PLANS } from "@/config";
 import { getBotByIdCached } from "@/lib/services/server/bot-cache.service";
 import { CHATBOT_UNAVAILABLE_MESSAGE } from "@/lib/constants/chat";
 
@@ -210,9 +211,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
       isVoiceEnabled?: boolean;
     } | null;
 
-    const allowedPlans = [ESubscriptionPlan.Standard, ESubscriptionPlan.Pro];
     const canUseSuggestedQuestions =
-      userPlanCode && allowedPlans.includes(userPlanCode as ESubscriptionPlan);
+      userPlanCode && SUGGESTED_QUESTIONS_ALLOWED_PLANS.includes(userPlanCode as ESubscriptionPlan);
 
     let existingConversation = null;
     let previousMessages: Message[] = [];

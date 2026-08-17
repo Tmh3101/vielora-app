@@ -82,7 +82,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       botData = bot;
       workspaceId = bot.workspace_id;
       if (workspaceId) {
-        await requireWorkspaceMember(workspaceId, user.id);
+        try {
+          await requireWorkspaceMember(workspaceId, user.id);
+        } catch {
+          // If not direct workspace member, verify if user is an authorized group member for this bot
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: groupMember } = await (admin as any)
+            .from("group_members")
+            .select("can_create_note, status, group_chats!inner(bot_id)")
+            .eq("user_id", user.id)
+            .eq("status", "active")
+            .eq("group_chats.bot_id", bot.id)
+            .maybeSingle();
+
+          if (!groupMember || !groupMember.can_create_note) {
+            throw new Error("Unauthorized workspace access");
+          }
+        }
       }
 
       userPlanCode = await getBotActivePlanCode(admin, bot);

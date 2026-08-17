@@ -28,25 +28,22 @@ export default async function DashboardPage() {
       if (workspaces && workspaces.length > 0) {
         const firstWs = workspaces[0];
         redirectUrl = `/${firstWs.slug}`;
+      } else {
+        // Auto-create default workspace for new user if none exists
+        const defaultWsId = await WorkspaceService.getOrCreateDefaultWorkspace(user.id);
+        const userWs = await WorkspaceService.getUserWorkspaces(user.id);
+        const targetWs = userWs.find((w) => w.id === defaultWsId) || userWs[0];
+        if (targetWs?.slug) {
+          redirectUrl = `/${targetWs.slug}`;
+        }
       }
-    } catch {
-      // DB error — fall through to "no workspace" message
+    } catch (err) {
+      console.error("Error ensuring default workspace in /dashboard:", err);
     }
 
     if (redirectUrl) {
       redirect(redirectUrl);
     }
-
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-8">
-        <div className="max-w-md text-center">
-          <h2 className="text-2xl font-bold">Welcome to Vielora</h2>
-          <p className="mt-2 text-muted-foreground">
-            You don&apos;t have any workspace yet. Use the sidebar to create one.
-          </p>
-        </div>
-      </div>
-    );
   }
 
   let initialData: DashboardInitialData | undefined = undefined;

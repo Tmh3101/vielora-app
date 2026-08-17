@@ -399,7 +399,7 @@ export async function resolveWorkspaceId(
 
 export async function deductBotCredits(
   client: ServiceClient,
-  bot: { user_id: string; workspace_id?: string | null },
+  bot: { id?: string; user_id: string; workspace_id?: string | null },
   params: {
     creditAmount: number;
     transactionType: ETransactionType;
@@ -416,6 +416,22 @@ export async function deductBotCredits(
       transactionType: params.transactionType,
       transactionDescription: params.transactionDescription,
     });
+
+    if (res.success && bot.id) {
+      try {
+        const adminClient = createAdminClient();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (adminClient as any).from("usage_logs").insert({
+          workspace_id: workspaceId,
+          bot_id: bot.id,
+          action: "chat_message",
+          count: params.creditAmount,
+        });
+      } catch (err) {
+        console.error("[CreditDebug] Failed to insert usage_log:", err);
+      }
+    }
+
     console.log("[CreditDebug] deductWorkspaceCredits result:", res);
     return res;
   }

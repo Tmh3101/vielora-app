@@ -39,11 +39,6 @@ const URL_SOURCE_TYPES = new Set<HybridSearchRow["source_type"]>([
   EPageSourceType.SingleUrl,
 ]);
 
-const FILE_SOURCE_TYPES = new Set<HybridSearchRow["source_type"]>([
-  EPageSourceType.File,
-  EPageSourceType.ManualText,
-]);
-
 const escapeAttributeValue = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -69,17 +64,13 @@ export const serializeRetrievedChunk = (chunk: RetrievedChunk) => {
 
   if (URL_SOURCE_TYPES.has(chunk.source_type)) {
     const resolvedUrl = (chunk.resolved_url || chunk.metadata?.url || "").trim();
-    if (!resolvedUrl) return "";
-
-    return `<c s="url" u="${escapeAttributeValue(resolvedUrl)}">${content}</c>`;
+    if (resolvedUrl) {
+      return `<c s="url" u="${escapeAttributeValue(resolvedUrl)}">${content}</c>`;
+    }
   }
 
-  if (FILE_SOURCE_TYPES.has(chunk.source_type)) {
-    const fileName = getChunkLabel(chunk.metadata);
-    return `<c s="file" n="${escapeAttributeValue(fileName)}">${content}</c>`;
-  }
-
-  return "";
+  const fileName = getChunkLabel(chunk.metadata);
+  return `<c s="file" n="${escapeAttributeValue(fileName)}">${content}</c>`;
 };
 
 export const serializeRetrievedContext = (chunks: RetrievedChunk[]) =>

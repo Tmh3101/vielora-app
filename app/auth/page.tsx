@@ -44,6 +44,7 @@ import {
   OauthProvider,
   AuthView,
 } from "@/lib/constants/auth";
+import { ERROR_CODE_ACCESS_DENIED } from "@/lib/constants";
 import type { OauthProviderType, AuthViewType } from "@/lib/constants/auth";
 
 /* ------------------------------------------------------------------ */
@@ -242,8 +243,12 @@ function AuthPageContent() {
     view === AuthView.LOGIN && cooldownRemaining > 0 && normalizedEmail === cooldownEmail;
 
   /* ---- redirect after auth ---- */
+  const targetRedirect = useMemo(
+    () => getSafeRedirect(searchParams.get("redirect") || searchParams.get("next")),
+    [searchParams]
+  );
+
   useEffect(() => {
-    const targetRedirect = getSafeRedirect(searchParams.get("redirect"));
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
@@ -259,7 +264,7 @@ function AuthPageContent() {
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase, router, searchParams]);
+  }, [supabase, router, targetRedirect]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -269,7 +274,8 @@ function AuthPageContent() {
       window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash
     );
 
-    const oauthFailed = authError === "oauth_failed" || hashParams.get("error") === "access_denied";
+    const oauthFailed =
+      authError === "oauth_failed" || hashParams.get("error") === ERROR_CODE_ACCESS_DENIED;
     if (!oauthFailed) {
       handledOAuthErrorRef.current = false;
       return;
@@ -279,7 +285,7 @@ function AuthPageContent() {
     handledOAuthErrorRef.current = true;
 
     const oauthErrorMessage =
-      hashParams.get("error") === "access_denied"
+      hashParams.get("error") === ERROR_CODE_ACCESS_DENIED
         ? "Bạn đã hủy đăng nhập OAuth hoặc quyền truy cập bị từ chối."
         : "Không thể đăng nhập bằng OAuth. Vui lòng thử lại.";
 
@@ -474,9 +480,13 @@ function AuthPageContent() {
   const handleOAuth = async (provider: OauthProviderType) => {
     setIsOAuthLoading(provider);
     try {
+      const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
+      if (targetRedirect && targetRedirect !== "/dashboard") {
+        callbackUrl.searchParams.set("next", targetRedirect);
+      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: { redirectTo: callbackUrl.toString() },
       });
       if (error) throw error;
     } catch (error: unknown) {

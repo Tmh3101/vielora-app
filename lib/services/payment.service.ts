@@ -700,7 +700,7 @@ export async function calculateCreditBasedProration(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: sub, error: subError } = await (client as any)
     .from("subscriptions")
-    .select("*, plans(monthly_credits, pricing)")
+    .select("*, plans(code, monthly_credits, pricing)")
     .eq("workspace_id", workspaceId)
     .eq("status", ESubscriptionStatus.Active)
     .order("current_period_end", { ascending: false })
@@ -711,20 +711,11 @@ export async function calculateCreditBasedProration(
 
   const planData = Array.isArray(sub.plans) ? sub.plans[0] : sub.plans;
   const effectiveMonthlyCredits = sub.monthly_credits_override ?? planData?.monthly_credits ?? 0;
-  if (!planData || effectiveMonthlyCredits <= 0) return 0; // free plan
+  if (!planData || planData.code === "free") return 0;
 
   const now = new Date();
   const periodEnd = new Date(sub.current_period_end);
   if (now >= periodEnd) return 0;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: wallet } = await (client as any)
-    .from("wallets")
-    .select("subscription_credits")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
-
-  const currentCredits = wallet?.subscription_credits ?? 0;
 
   let pricePaid = 0;
   if (planData.code === "enterprise") {
@@ -744,28 +735,30 @@ export async function calculateCreditBasedProration(
   if (pricePaid <= 0) return 0;
 
   const isYearly = sub.billing_cycle === ESubscriptionCycle.Yearly;
+  const periodDurationMs = (isYearly ? 365 : 30) * 24 * 60 * 60 * 1000;
+  const periodStart = sub.current_period_start
+    ? new Date(sub.current_period_start)
+    : new Date(periodEnd.getTime() - periodDurationMs);
+
+  const totalTimeMs = Math.max(1, periodEnd.getTime() - periodStart.getTime());
+  const remainingTimeMs = Math.max(0, periodEnd.getTime() - now.getTime());
+  const timeRatio = Math.min(1, Math.max(0, remainingTimeMs / totalTimeMs));
+  const timeBasedDiscount = Math.floor(pricePaid * timeRatio);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: wallet } = await (client as any)
+    .from("wallets")
+    .select("subscription_credits, credits")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+
+  const currentCredits = (wallet?.subscription_credits ?? 0) + (wallet?.credits ?? 0);
   const totalCreditsPeriod = effectiveMonthlyCredits * (isYearly ? 12 : 1);
+  const creditRatio =
+    totalCreditsPeriod > 0 ? Math.min(1, Math.max(0, currentCredits / totalCreditsPeriod)) : 0;
+  const creditBasedDiscount = Math.floor(pricePaid * creditRatio);
 
-  let fullMonthsLeft = 0;
-  if (sub.next_credit_reset_at) {
-    const nextReset = new Date(sub.next_credit_reset_at);
-    if (nextReset < periodEnd && nextReset >= now) {
-      const monthsDiff =
-        (periodEnd.getFullYear() - nextReset.getFullYear()) * 12 +
-        (periodEnd.getMonth() - nextReset.getMonth());
-      fullMonthsLeft = Math.max(0, monthsDiff);
-    } else if (nextReset >= periodEnd) {
-      // If next reset is at or after period end, no full months left
-      fullMonthsLeft = 0;
-    } else if (nextReset < now && isYearly) {
-      // Fallback calculation just in case next_credit_reset_at is in the past
-      const remainingTime = periodEnd.getTime() - now.getTime();
-      fullMonthsLeft = Math.floor(remainingTime / (1000 * 60 * 60 * 24 * 30));
-    }
-  }
-
-  const remainingCredits = fullMonthsLeft * effectiveMonthlyCredits + Math.max(0, currentCredits);
-
-  const discount = Math.floor((remainingCredits / totalCreditsPeriod) * pricePaid);
-  return discount;
+  const finalDiscount = Math.max(timeBasedDiscount, creditBasedDiscount);
+  // Cap discount to 95% of paid price
+  return Math.min(Math.floor(pricePaid * 0.95), finalDiscount);
 }

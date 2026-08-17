@@ -8,4 +8,5 @@ export const BotDetailDashboardTabs = {
   SETTINGS: "settings",
   INSTALL: "install",
   LEADS: "leads",
+  GROUP: "group",
 } as const;
