@@ -30,6 +30,7 @@ export interface AppearanceState {
   slug: string;
   isPublic: boolean;
   isVoiceEnabled: boolean;
+  navigationEnabled: boolean;
   allowedDomains: string[];
   isSaving: boolean;
   isSavingRateLimit: boolean;
@@ -61,6 +62,7 @@ export interface AppearanceState {
   setSlug: (value: string) => void;
   setIsPublic: (value: boolean) => void;
   setIsVoiceEnabled: (value: boolean) => void;
+  setNavigationEnabled: (value: boolean) => void;
   setIsSaving: (value: boolean) => void;
   setIsSavingRateLimit: (value: boolean) => void;
   setIsSavingSlugSettings: (value: boolean) => void;
@@ -94,6 +96,7 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
   slug: "",
   isPublic: false,
   isVoiceEnabled: WIDGET_FALLBACK.IS_VOICE_ENABLED ?? true,
+  navigationEnabled: false,
   allowedDomains: [],
   isSaving: false,
   isSavingRateLimit: false,
@@ -125,6 +128,7 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
   setSlug: (value) => set({ slug: value }),
   setIsPublic: (value) => set({ isPublic: value }),
   setIsVoiceEnabled: (value) => set({ isVoiceEnabled: value }),
+  setNavigationEnabled: (value) => set({ navigationEnabled: value }),
   setIsSaving: (value) => set({ isSaving: value }),
   setIsSavingRateLimit: (value) => set({ isSavingRateLimit: value }),
   setIsSavingSlugSettings: (value) => set({ isSavingSlugSettings: value }),
@@ -135,7 +139,7 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
   setAllowedDomainsError: (value) => set({ allowedDomainsError: value }),
 
   initializeFromBot: (bot) => {
-    const settings = bot.widget_settings as WidgetSettings | null;
+    const settings = bot.widget_settings as unknown as WidgetSettings | null;
 
     set({
       editBotName: bot.name,
@@ -183,6 +187,8 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
           typeof settings.isVoiceEnabled === "boolean"
             ? settings.isVoiceEnabled
             : WIDGET_FALLBACK.IS_VOICE_ENABLED,
+        navigationEnabled:
+          typeof settings.navigation_enabled === "boolean" ? settings.navigation_enabled : false,
       });
     } else {
       set({
@@ -200,6 +206,7 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
         chatIconColor: WIDGET_FALLBACK.CHAT_ICON_COLOR,
         chatIconBgColor: WIDGET_FALLBACK.CHAT_ICON_BG_COLOR,
         isVoiceEnabled: WIDGET_FALLBACK.IS_VOICE_ENABLED,
+        navigationEnabled: false,
       });
     }
   },
@@ -226,6 +233,7 @@ export const useAppearanceStore = create<AppearanceState>()((set) => ({
       slug: "",
       isPublic: false,
       isVoiceEnabled: WIDGET_FALLBACK.IS_VOICE_ENABLED,
+      navigationEnabled: false,
       allowedDomains: [],
       isSaving: false,
       isSavingRateLimit: false,

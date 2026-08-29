@@ -26,6 +26,7 @@ import { WorkspaceUpgradeSelector } from "@/components/dashboard/upgrade/Workspa
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { calculateRemainingMonths, formatPaymentDate } from "@/lib/helpers/payment-helpers";
 import { toast } from "sonner";
+import type { Tables } from "@/lib/supabase/types";
 
 function setWorkspaceCookie(wsId: string) {
   if (typeof document !== "undefined") {
@@ -59,8 +60,14 @@ export default function EnterpriseUpgradePage() {
     bots_limit_override: number | null;
     monthly_credits_override: number | null;
     current_period_end: string;
-    plans?: { code?: string; bots_limit?: number; monthly_credits?: number } | null;
+    plans?: {
+      code?: string;
+      bots_limit?: number;
+      monthly_credits?: number;
+      pricing?: unknown;
+    } | null;
   } | null>(null);
+  const [enterprisePlan, setEnterprisePlan] = useState<Tables<"plans"> | null>(null);
   const [isLoadingSub, setIsLoadingSub] = useState(true);
 
   // Form states for first-time registration
@@ -92,7 +99,7 @@ export default function EnterpriseUpgradePage() {
         const { data } = await (supabase as any)
           .from("subscriptions")
           .select(
-            "id, billing_cycle, bots_limit_override, monthly_credits_override, current_period_end, plans(code, bots_limit, monthly_credits)"
+            "id, billing_cycle, bots_limit_override, monthly_credits_override, current_period_end, plans(code, bots_limit, monthly_credits, pricing)"
           )
           .eq("workspace_id", activeWorkspace.id)
           .eq("status", "active")
@@ -111,13 +118,32 @@ export default function EnterpriseUpgradePage() {
           }
         }
       } catch (err) {
-        console.error("Error fetching workspace subscription:", err);
+        console.error("[EnterpriseUpgradePage] Error fetching workspace subscription:", err);
       } finally {
         setIsLoadingSub(false);
       }
     };
     fetchSub();
   }, [activeWorkspace?.id, supabase]);
+
+  // Fetch enterprise plan metadata from DB
+  useEffect(() => {
+    const fetchEnterprisePlan = async () => {
+      try {
+        const { data } = await supabase
+          .from("plans")
+          .select("*")
+          .eq("code", "enterprise")
+          .maybeSingle();
+        if (data) {
+          setEnterprisePlan(data as Tables<"plans">);
+        }
+      } catch (err) {
+        console.error("[EnterpriseUpgradePage] Error fetching enterprise plan:", err);
+      }
+    };
+    fetchEnterprisePlan();
+  }, [supabase]);
 
   const isCurrentSubEnterprise = currentSubscription?.plans?.code === ESubscriptionPlan.Enterprise;
 
@@ -137,22 +163,73 @@ export default function EnterpriseUpgradePage() {
     window.location.href = `/${encodeURIComponent(slug)}/upgrade/enterprise?cycle=${billingCycle}`;
   };
 
+  const enterpriseOptions = useMemo(() => {
+    // If current subscription is enterprise, use its plan info; otherwise ALWAYS use enterprisePlan from DB
+    const targetPricing =
+      (isCurrentSubEnterprise ? currentSubscription?.plans?.pricing : enterprisePlan?.pricing) ||
+      enterprisePlan?.pricing;
+    const targetBotsLimit =
+      (isCurrentSubEnterprise
+        ? currentSubscription?.plans?.bots_limit
+        : enterprisePlan?.bots_limit) ??
+      enterprisePlan?.bots_limit ??
+      ENTERPRISE_PRICE.bots.min;
+    const targetCreditsLimit =
+      (isCurrentSubEnterprise
+        ? currentSubscription?.plans?.monthly_credits
+        : enterprisePlan?.monthly_credits) ??
+      enterprisePlan?.monthly_credits ??
+      ENTERPRISE_PRICE.monthlyCredits.min;
+
+    const opts = {
+      pricing: targetPricing as Record<string, Record<string, number>> | null,
+      minBots: targetBotsLimit,
+      minCredits: targetCreditsLimit,
+    };
+
+    return opts;
+  }, [isCurrentSubEnterprise, currentSubscription, enterprisePlan]);
+
   // Price calculations
   const renewalPrice = useMemo(() => {
-    return calculateEnterprisePrice(currentBots, currentMonthlyCredits, activeCycle);
-  }, [currentBots, currentMonthlyCredits, activeCycle]);
+    const price = calculateEnterprisePrice(
+      currentBots,
+      currentMonthlyCredits,
+      activeCycle,
+      enterpriseOptions
+    );
+    return price;
+  }, [currentBots, currentMonthlyCredits, activeCycle, enterpriseOptions]);
 
   const upgradePrice = useMemo(() => {
-    return calculateEnterpriseUpgradePrice(deltaBots, deltaCredits, activeCycle, remainingMonths);
+    const price = calculateEnterpriseUpgradePrice(
+      deltaBots,
+      deltaCredits,
+      activeCycle,
+      remainingMonths
+    );
+    return price;
   }, [deltaBots, deltaCredits, activeCycle, remainingMonths]);
 
   const firstTimePrice = useMemo(() => {
-    return calculateEnterprisePrice(botsLimit, monthlyCredits, billingCycle);
-  }, [botsLimit, monthlyCredits, billingCycle]);
+    const price = calculateEnterprisePrice(
+      botsLimit,
+      monthlyCredits,
+      billingCycle,
+      enterpriseOptions
+    );
+    return price;
+  }, [botsLimit, monthlyCredits, billingCycle, enterpriseOptions]);
 
   const monthlyBasePrice = useMemo(() => {
-    return calculateEnterprisePrice(botsLimit, monthlyCredits, ESubscriptionCycle.Monthly);
-  }, [botsLimit, monthlyCredits]);
+    const price = calculateEnterprisePrice(
+      botsLimit,
+      monthlyCredits,
+      ESubscriptionCycle.Monthly,
+      enterpriseOptions
+    );
+    return price;
+  }, [botsLimit, monthlyCredits, enterpriseOptions]);
 
   const handleCheckout = () => {
     if (invoiceFormRef.current && !invoiceFormRef.current.validate()) {

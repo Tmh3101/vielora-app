@@ -10,6 +10,7 @@ import {
   extractCleanHtml,
   extractMetadata,
   extractLinks,
+  extractAnchors,
   htmlToMarkdown,
   classifyError,
   getExtractHiddenItemsScript,
@@ -177,6 +178,7 @@ export async function extractDynamic(job: CrawlJob): Promise<CrawlResult> {
       excludeTags: config?.excludeTags,
     });
     const markdown = htmlToMarkdown(cleanHtml);
+    const anchors = extractAnchors($);
 
     return {
       success: true,
@@ -189,6 +191,7 @@ export async function extractDynamic(job: CrawlJob): Promise<CrawlResult> {
       markdown,
       metadata,
       links,
+      anchors,
       processingTimeMs: Date.now() - startTime,
     };
   } catch (error) {

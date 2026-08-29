@@ -12,6 +12,7 @@ import { GroupDrawer } from "@/components/chat/group/GroupDrawer";
 import { NoteBanner } from "@/components/chat/group/NoteBanner";
 import { NoteEditorModal } from "@/components/chat/group/NoteEditorModal";
 import { DeleteNoteConfirmModal } from "@/components/chat/group/DeleteNoteConfirmModal";
+import { ExportReportModal } from "@/components/dashboard/bot-detail/ExportReportModal";
 import { GroupMessageRow } from "@/lib/services/group-chat.service";
 import type { PublicBotData } from "@/lib/services/bot.service";
 import type { GroupNoteRow } from "@/types/group-chat";
@@ -98,6 +99,7 @@ export function GroupChatView({
   const [isDeletingNote, setIsDeletingNote] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerDefaultTab, setDrawerDefaultTab] = useState<"members" | "notes">("members");
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   const {
     messages,
@@ -122,7 +124,7 @@ export function GroupChatView({
     isLoadingNotes,
     loadNotesList,
     canCreateNote,
-    toggleNoteCollapse,
+    canExportReport,
     createNote,
     updateNote,
     pinNote,
@@ -571,12 +573,14 @@ export function GroupChatView({
               hasMoreNotes={hasMoreNotes}
               isLoadingNotes={isLoadingNotes}
               canCreateNote={canCreateNote}
+              canExportReport={canExportReport}
               primaryColor={primaryColor}
               onLeaveGroup={leaveGroup}
               onLoadMoreNotes={async () => {
                 await loadNotesList();
               }}
               onCreateNoteClick={handleOpenCreateNote}
+              onExportReportClick={() => setReportModalOpen(true)}
               onEditNoteClick={handleOpenEditNote}
               onDeleteNoteClick={handleOpenDeleteNote}
               onPinNoteClick={handlePinNote}
@@ -598,9 +602,6 @@ export function GroupChatView({
           onEdit={handleOpenEditNote}
           onUnpin={handleUnpinNote}
           onOpenNotesDrawer={handleOpenNotesDrawer}
-          onToggleCollapse={(noteId, collapsed) => {
-            void toggleNoteCollapse(noteId, collapsed);
-          }}
         />
       )}
 
@@ -746,6 +747,24 @@ export function GroupChatView({
           noteTitle={deletingNote.title}
           onConfirm={handleDeleteConfirm}
           isDeleting={isDeletingNote}
+        />
+      )}
+
+      {/* Export Report Modal */}
+      {canExportReport && (
+        <ExportReportModal
+          open={reportModalOpen}
+          onOpenChange={setReportModalOpen}
+          botId={botId}
+          workspaceId={botData?.workspace_id || botInfo?.workspace_id || undefined}
+          groupId={groupInfo?.id}
+          requestedByDisplayName={
+            members.find((m) => m.user_id === userId)?.display_name ||
+            members.find((m) => m.user_id === userId)?.full_name ||
+            members.find((m) => m.user_id === userId)?.email ||
+            userEmail ||
+            "Thành viên nhóm"
+          }
         />
       )}
     </div>

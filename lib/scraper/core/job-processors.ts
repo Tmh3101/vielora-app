@@ -48,6 +48,7 @@ import { refundWorkspaceCredits } from "@/lib/services/credit.service";
 import { createChunks, embedChunks } from "@/lib/rag-processor";
 import { CREDIT_PER_PAGE, MAX_PAGES, MAX_DEPTH, MIN_CHUNK_SIZE } from "@/config";
 import { sleep } from "@/lib/utils/sleep";
+import { buildNavigationFromPages } from "@/lib/services/navigation-autobuild.service";
 
 // Debounce finalizeBotIfDone per botId to prevent burst COUNT queries on concurrent completions
 const finalizeDebounceMap = new Map<string, ReturnType<typeof setTimeout>>();
@@ -212,6 +213,28 @@ export const processDiscoverJob = async (job: Job<DiscoverJobData>): Promise<voi
       );
       void job.updateProgress({ percent: 100, currentUrl: normalizedStartUrl });
       isDiscovering = false;
+
+      // FR-9: when a discover run finishes and Smart Homepage is enabled,
+      // auto-build the navigation entries from the discovered pages.
+      if (discoveredCount > 0) {
+        try {
+          const { data: botRow } = await supabase
+            .from("bots")
+            .select("widget_settings")
+            .eq("id", botId)
+            .single();
+          const navEnabled = Boolean(
+            (botRow?.widget_settings as Record<string, unknown> | null)?.navigation_enabled
+          );
+          if (navEnabled) {
+            void buildNavigationFromPages(supabase, botId).catch((err) =>
+              console.error("[DiscoverJob] auto navigation build failed:", err)
+            );
+          }
+        } catch (err) {
+          console.error("[DiscoverJob] reading bot navigation_enabled failed:", err);
+        }
+      }
       return;
     }
 
@@ -367,6 +390,7 @@ export const processPageCrawlerJob = async (job: Job<PageCrawlerJobData>): Promi
         content: result.markdown,
         depth,
         contentHash: hashContent(result.markdown),
+        anchors: result.anchors,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : "";

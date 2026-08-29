@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient, createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { ESubscriptionPlan, ETransactionType } from "@/types";
 import { KNOWLEDGE_STT_CREDIT_COST } from "@/config/knowledge-voice";
 import {
@@ -14,20 +14,15 @@ import {
 } from "@/lib/services/subscription.service";
 import { requireWorkspaceMember } from "@/lib/services/workspace-knowledge.service";
 import { transcribeAudio, generateTitleFromText } from "@/lib/ai/stt";
+import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 
 import type { Tables } from "@/lib/supabase/types";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const supabaseUserClient = await createServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseUserClient.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-    }
+    const authResult = await authenticateRequest(req);
+    if (isAuthError(authResult)) return authResult;
+    const { user } = authResult;
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -82,22 +77,48 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       botData = bot;
       workspaceId = bot.workspace_id;
       if (workspaceId) {
+        let isAuthorized = false;
         try {
           await requireWorkspaceMember(workspaceId, user.id);
+          isAuthorized = true;
         } catch {
           // If not direct workspace member, verify if user is an authorized group member for this bot
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: groupMember } = await (admin as any)
-            .from("group_members")
-            .select("can_create_note, status, group_chats!inner(bot_id)")
-            .eq("user_id", user.id)
-            .eq("status", "active")
-            .eq("group_chats.bot_id", bot.id)
-            .maybeSingle();
+          const { data: groupChats } = await (admin as any)
+            .from("group_chats")
+            .select("id")
+            .eq("bot_id", bot.id)
+            .eq("status", "active");
 
-          if (!groupMember || !groupMember.can_create_note) {
-            throw new Error("Unauthorized workspace access");
+          const groupIds = ((groupChats as { id: string }[] | null) || []).map((g) => g.id);
+
+          if (groupIds.length > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let memberQuery = (admin as any)
+              .from("group_members")
+              .select("id, can_create_note, can_pin_knowledge")
+              .in("group_id", groupIds);
+
+            if (user.email) {
+              const normalizedEmail = user.email.trim().toLowerCase();
+              memberQuery = memberQuery.or(`user_id.eq.${user.id},email.ilike.${normalizedEmail}`);
+            } else {
+              memberQuery = memberQuery.eq("user_id", user.id);
+            }
+
+            const { data: memberRows } = await memberQuery;
+            const rows =
+              (memberRows as { can_create_note?: boolean; can_pin_knowledge?: boolean }[] | null) ||
+              [];
+            isAuthorized = rows.some((m) => Boolean(m.can_create_note || m.can_pin_knowledge));
           }
+        }
+
+        if (!isAuthorized) {
+          return NextResponse.json(
+            { success: false, message: "Bạn không có quyền sử dụng tính năng này." },
+            { status: 403 }
+          );
         }
       }
 

@@ -1,8 +1,9 @@
 import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getBotBySlug } from "@/lib/services/bot.service";
+import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { PwaGroupChatContainer } from "@/components/chat/group/PwaGroupChatContainer";
-import { EBotStatus } from "@/types";
+import { EBotStatus, ESubscriptionPlan } from "@/types";
 
 const getPublicBot = cache(async (slug: string) => {
   const supabase = createAdminClient();
@@ -47,6 +48,20 @@ export default async function PwaGroupPage({ params }: { params: Promise<{ botSl
       <PublicBotUnavailable
         title="Bot chưa sẵn sàng"
         message="Nhóm chat của bot đang trong quá trình thiết lập."
+      />
+    );
+  }
+
+  const supabase = createAdminClient();
+  const planCode = await getBotActivePlanCode(supabase, bot);
+  const isProOrEnterprise =
+    planCode === ESubscriptionPlan.Pro || planCode === ESubscriptionPlan.Enterprise;
+
+  if (!isProOrEnterprise) {
+    return (
+      <PublicBotUnavailable
+        title="Tính năng Nhóm chat chưa khả dụng"
+        message="Nhóm chat với AI là tính năng nâng cao chỉ khả dụng cho các chatbot thuộc gói Pro hoặc Enterprise. Vui lòng liên hệ quản trị viên không gian làm việc để kích hoạt."
       />
     );
   }

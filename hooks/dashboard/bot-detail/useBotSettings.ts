@@ -49,6 +49,7 @@ export interface AppearanceSettingsOverrides {
   chatIconColor?: string;
   chatIconBgColor?: string;
   isVoiceEnabled?: boolean;
+  navigation_enabled?: boolean;
 }
 
 import { EWidgetIconType } from "@/types";
@@ -206,6 +207,7 @@ export function useBotSettings({
           chatIconColor: current.chatIconColor,
           chatIconBgColor: current.chatIconBgColor,
           isVoiceEnabled: current.isVoiceEnabled,
+          navigation_enabled: current.navigation_enabled ?? current.navigationEnabled,
         };
 
         if (

@@ -15,6 +15,14 @@ const SHOPIFY_FRAME_ANCESTORS_CSP =
   "frame-ancestors https://admin.shopify.com https://*.myshopify.com;";
 const RESERVED_SUBDOMAINS = new Set<string>(RESERVED_SUBDOMAINS_LIST);
 
+interface WorkspaceCacheEntry {
+  workspaceId: string | null;
+  expiresAt: number;
+}
+const workspaceSlugCache = new Map<string, WorkspaceCacheEntry>();
+const WORKSPACE_CACHE_TTL_MS = 60 * 1000;
+const NEGATIVE_CACHE_TTL_MS = 15 * 1000;
+
 function hasFileExtension(pathname: string): boolean {
   const lastSegment = pathname.split("/").pop() ?? "";
   return /\.[a-zA-Z0-9]+$/.test(lastSegment);
@@ -26,6 +34,7 @@ function isExcludedPath(pathname: string): boolean {
     pathname.startsWith("/api") ||
     pathname.startsWith("/static") ||
     pathname.startsWith("/public-bot") ||
+    pathname.startsWith("/auth") ||
     hasFileExtension(pathname)
   );
 }
@@ -58,58 +67,43 @@ function getSubdomainForRoot(hostname: string, rootDomain: string): string | nul
     return null;
   }
 
-  const subdomain = hostname.slice(0, -rootDomain.length - 1);
-  if (!subdomain || subdomain.includes(".") || RESERVED_SUBDOMAINS.has(subdomain)) {
-    return null;
+  const subdomain = hostname.slice(0, -(rootDomain.length + 1)).trim();
+  return subdomain.length > 0 ? subdomain : null;
+}
+
+function getSubdomain(request: NextRequest): string | null {
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const hostname = getHostname(host);
+  const rootDomain = getMainDomain();
+
+  if (process.env.NODE_ENV === "production") {
+    return getSubdomainForRoot(hostname, rootDomain);
   }
 
-  return subdomain;
+  if (hostname.endsWith(`.${LOCAL_ROOT}`)) {
+    const subdomain = hostname.slice(0, -(LOCAL_ROOT.length + 1)).trim();
+    return subdomain.length > 0 ? subdomain : null;
+  }
+
+  if (hostname.includes(".localhost")) {
+    const subdomain = hostname.split(".localhost")[0]?.trim();
+    return subdomain && subdomain.length > 0 ? subdomain : null;
+  }
+
+  return null;
 }
 
-const SLUG_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
-
-function isValidBotSlug(slug: string): boolean {
-  if (!slug || slug.length < 2 || slug.length > 48) return false;
-  return SLUG_PATTERN.test(slug);
-}
-
-function getBotSubdomain(host: string | null): string | null {
-  const hostname = getHostname(host);
-  const rootDomain = getRootDomain();
-  const slug =
-    getSubdomainForRoot(hostname, LOCAL_ROOT) ??
-    getSubdomainForRoot(hostname, rootDomain) ??
-    getSubdomainForRoot(hostname, PRODUCTION_ROOT);
-  if (slug && !isValidBotSlug(slug)) return null;
-  return slug;
-}
+const SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const host = (request.headers.get("host") ?? "").toLowerCase();
-  const mainDomain = getMainDomain();
+  const subdomain = getSubdomain(request);
   const requestHeaders = buildRequestHeaders(request);
 
-  if (
-    process.env.NODE_ENV === "production" &&
-    host === mainDomain &&
-    pathname.startsWith("/chat/")
-  ) {
-    const slug = pathname.split("/")[2];
-
-    if (slug) {
-      const redirectUrl = new URL(`https://${slug}.${mainDomain}/`, request.url);
-      redirectUrl.search = request.nextUrl.search;
-      return withShopifyCsp(NextResponse.redirect(redirectUrl, 301));
-    }
-  }
-
-  if (pathname === "/apple-touch-icon.png" || pathname === "/apple-touch-icon-precomposed.png") {
-    const botSlug = getBotSubdomain(host);
-
-    if (botSlug) {
+  if (subdomain && !RESERVED_SUBDOMAINS.has(subdomain)) {
+    if (pathname === "/" || pathname === "") {
       const rewriteUrl = request.nextUrl.clone();
-      rewriteUrl.pathname = `/public-bot/${botSlug}/apple-touch-icon.png`;
+      rewriteUrl.pathname = `/public-bot/${subdomain}`;
       return withShopifyCsp(
         NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } })
       );
@@ -124,39 +118,52 @@ export async function middleware(request: NextRequest) {
     return withShopifyCsp(NextResponse.next({ request: { headers: requestHeaders } }));
   }
 
-  // Workspace path-based routing detection
+  // Workspace path-based routing detection with in-memory caching
   const segments = pathname.split("/").filter(Boolean);
   const firstSegment = segments[0];
 
   if (firstSegment && !RESERVED_PATHS.has(firstSegment) && SLUG_PATTERN.test(firstSegment)) {
     try {
-      const supabase = createAdminClient();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: workspace } = await (supabase as any)
-        .from("workspaces")
-        .select("id, slug")
-        .eq("slug", firstSegment)
-        .maybeSingle();
+      const now = Date.now();
+      const cached = workspaceSlugCache.get(firstSegment);
+      let workspaceId: string | null = null;
 
-      if (workspace) {
+      if (cached && cached.expiresAt > now) {
+        workspaceId = cached.workspaceId;
+      } else {
+        const supabase = createAdminClient();
+        const { data: workspace } = await supabase
+          .from("workspaces")
+          .select("id, slug")
+          .eq("slug", firstSegment)
+          .maybeSingle();
+
+        workspaceId = workspace?.id ?? null;
+        workspaceSlugCache.set(firstSegment, {
+          workspaceId,
+          expiresAt: now + (workspaceId ? WORKSPACE_CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS),
+        });
+      }
+
+      if (workspaceId) {
         const remainingSegments = segments.slice(1);
         const remainingPath = remainingSegments.length > 0 ? `/${remainingSegments.join("/")}` : "";
         const rewriteUrl = request.nextUrl.clone();
         rewriteUrl.pathname = `/dashboard${remainingPath}`;
 
-        requestHeaders.set("x-workspace-id", workspace.id);
+        requestHeaders.set("x-workspace-id", workspaceId);
 
         const response = NextResponse.rewrite(rewriteUrl, {
           request: { headers: requestHeaders },
         });
 
-        response.cookies.set("active_workspace_id", workspace.id, {
+        response.cookies.set("active_workspace_id", workspaceId, {
           path: "/",
           maxAge: 2592000,
           sameSite: "lax",
         });
 
-        response.headers.set("x-workspace-id", workspace.id);
+        response.headers.set("x-workspace-id", workspaceId);
 
         return withShopifyCsp(response);
       }
@@ -209,7 +216,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  const botSlug = getBotSubdomain(host);
+  const botSlug = subdomain;
 
   if (botSlug) {
     const rewriteUrl = request.nextUrl.clone();

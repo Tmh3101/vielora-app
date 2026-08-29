@@ -31,7 +31,7 @@ export async function PATCH(
     const { user, supabase } = authResult;
 
     // Verify membership / read permission
-    const perm = await checkGroupNoteReadPermission(supabase, groupId, user.id);
+    const perm = await checkGroupNoteReadPermission(supabase, groupId, user.id, user.email);
     if (!perm.allowed) {
       return NextResponse.json(
         { success: false, message: "Forbidden: Not a member of this group" },

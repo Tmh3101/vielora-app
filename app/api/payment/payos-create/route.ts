@@ -131,6 +131,12 @@ export async function POST(request: NextRequest) {
         currentSub.status === ESubscriptionStatus.Active &&
         currentSub.plan_id === plan.id;
 
+      const enterpriseOptions = {
+        pricing: plan.pricing as Record<string, Record<string, number>> | null,
+        minBots: plan.bots_limit ?? undefined,
+        minCredits: plan.monthly_credits ?? undefined,
+      };
+
       if (isCurrentSubEnterprise && action === PaymentAction.Renew) {
         // Enforce same cycle renewal
         if (currentSub.billing_cycle && billingCycle !== currentSub.billing_cycle) {
@@ -143,13 +149,16 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        selectedBots = currentSub.bots_limit_override ?? ENTERPRISE_PRICE.bots.min;
+        selectedBots =
+          currentSub.bots_limit_override ?? (plan.bots_limit || ENTERPRISE_PRICE.bots.min);
         selectedCredits =
-          currentSub.monthly_credits_override ?? ENTERPRISE_PRICE.monthlyCredits.min;
+          currentSub.monthly_credits_override ??
+          (plan.monthly_credits || ENTERPRISE_PRICE.monthlyCredits.min);
         amount = calculateEnterprisePrice(
           selectedBots,
           selectedCredits,
-          billingCycle as ESubscriptionCycle
+          billingCycle as ESubscriptionCycle,
+          enterpriseOptions
         );
       } else if (isCurrentSubEnterprise && isIncrementalUpgrade) {
         deltaBots = Math.max(0, Number(deltaBotsInput || 0));
@@ -170,20 +179,23 @@ export async function POST(request: NextRequest) {
         );
       } else {
         // First-time Enterprise registration or normal plan change
+        const minBots = plan.bots_limit || ENTERPRISE_PRICE.bots.min;
+        const minCredits = plan.monthly_credits || ENTERPRISE_PRICE.monthlyCredits.min;
         selectedBots = clampValue(
-          Number(customBots || ENTERPRISE_PRICE.bots.min),
-          ENTERPRISE_PRICE.bots.min,
+          Number(customBots || minBots),
+          minBots,
           ENTERPRISE_PRICE.bots.max
         );
         selectedCredits = clampValue(
-          Number(customCredits || ENTERPRISE_PRICE.monthlyCredits.min),
-          ENTERPRISE_PRICE.monthlyCredits.min,
+          Number(customCredits || minCredits),
+          minCredits,
           ENTERPRISE_PRICE.monthlyCredits.max
         );
         amount = calculateEnterprisePrice(
           selectedBots,
           selectedCredits,
-          billingCycle as ESubscriptionCycle
+          billingCycle as ESubscriptionCycle,
+          enterpriseOptions
         );
       }
     } else {

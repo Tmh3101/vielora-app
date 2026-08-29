@@ -17,4 +17,5 @@ export const LEAD_FORM_MESSAGE =
 export const ChatResponseType = {
   MESSAGE: "MESSAGE",
   SHOW_LEAD_FORM: "SHOW_LEAD_FORM",
+  NAVIGATE: "NAVIGATE",
 } as const;

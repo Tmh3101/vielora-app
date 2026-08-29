@@ -4,7 +4,6 @@ import {
   ESubscriptionStatus,
   ESubscriptionCycle,
   ESubscriptionPlan,
-  EWorkspaceStatus,
 } from "@/types";
 import {
   sendSubscriptionDowngradeEmail,
@@ -167,74 +166,108 @@ export async function processSubscriptionLifecycle(
   }
 
   // Scenario B: Monthly credit reset for active workspaces
-  console.log("[SubscriptionCron] Scenario B: Checking for active workspaces for credit reset…");
+  console.log(
+    "[SubscriptionCron] Scenario B: Checking for active subscriptions needing monthly credit reset…"
+  );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: activeWorkspaces, error: activeWsError } = await (client as any)
-    .from("workspaces")
-    .select("id, name, owner_id")
-    .eq("status", EWorkspaceStatus.Active);
+  // Find active subscriptions that have reached or passed their next_credit_reset_at
+  const { data: dueSubs, error: dueSubsError } = await client
+    .from("subscriptions")
+    .select(
+      "id, user_id, workspace_id, plan_id, monthly_credits_override, next_credit_reset_at, current_period_end, plans(id, code, name, monthly_credits)"
+    )
+    .eq("status", ESubscriptionStatus.Active)
+    .not("workspace_id", "is", null)
+    .or(`next_credit_reset_at.lte.${nowIso},next_credit_reset_at.is.null`);
 
-  if (activeWsError) {
+  if (dueSubsError) {
     throw new Error(
-      `processSubscriptionLifecycle: failed to fetch active workspaces — ${activeWsError.message}`
+      `processSubscriptionLifecycle: failed to fetch due subscriptions — ${dueSubsError.message}`
     );
   }
 
-  const workspaceList = activeWorkspaces ?? [];
+  const subList = dueSubs ?? [];
   console.log(
-    `[SubscriptionCron] Scenario B: ${workspaceList.length} active workspace(s) found for credit reset`
+    `[SubscriptionCron] Scenario B: ${subList.length} subscription(s) due for monthly credit reset`
   );
 
-  for (const ws of workspaceList) {
+  for (const sub of subList) {
+    if (!sub.workspace_id) continue;
+
     try {
-      let monthlyCredits = 0;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: subData } = await (client as any)
-        .from("subscriptions")
-        .select("plan_id, monthly_credits_override, plans(monthly_credits)")
-        .eq("workspace_id", ws.id)
-        .eq("status", ESubscriptionStatus.Active)
-        .maybeSingle();
+      const planObj = (Array.isArray(sub.plans) ? sub.plans[0] : sub.plans) as {
+        id: string;
+        code: string;
+        name: string;
+        monthly_credits: number;
+      } | null;
 
-      if (subData) {
-        const planObj = (Array.isArray(subData.plans) ? subData.plans[0] : subData.plans) as {
-          monthly_credits: number;
-        } | null;
-        monthlyCredits = subData.monthly_credits_override ?? planObj?.monthly_credits ?? 0;
-      }
+      const monthlyCredits =
+        sub.monthly_credits_override ?? planObj?.monthly_credits ?? freePlan.monthly_credits ?? 100;
 
+      // 1. Reset wallet subscription credits
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: walletError } = await (client as any)
         .from("wallets")
         .update({ subscription_credits: monthlyCredits })
-        .eq("workspace_id", ws.id);
+        .eq("workspace_id", sub.workspace_id);
 
       if (walletError) throw new Error(`Failed to update wallet: ${walletError.message}`);
 
+      // 2. Advance next_credit_reset_at by 1 month
+      let nextResetDate = addOneMonth(new Date(sub.next_credit_reset_at || now));
+      if (nextResetDate <= now) {
+        nextResetDate = addOneMonth(now);
+      }
+      const nextResetIso = nextResetDate.toISOString();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updateSubPayload: Record<string, any> = {
+        next_credit_reset_at: nextResetIso,
+      };
+
+      // For free plans (rolling monthly period), also keep current_period_end synced
+      if (planObj?.code === ESubscriptionPlan.Free) {
+        updateSubPayload.current_period_start = nowIso;
+        updateSubPayload.current_period_end = nextResetIso;
+      }
+
+      const { error: updateSubErr } = await client
+        .from("subscriptions")
+        .update(updateSubPayload)
+        .eq("id", sub.id);
+
+      if (updateSubErr) {
+        console.warn(
+          `[SubscriptionCron] Scenario B: Warning updating subscription ${sub.id} next_credit_reset_at:`,
+          updateSubErr.message
+        );
+      }
+
+      // 3. Record credit transaction
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: txError } = await (client as any).from("credit_transactions").insert({
-        workspace_id: ws.id,
+        workspace_id: sub.workspace_id,
         amount: monthlyCredits,
         transaction_type: ETransactionType.MonthlyReset,
-        description: `Reset credits for workspace ${ws.name || ws.id}`,
+        description: `Monthly credit reset for workspace`,
       });
 
       if (txError) {
         console.warn(
-          `[SubscriptionCron] Scenario B: Warning recording credit transaction for workspace ${ws.id}:`,
+          `[SubscriptionCron] Scenario B: Warning recording credit transaction for workspace ${sub.workspace_id}:`,
           txError.message
         );
       }
 
       result.creditsReset++;
       console.log(
-        `[SubscriptionCron] Scenario B: ✓ Reset credits for workspace ${ws.name || ws.id} (${ws.id}) → ${monthlyCredits} credits`
+        `[SubscriptionCron] Scenario B: ✓ Reset credits for workspace (${sub.workspace_id}) → ${monthlyCredits} credits (next reset: ${nextResetIso})`
       );
     } catch (err) {
       result.creditResetFailed++;
       console.error(
-        `[SubscriptionCron] Scenario B: ✗ Failed for workspace ${ws.id} —`,
+        `[SubscriptionCron] Scenario B: ✗ Failed for sub ${sub.id} (ws: ${sub.workspace_id}) —`,
         err instanceof Error ? err.message : String(err)
       );
     }

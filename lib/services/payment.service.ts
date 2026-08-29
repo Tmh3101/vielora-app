@@ -688,7 +688,10 @@ export async function getPendingPayOSPaymentsByUser(
 }
 
 /**
- * Tính toán số tiền được giảm giá (Proration) dựa trên lượng Credit tiêu thụ thực tế.
+ * Tính toán số tiền được giảm giá (Proration) khi nâng cấp gói.
+ *
+ * Công thức đơn giản: subscription_credits_còn_lại × CREDIT_UNIT_PRICE_PRORATION (100đ/credit).
+ * Chỉ tính subscription_credits (không bao gồm payg_credits) để tránh lạm dụng.
  */
 export async function calculateCreditBasedProration(
   client: ServiceClient,
@@ -697,10 +700,12 @@ export async function calculateCreditBasedProration(
 ): Promise<number> {
   if (!workspaceId) return 0;
 
+  const { CREDIT_UNIT_PRICE_PRORATION } = await import("@/config/credit-pricing");
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: sub, error: subError } = await (client as any)
     .from("subscriptions")
-    .select("*, plans(code, monthly_credits, pricing)")
+    .select("*, plans(code, monthly_credits)")
     .eq("workspace_id", workspaceId)
     .eq("status", ESubscriptionStatus.Active)
     .order("current_period_end", { ascending: false })
@@ -710,55 +715,23 @@ export async function calculateCreditBasedProration(
   if (subError || !sub || !sub.plans) return 0;
 
   const planData = Array.isArray(sub.plans) ? sub.plans[0] : sub.plans;
-  const effectiveMonthlyCredits = sub.monthly_credits_override ?? planData?.monthly_credits ?? 0;
   if (!planData || planData.code === "free") return 0;
 
   const now = new Date();
   const periodEnd = new Date(sub.current_period_end);
   if (now >= periodEnd) return 0;
 
-  let pricePaid = 0;
-  if (planData.code === "enterprise") {
-    const { calculateEnterprisePrice, ENTERPRISE_PRICE } =
-      await import("@/config/pricing-enterprise");
-    const bots = sub.bots_limit_override ?? ENTERPRISE_PRICE.bots.min;
-    const credits = sub.monthly_credits_override ?? ENTERPRISE_PRICE.monthlyCredits.min;
-    pricePaid = calculateEnterprisePrice(
-      bots,
-      credits,
-      sub.billing_cycle || ESubscriptionCycle.Monthly
-    );
-  } else {
-    const pricing = planData.pricing as Record<string, Record<string, number>> | null;
-    pricePaid = pricing?.VND?.[sub.billing_cycle || ESubscriptionCycle.Monthly] ?? 0;
-  }
-  if (pricePaid <= 0) return 0;
-
-  const isYearly = sub.billing_cycle === ESubscriptionCycle.Yearly;
-  const periodDurationMs = (isYearly ? 365 : 30) * 24 * 60 * 60 * 1000;
-  const periodStart = sub.current_period_start
-    ? new Date(sub.current_period_start)
-    : new Date(periodEnd.getTime() - periodDurationMs);
-
-  const totalTimeMs = Math.max(1, periodEnd.getTime() - periodStart.getTime());
-  const remainingTimeMs = Math.max(0, periodEnd.getTime() - now.getTime());
-  const timeRatio = Math.min(1, Math.max(0, remainingTimeMs / totalTimeMs));
-  const timeBasedDiscount = Math.floor(pricePaid * timeRatio);
-
+  // Chỉ lấy subscription_credits (không lấy payg_credits)
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const adminClient = createAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: wallet } = await (client as any)
+  const { data: wallet } = await (adminClient as any)
     .from("wallets")
-    .select("subscription_credits, credits")
+    .select("subscription_credits")
     .eq("workspace_id", workspaceId)
     .maybeSingle();
 
-  const currentCredits = (wallet?.subscription_credits ?? 0) + (wallet?.credits ?? 0);
-  const totalCreditsPeriod = effectiveMonthlyCredits * (isYearly ? 12 : 1);
-  const creditRatio =
-    totalCreditsPeriod > 0 ? Math.min(1, Math.max(0, currentCredits / totalCreditsPeriod)) : 0;
-  const creditBasedDiscount = Math.floor(pricePaid * creditRatio);
+  const subscriptionCredits = Math.max(0, wallet?.subscription_credits ?? 0);
 
-  const finalDiscount = Math.max(timeBasedDiscount, creditBasedDiscount);
-  // Cap discount to 95% of paid price
-  return Math.min(Math.floor(pricePaid * 0.95), finalDiscount);
+  return subscriptionCredits * CREDIT_UNIT_PRICE_PRORATION;
 }

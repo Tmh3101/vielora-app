@@ -38,6 +38,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ botI
       );
     }
 
+    // Rate Limit on read per user
+    const rateLimitResult = checkApiRateLimit(
+      `group_msg_get:${user.id}`,
+      API_RATE_LIMITS.groupMessageRead
+    );
+    if (!rateLimitResult.allowed) {
+      const headers = {
+        ...corsHeaders,
+        ...createRateLimitHeaders(
+          rateLimitResult.remaining,
+          rateLimitResult.resetIn,
+          API_RATE_LIMITS.groupMessageRead.maxRequests
+        ),
+      };
+      return NextResponse.json(
+        { success: false, message: API_RATE_LIMITS.groupMessageRead.message },
+        { status: 429, headers }
+      );
+    }
+
     const group = await getGroupByBotId(supabase, botId);
     if (!group) {
       return NextResponse.json(
@@ -118,24 +138,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ bot
     }
 
     const body = await req.json();
-    const {
-      content,
-      reply_to_id,
-      mentions,
-      should_bot_reply,
-    }: {
-      content?: string;
-      reply_to_id?: string | null;
-      mentions?: string[];
-      should_bot_reply?: boolean;
-    } = body;
+    const { sendGroupMessageSchema } = await import("@/lib/validations/group-chat.schema");
+    const parsed = sendGroupMessageSchema.safeParse(body);
 
-    if (!content || !content.trim()) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, message: "Message content cannot be empty" },
+        {
+          success: false,
+          message: parsed.error.issues[0]?.message || "Message content cannot be empty",
+        },
         { status: 400, headers: corsHeaders }
       );
     }
+
+    const { content, replyToId, mentions, shouldBotReply } = parsed.data;
 
     if (content.length > MAX_GROUP_CHAT_INPUT) {
       return NextResponse.json(
@@ -152,9 +168,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ bot
       senderType: EGroupSenderType.User,
       senderId: user.id,
       content: content.trim(),
-      replyToId: reply_to_id,
-      mentions,
-      shouldBotReply: should_bot_reply ?? true,
+      replyToId: replyToId || null,
+      mentions: mentions || [],
+      shouldBotReply: shouldBotReply ?? true,
     });
 
     if (message.should_bot_reply) {

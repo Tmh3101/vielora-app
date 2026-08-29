@@ -5,6 +5,7 @@ import {
   processExpiryReminders,
 } from "@/lib/services/subscription-cron.service";
 import { processGroupChatSummaries } from "@/lib/services/group-chat-summary.service";
+import { cleanExpiredReportExports } from "@/lib/services/report-export.service";
 import { CRON_QUEUE_NAME, CRON_WORKER_CONCURRENCY } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -14,6 +15,8 @@ const DAILY_EXPIRY_REMINDER_JOB_NAME = "daily-expiry-reminder" as const;
 const DAILY_EXPIRY_REMINDER_JOB_ID = "daily-expiry-reminder-job";
 const DAILY_GROUP_SUMMARY_JOB_NAME = "daily-group-summary" as const;
 const DAILY_GROUP_SUMMARY_JOB_ID = "daily-group-summary-job";
+const DAILY_REPORT_EXPORT_RETENTION_JOB_NAME = "daily-report-export-retention" as const;
+const DAILY_REPORT_EXPORT_RETENTION_JOB_ID = "daily-report-export-retention-job";
 const DAILY_SUBSCRIPTION_CRON = "0 0 * * *";
 const DAILY_GROUP_SUMMARY_CRON = "0 2 * * *";
 
@@ -38,6 +41,8 @@ async function handleCronJob(job: Job): Promise<any> {
       return await processExpiryReminders(createAdminClient());
     case DAILY_GROUP_SUMMARY_JOB_NAME:
       return await processGroupChatSummaries(createAdminClient());
+    case DAILY_REPORT_EXPORT_RETENTION_JOB_NAME:
+      return await cleanExpiredReportExports(createAdminClient());
 
     default:
       console.warn(`[CronWorker] Unknown job name: "${job.name}" — skipping`);
@@ -73,8 +78,17 @@ export async function initCronJobs(): Promise<void> {
     }
   );
 
+  await cronQueue.add(
+    DAILY_REPORT_EXPORT_RETENTION_JOB_NAME,
+    {},
+    {
+      repeat: { pattern: DAILY_SUBSCRIPTION_CRON },
+      jobId: DAILY_REPORT_EXPORT_RETENTION_JOB_ID,
+    }
+  );
+
   console.log(
-    `[CronSystem] Registered repeatable jobs: "${DAILY_SUBSCRIPTION_JOB_NAME}", "${DAILY_EXPIRY_REMINDER_JOB_NAME}", "${DAILY_GROUP_SUMMARY_JOB_NAME}"`
+    `[CronSystem] Registered repeatable jobs: "${DAILY_SUBSCRIPTION_JOB_NAME}", "${DAILY_EXPIRY_REMINDER_JOB_NAME}", "${DAILY_GROUP_SUMMARY_JOB_NAME}", "${DAILY_REPORT_EXPORT_RETENTION_JOB_NAME}"`
   );
 }
 

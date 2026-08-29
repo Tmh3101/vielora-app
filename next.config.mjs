@@ -30,6 +30,8 @@ const nextConfig = {
       "puppeteer-extra-plugin-stealth",
       "clone-deep",
       "merge-deep",
+      "bullmq",
+      "ioredis",
     ],
     optimizePackageImports: ["framer-motion", "lucide-react"],
   },
@@ -44,6 +46,17 @@ const nextConfig = {
           "puppeteer-core": "commonjs puppeteer-core",
           "puppeteer-extra": "commonjs puppeteer-extra",
           "puppeteer-extra-plugin-stealth": "commonjs puppeteer-extra-plugin-stealth",
+          bullmq: "commonjs bullmq",
+          ioredis: "commonjs ioredis",
+          // BullMQ's nested ESM internals pull Node built-ins; external them so
+          // webpack does not try to bundle (server runtime provides them).
+          child_process: "commonjs child_process",
+          net: "commonjs net",
+          worker_threads: "commonjs worker_threads",
+          fs: "commonjs fs",
+          dns: "commonjs dns",
+          tls: "commonjs tls",
+          "timers/promises": "commonjs timers/promises",
         });
       }
     }

@@ -173,6 +173,7 @@ export interface AppearanceUpdateRequest {
     chatIconColor?: string;
     chatIconBgColor?: string;
     isVoiceEnabled?: boolean;
+    navigation_enabled?: boolean;
   };
 }
 

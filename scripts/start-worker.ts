@@ -24,6 +24,9 @@ async function main() {
   // Dynamically import and start the invoice worker
   const { invoiceWorker } = await import("../lib/services/server/invoice-worker");
 
+  // Dynamically import and start the report export worker
+  const { reportExportWorker } = await import("../workers/report-export-worker");
+
   // Register shutdown handlers for graceful shutdown
   registerShutdownHandlers();
 
@@ -34,19 +37,20 @@ async function main() {
   console.log("");
   console.log("> Configuration:");
   console.log(
-    "   - Queues: discover-queue, page-crawler-queue, indexer-queue, invoice-queue, crawler-queue (legacy)"
+    "   - Queues: discover-queue, page-crawler-queue, indexer-queue, invoice-queue, report-export, crawler-queue (legacy)"
   );
   console.log("   - Discover concurrency: 5 jobs");
   console.log("   - Page crawler concurrency: 15 jobs");
   console.log("   - Indexer concurrency: 2 jobs");
   console.log("   - Invoice concurrency: 1 job");
+  console.log("   - Report export concurrency: 2 jobs");
   console.log("   - Legacy concurrency: 1 job");
   console.log("");
   console.log("> Waiting for jobs... Press Ctrl+C to stop");
 
   // Health check interval
   setInterval(() => {
-    if (!isWorkerRunning() || invoiceWorker.closing) {
+    if (!isWorkerRunning() || invoiceWorker.closing || reportExportWorker.closing) {
       console.error("Worker stopped unexpectedly!");
       process.exit(1);
     }

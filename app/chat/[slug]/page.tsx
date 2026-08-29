@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getBotBySlug } from "@/lib/services/bot.service";
+import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { StandaloneChatUI } from "@/components/chat/StandaloneChatUI";
 import { EBotStatus } from "@/types";
 import { FALLBACK_CHAT_TITLE } from "@/lib/constants/chat";
@@ -69,5 +70,8 @@ export default async function StandaloneChatPage({
     );
   }
 
-  return <StandaloneChatUI bot={bot} />;
+  const supabase = createAdminClient();
+  const planCode = await getBotActivePlanCode(supabase, bot);
+
+  return <StandaloneChatUI bot={bot} planCode={planCode} />;
 }

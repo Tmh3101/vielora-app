@@ -60,13 +60,15 @@ export function EnterpriseBuilderModal({
         if (res.ok) {
           const json = await res.json();
           if (json.success && json.data) {
+            console.log("[EnterpriseBuilderModal] Quote received from server:", json.data);
             setComputedPrice(json.data.price);
           }
         }
       } catch (err) {
-        console.error("Error fetching price quote:", err);
+        console.error("[EnterpriseBuilderModal] Error fetching price quote:", err);
         // Fallback local calc
-        setComputedPrice(calculateEnterprisePrice(bots, credits, cycle));
+        const fallbackPrice = calculateEnterprisePrice(bots, credits, cycle);
+        setComputedPrice(fallbackPrice);
       } finally {
         setIsQuoting(false);
       }

@@ -1,5 +1,6 @@
 import type { ServiceClient } from "@/lib/services/types";
 import { isBotManager } from "@/lib/services/group-permission.service";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface GroupNoteWritePermissionResult {
   allowed: boolean;
@@ -18,21 +19,25 @@ export interface GroupNoteReadPermissionResult {
  * Check if the user is authorized to write (create, update, delete) group notes.
  * Authorization rules:
  * 1. User is a bot manager (workspace owner/admin or assigned manager) -> allowed
- * 2. User is a group member with can_create_note = true -> allowed
+ * 2. User is a group member with can_create_note = true or can_pin_knowledge = true -> allowed
  */
 export async function checkGroupNoteWritePermission(
-  client: ServiceClient,
+  _client: ServiceClient,
   groupId: string,
   userId: string,
   providedBotId?: string,
   userMetadata?: {
+    display_name?: string | null;
     full_name?: string | null;
     name?: string | null;
     email?: string | null;
   } | null
 ): Promise<GroupNoteWritePermissionResult> {
+  const adminClient = createAdminClient();
+  const normalizedEmail = userMetadata?.email?.trim().toLowerCase();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: group, error: groupErr } = await (client as any)
+  const { data: group, error: groupErr } = await (adminClient as any)
     .from("group_chats")
     .select("id, bot_id")
     .eq("id", groupId)
@@ -49,33 +54,35 @@ export async function checkGroupNoteWritePermission(
     return { allowed: false, botId: null, groupTitle, userName: "" };
   }
 
-  // Fetch member info if exists
+  // Fetch member info by userId or email
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: member } = await (client as any)
+  let memberQuery = (adminClient as any)
     .from("group_members")
-    .select("can_create_note, role_label, display_name, full_name, email")
-    .eq("group_id", groupId)
-    .eq("user_id", userId)
-    .maybeSingle();
+    .select("id, user_id, email, role_label, can_create_note, can_pin_knowledge")
+    .eq("group_id", groupId);
 
-  // Resolve author name priority:
-  // 1. member display_name / full_name
-  // 2. user metadata full_name / name
-  // 3. member email prefix / user email prefix
-  // 4. member role_label
-  // 5. fallback
+  if (userId) {
+    memberQuery = memberQuery.eq("user_id", userId);
+  } else if (normalizedEmail) {
+    memberQuery = memberQuery.eq("email", normalizedEmail);
+  }
+
+  const { data: member } = await memberQuery.maybeSingle();
+
+  // Resolve author display name priority:
+  // 1. user metadata display_name / full_name / name
+  // 2. member email prefix / user email prefix
+  // 3. fallback
   const resolvedName =
-    member?.display_name?.trim() ||
-    member?.full_name?.trim() ||
+    userMetadata?.display_name?.trim() ||
     userMetadata?.full_name?.trim() ||
     userMetadata?.name?.trim() ||
     (member?.email ? member.email.split("@")[0] : null) ||
     (userMetadata?.email ? userMetadata.email.split("@")[0] : null) ||
-    member?.role_label?.trim() ||
     "";
 
   // 1. Check if user is bot manager (owner/admin)
-  const isManager = await isBotManager(client, botId, userId);
+  const isManager = await isBotManager(adminClient, botId, userId);
   if (isManager) {
     return {
       allowed: true,
@@ -85,8 +92,8 @@ export async function checkGroupNoteWritePermission(
     };
   }
 
-  // 2. Check if user is group member with can_create_note = true
-  if (member && member.can_create_note) {
+  // 2. Check if user is group member with can_create_note = true or can_pin_knowledge = true
+  if (member && (member.can_create_note || member.can_pin_knowledge)) {
     return {
       allowed: true,
       botId,
@@ -102,12 +109,16 @@ export async function checkGroupNoteWritePermission(
  * Check if the user is authorized to read group notes (any group member or bot manager).
  */
 export async function checkGroupNoteReadPermission(
-  client: ServiceClient,
+  _client: ServiceClient,
   groupId: string,
-  userId: string
+  userId: string,
+  userEmail?: string | null
 ): Promise<GroupNoteReadPermissionResult> {
+  const adminClient = createAdminClient();
+  const normalizedEmail = userEmail?.trim().toLowerCase();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: group, error: groupErr } = await (client as any)
+  const { data: group, error: groupErr } = await (adminClient as any)
     .from("group_chats")
     .select("id, bot_id")
     .eq("id", groupId)
@@ -121,22 +132,35 @@ export async function checkGroupNoteReadPermission(
 
   // 1. Check if user is bot manager
   if (botId) {
-    const isManager = await isBotManager(client, botId, userId);
+    const isManager = await isBotManager(adminClient, botId, userId);
     if (isManager) {
       return { allowed: true, botId, groupTitle: null };
     }
   }
 
-  // 2. Check if user is group member
+  // 2. Check if user is group member by userId or email
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: member } = await (client as any)
+  let memberQuery = (adminClient as any)
     .from("group_members")
-    .select("id")
-    .eq("group_id", groupId)
-    .eq("user_id", userId)
-    .maybeSingle();
+    .select("id, user_id")
+    .eq("group_id", groupId);
+
+  if (normalizedEmail) {
+    memberQuery = memberQuery.or(`user_id.eq.${userId},email.ilike.${normalizedEmail}`);
+  } else {
+    memberQuery = memberQuery.eq("user_id", userId);
+  }
+
+  const { data: member } = await memberQuery.maybeSingle();
 
   if (member) {
+    if (member.user_id !== userId && userId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (adminClient as any)
+        .from("group_members")
+        .update({ user_id: userId })
+        .eq("id", member.id);
+    }
     return { allowed: true, botId, groupTitle: null };
   }
 

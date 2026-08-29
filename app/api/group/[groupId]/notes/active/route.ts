@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ grou
     if (isAuthError(authResult)) return authResult;
     const { user, supabase } = authResult;
 
-    const perm = await checkGroupNoteReadPermission(supabase, groupId, user.id);
+    const perm = await checkGroupNoteReadPermission(supabase, groupId, user.id, user.email);
     if (!perm.allowed) {
       return NextResponse.json(
         { success: false, message: "Forbidden: Not a member of this group" },

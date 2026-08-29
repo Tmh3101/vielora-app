@@ -49,6 +49,8 @@
     suggestedQuestionsShown: false,
     showLeadForm: false,
     leadFormQuestion: null,
+    pendingNavigation: null,
+    navigationCancelled: false,
     subscriptionPlan: null,
     isRecording: false,
     audioChunks: [],
@@ -209,6 +211,12 @@
         state.botName = data.data.name || null;
         state.avatarUrl = data.data.avatarUrl || null;
         state.subscriptionPlan = data.data.subscriptionPlan || data.data.settings?.subscriptionPlan || null;
+        if (data.data.allowedDomains || data.data.allowed_domains || data.data.domain) {
+          window.__vieloraAllowedDomains = []
+            .concat(data.data.allowedDomains || data.data.allowed_domains || [])
+            .concat(data.data.domain || [])
+            .filter(Boolean);
+        }
 
         // Inject JSON-LD Schema for SEO
         injectVieloraContactSchema(data.data.botName);
@@ -219,6 +227,14 @@
         }
 
         renderWidget();
+
+        // T-A: reopen chat if a navigation just happened
+        try {
+          if (localStorage.getItem('vielora_pending_nav_' + (config.botId || '')) === '1') {
+            localStorage.removeItem('vielora_pending_nav_' + (config.botId || ''));
+            openChatPanel();
+          }
+        } catch (e) {}
 
         if (state.messages.length > 0) {
           loadPreviousMessages();
@@ -637,8 +653,14 @@
     var messages = document.getElementById('chatbotai-messages');
     if (!messages) return;
     var lastMsg = messages.lastElementChild;
-    if (lastMsg && lastMsg.classList.contains('chatbotai-message') && lastMsg.classList.contains('user')) {
+    if (lastMsg && lastMsg.classList.contains('chatbotai-message-wrapper') && lastMsg.classList.contains('user')) {
       lastMsg.remove();
+      return;
+    }
+    // Fallback: scan from the end for the last user message wrapper
+    var wrappers = messages.querySelectorAll('.chatbotai-message-wrapper.user');
+    if (wrappers.length > 0) {
+      wrappers[wrappers.length - 1].remove();
     }
   }
 
@@ -1103,6 +1125,24 @@
     }
   }
 
+  function openChatPanel() {
+    var chat = document.getElementById('chatbotai-chat');
+    var input = document.getElementById('chatbotai-input');
+    if (!chat) return;
+
+    state.isOpen = true;
+    chat.style.display = 'flex';
+    applyBackgroundStyle();
+    syncChatInputState();
+    setTimeout(function () {
+      if (!isChatBlocked() && input) input.focus();
+      var messages = document.getElementById('chatbotai-messages');
+      if (messages) {
+        messages.scrollTop = messages.scrollHeight;
+      }
+    }, 100);
+  }
+
   function bindEvents() {
     var trigger = document.getElementById('chatbotai-trigger');
     var chat = document.getElementById('chatbotai-chat');
@@ -1120,20 +1160,11 @@
     }
 
     trigger.addEventListener('click', function () {
-      state.isOpen = !state.isOpen;
-      chat.style.display = state.isOpen ? 'flex' : 'none';
-
-      if (state.isOpen) {
-        applyBackgroundStyle();
-        syncChatInputState();
-        setTimeout(function () {
-          if (!isChatBlocked()) input.focus();
-          var messages = document.getElementById('chatbotai-messages');
-          if (messages) {
-            messages.scrollTop = messages.scrollHeight;
-          }
-        }, 100);
+      if (!state.isOpen) {
+        openChatPanel();
       } else {
+        state.isOpen = false;
+        chat.style.display = 'none';
         state.suggestedQuestionsShown = false;
         var container = document.getElementById('chatbotai-suggested-container');
         if (container) {
@@ -1181,6 +1212,14 @@
   async function sendMessage(fromVoice) {
     var input = document.getElementById('chatbotai-input');
     var message = input.value.trim();
+    var pendingNavigation = state.pendingNavigation;
+    state.pendingNavigation = null;
+    if (pendingNavigation && pendingNavigation.timerId) {
+      clearInterval(pendingNavigation.timerId);
+      var existingBanner = document.getElementById('chatbotai-nav-banner');
+      if (existingBanner) existingBanner.remove();
+      try { localStorage.removeItem('vielora_pending_nav_' + config.botId); } catch (e) {}
+    }
     if (!message || state.isLoading) return;
 
     if (message.length > MAX_CHAT_INPUT) {
@@ -1267,6 +1306,21 @@
         return;
       }
 
+      if (data.success && data.data.type === 'NAVIGATE') {
+        console.log('[SmartHomepage] Server returned NAVIGATE', {
+          url: data.data.url,
+          anchor: data.data.anchor || null,
+          explicit: data.data.explicit,
+        });
+        state.conversationId = data.data.conversationId;
+        addMessage(data.data.message, 'bot');
+        handleNavigationIntent(data.data);
+        state.isLoading = false;
+        syncChatInputState();
+        focusChatInput();
+        return;
+      }
+
       if (data.success) {
         state.conversationId = data.data.conversationId;
         addMessage(data.data.message, 'bot');
@@ -1286,6 +1340,120 @@
     state.isLoading = false;
     syncChatInputState();
     focusChatInput();
+  }
+
+  function navigateToPage(url, anchor, explicit) {
+    if (!url) return; // T-F guard: missing url -> treat as normal message, no crash
+    console.log('[SmartHomepage] navigateToPage called', { url: url, anchor: anchor || null, explicit: explicit });
+
+    // T-E: client-side re-validation (FR-6 Layer 3) - defense in depth
+    var target;
+    try {
+      target = new URL(url, window.location.href);
+      var allowed = (window.__vieloraAllowedDomains || []);
+      var hostOk = allowed.length === 0 || allowed.some(function (d) {
+        return target.hostname === d || target.hostname.endsWith('.' + d);
+      });
+      if (!hostOk) {
+        console.warn('[SmartHomepage] Client blocked navigation to', target.hostname);
+        return;
+      }
+    } catch (e) {
+      console.warn('[SmartHomepage] Invalid navigation URL', e);
+      return;
+    }
+
+    // T-A: mark pending so chat reopens after navigation
+    try { localStorage.setItem('vielora_pending_nav_' + config.botId, '1'); } catch (e) {}
+
+    // T-B: pure in-page anchor (same path, only #hash) -> scroll, no reload
+    var samePage = target.pathname === window.location.pathname && target.search === window.location.search;
+    if (samePage && anchor) {
+      var el = document.getElementById(anchor);
+      if (el) {
+        console.log('[SmartHomepage] In-page anchor scroll (no reload):', anchor);
+        el.scrollIntoView({ behavior: 'smooth' });
+        try { localStorage.removeItem('vielora_pending_nav_' + config.botId); } catch (e) {}
+        return;
+      }
+    }
+
+    var finalUrl = url + (anchor ? (url.indexOf('#') === -1 ? '#' + anchor : '') : '');
+    console.log('[SmartHomepage] Final navigation URL:', finalUrl, '| explicit =', explicit);
+
+    if (explicit) {
+      console.log('[SmartHomepage] EXPLICIT → navigating immediately (0s)');
+      window.location.href = finalUrl; // explicit intent: immediate (0s)
+      return;
+    }
+    console.log('[SmartHomepage] IMPLICIT → showing 3s countdown banner');
+    showNavigationBanner(finalUrl); // implicit: 3s countdown
+  }
+
+  function showNavigationBanner(finalUrl) {
+    var existing = document.getElementById('chatbotai-nav-banner');
+    if (existing) existing.remove();
+    if (state.pendingNavigation && state.pendingNavigation.timerId) {
+      clearInterval(state.pendingNavigation.timerId);
+    }
+    console.log('[SmartHomepage] Banner shown, countdown start:', finalUrl);
+
+    var banner = document.createElement('div');
+    banner.id = 'chatbotai-nav-banner';
+    banner.setAttribute('role', 'alert');        // T-D ARIA
+    banner.setAttribute('aria-live', 'assertive');
+    banner.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;z-index:9999;display:flex;align-items:center;gap:10px;box-shadow:0 4px 12px rgba(0,0,0,.2);';
+
+    var text = document.createElement('span');
+    text.textContent = 'Đang chuyển hướng...';
+
+    var countdown = document.createElement('span');
+    var secs = 3;
+    countdown.textContent = '(' + secs + ')';
+    var timer = setInterval(function () {
+      secs--;
+      if (secs <= 0) {
+        clearInterval(timer);
+        state.pendingNavigation = null;
+        window.location.href = finalUrl;
+      } else {
+        countdown.textContent = '(' + secs + ')';
+      }
+    }, 1000);
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Hủy';
+    cancelBtn.setAttribute('aria-label', 'Hủy chuyển hướng'); // T-D
+    cancelBtn.style.cssText = 'background:#334155;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;';
+    cancelBtn.onclick = function () {
+      clearInterval(timer);
+      banner.remove();
+      state.pendingNavigation = null;
+      state.navigationCancelled = true;
+      trackNavigationCancel(finalUrl); // T-C
+      try { localStorage.removeItem('vielora_pending_nav_' + config.botId); } catch (e) {}
+    };
+
+    state.pendingNavigation = {
+      url: finalUrl,
+      timerId: timer,
+      countdownEl: countdown
+    };
+
+    banner.appendChild(text);
+    banner.appendChild(countdown);
+    banner.appendChild(cancelBtn);
+    document.body.appendChild(banner);
+  }
+
+  function handleNavigationIntent(data) {
+    navigateToPage(data.url, data.anchor || null, data.explicit);
+  }
+
+  function trackNavigationCancel(finalUrl) {
+    // T-C: cancellation logging stub. Server-side security_events insert requires
+    // service-role; a /api/widget/nav-cancel route will be added in V2.
+    console.info('[SmartHomepage] Navigation cancelled by user:', finalUrl);
   }
 
   function showLeadForm(originalQuestion) {

@@ -6,6 +6,7 @@ import { ShieldAlert, LogOut, MessageSquare, LogIn, ArrowRight } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { getBotStandaloneChatPath, getBotAuthUrl } from "@/lib/utils/standalone-chat-url";
 
 interface GroupInvitePromptProps {
   userEmail?: string;
@@ -27,18 +28,12 @@ export function GroupInvitePrompt({
     if (onSwitchToAuth) {
       onSwitchToAuth();
     } else {
-      window.location.reload();
+      window.location.assign(getBotAuthUrl(botSlug));
     }
   };
 
-  const standaloneChatUrl = botSlug ? `/public-bot/${botSlug}` : "/";
-  const groupPath =
-    typeof window !== "undefined"
-      ? window.location.pathname
-      : botSlug
-        ? `/public-bot/${botSlug}/group`
-        : "/";
-  const authUrl = `/auth?next=${encodeURIComponent(groupPath)}`;
+  const standaloneChatUrl = getBotStandaloneChatPath(botSlug);
+  const authUrl = getBotAuthUrl(botSlug);
 
   return (
     <div className="flex h-full min-h-[450px] items-center justify-center p-4 sm:p-6">

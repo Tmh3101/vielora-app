@@ -188,3 +188,6 @@ export const KNOWN_SLDS = ["co", "com", "org", "net", "gov", "edu", "ac", "vn", 
 
 export const MAX_PAGES_PER_BROWSER = 100;
 export const CLOSE_TIMEOUT_MS = 5000;
+
+/** Maximum number of anchors stored per page. */
+export const MAX_ANCHORS_PER_PAGE = 100;

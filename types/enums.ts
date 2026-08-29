@@ -206,3 +206,11 @@ export enum EGroupSenderType {
   Bot = "bot",
   System = "system",
 }
+
+export enum ELanguage {
+  Vi = "vi",
+  En = "en",
+  Ar = "ar",
+}
+
+export { ELanguage as ESupportedLanguage };

@@ -163,6 +163,7 @@ export async function verifyWidgetRequest(
           avatar_url: bot.avatar_url,
           widget_settings: bot.widget_settings,
           is_stopped: bot.is_stopped,
+          workspace_id: bot.workspace_id ?? null,
         },
       },
       rateLimitResult,

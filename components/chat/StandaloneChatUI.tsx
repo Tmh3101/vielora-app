@@ -44,6 +44,8 @@ import { VOICE_RECORDING_DURATION } from "@/config/voice-chat";
 import { ChatTabSwitcher } from "@/components/chat/ChatTabSwitcher";
 import { getLastTabPreference } from "@/lib/helpers/group-tab-preference";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { getBotGroupChatPath } from "@/lib/utils/standalone-chat-url";
+import { useIOSAuthSync } from "@/hooks/public-bot/useIOSAuthSync";
 
 const LeadForm = dynamic(() => import("@/components/chat/LeadForm").then((mod) => mod.LeadForm), {
   ssr: false,
@@ -90,11 +92,14 @@ export function StandaloneChatUI({
   bot,
   isMobile = false,
   pwaVersion = "1",
+  planCode,
 }: {
   bot: PublicBotData;
   isMobile?: boolean;
   pwaVersion?: string;
+  planCode?: string | null;
 }) {
+  useIOSAuthSync();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -127,12 +132,15 @@ export function StandaloneChatUI({
   const [subscriptionPlan, setSubscriptionPlan] = useState<string>("free");
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
+  const effectivePlan = (planCode || subscriptionPlan || "free").toString().toLowerCase();
+  const isProOrEnterprise = effectivePlan === "pro" || effectivePlan === "enterprise";
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       setShareUrl(window.location.href);
 
-      // Check last tab preference and redirect to group if user is a member
-      if (bot.id && bot.slug) {
+      // Check last tab preference and redirect to group if user is a member (Only Pro/Enterprise)
+      if (isProOrEnterprise && bot.id && bot.slug) {
         const pref = getLastTabPreference(bot.id);
         if (pref === "group") {
           const checkAndRedirect = async () => {
@@ -150,7 +158,7 @@ export function StandaloneChatUI({
                     json.success &&
                     json.data?.members?.some((m: { user_id: string }) => m.user_id === user.id)
                   ) {
-                    window.location.replace(`/public-bot/${bot.slug}/group`);
+                    window.location.replace(getBotGroupChatPath(bot.slug));
                   }
                 }
               }
@@ -162,7 +170,7 @@ export function StandaloneChatUI({
         }
       }
     }
-  }, [bot.id, bot.slug]);
+  }, [bot.id, bot.slug, isProOrEnterprise]);
 
   // Tích hợp nút Micro kế bên nút Gửi (Send) trong form input chat
   const {
@@ -486,7 +494,7 @@ export function StandaloneChatUI({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <h1 className="truncate text-lg font-semibold leading-tight">{bot.name}</h1>
-          {bot.slug && (
+          {isProOrEnterprise && bot.slug && (
             <ChatTabSwitcher
               botId={bot.id}
               botSlug={bot.slug}

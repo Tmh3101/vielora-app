@@ -313,7 +313,9 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
             )}
             <div className="inline-flex min-w-[250px] items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
               <div>
-                <p className="text-[11px] tracking-wide text-muted-foreground">Credits sử dụng</p>
+                <p className="text-[11px] tracking-wide text-muted-foreground">
+                  Credits cần dùng / Khả dụng
+                </p>
                 <p className="text-xs font-medium text-foreground">
                   {selectedCreditsCost.toLocaleString()} / {totalCredits.toLocaleString()}
                 </p>

@@ -17,6 +17,7 @@ const unifiedPlanFeatures: Partial<Record<PlanCode, string[]>> = {
     "Tạo các câu hỏi gợi ý",
     "Tùy chỉnh tính cách",
     "Thu thập Lead Form",
+    "Smart Homepage",
     "Chatbot Mobile App",
     "Voice Chat",
   ],
@@ -25,9 +26,11 @@ const unifiedPlanFeatures: Partial<Record<PlanCode, string[]>> = {
     "Tạo các câu hỏi gợi ý",
     "Tùy chỉnh tính cách",
     "Thu thập Lead Form",
+    "Smart Homepage",
     "Chatbot Mobile App",
     "Voice Chat",
     "Nhóm chat với AI",
+    "Xuất báo cáo",
   ],
   enterprise: [
     "Tùy chỉnh giới hạn số lượng bots",
@@ -36,9 +39,11 @@ const unifiedPlanFeatures: Partial<Record<PlanCode, string[]>> = {
     "Tạo các câu hỏi gợi ý",
     "Tùy chỉnh tính cách",
     "Thu thập Lead Form",
+    "Smart Homepage",
     "Chatbot Mobile App",
     "Voice Chat",
     "Nhóm chat với AI",
+    "Xuất báo cáo",
   ],
 };
 

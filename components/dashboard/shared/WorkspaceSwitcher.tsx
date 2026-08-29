@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useWorkspace, WorkspaceItem } from "@/hooks/useWorkspace";
+import { persistActiveWorkspaceId, useWorkspace, WorkspaceItem } from "@/hooks/useWorkspace";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,14 +93,16 @@ export function WorkspaceSwitcher() {
         throw new Error(errMsg);
       }
 
-      await refreshWorkspaces();
       setIsModalOpen(false);
       setName("");
       setSlug("");
       setSuggestions([]);
-      if (data.workspace?.slug) {
+      if (data.workspace?.id && data.workspace?.slug) {
+        persistActiveWorkspaceId(data.workspace.id);
         window.location.href = "/" + encodeURIComponent(data.workspace.slug);
+        return;
       }
+      await refreshWorkspaces();
     } catch (err: unknown) {
       setError((err as Error).message);
     } finally {

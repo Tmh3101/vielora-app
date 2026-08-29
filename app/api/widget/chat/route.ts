@@ -48,6 +48,15 @@ import {
   LEAD_FORM_MESSAGE,
   ChatResponseType,
 } from "@/lib/constants/chat";
+import { matchKeyAction } from "@/lib/utils/intent-matcher";
+import {
+  matchByLLM,
+  preflightNavigation,
+  buildNavigationContextBlock,
+} from "@/lib/services/navigation-llm-match.service";
+import { validateNavigationTarget } from "@/lib/security/navigation-validator";
+import { isNavigationEnabledForBot } from "@/lib/services/navigation-gating";
+import type { KeyActionPage, WidgetSettings } from "@/types";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
@@ -66,6 +75,134 @@ function createBusinessRateLimitResponse(rateLimitResult: RateLimitResult) {
     },
     { status: 429, headers: corsHeaders }
   );
+}
+
+/**
+ * Attempt Smart Homepage navigation. Returns the navigation payload OR null.
+ * Pure, no LLM calls. Caller decides whether to short-circuit the response.
+ */
+async function tryNavigation(
+  supabase: ReturnType<typeof createAdminClient>,
+  botData: {
+    workspace_id?: string | null;
+    widget_settings?: unknown;
+    domain: string;
+    allowed_domains: string[];
+    id?: string;
+  },
+  message: string,
+  conversationHistory: Array<{ role: "user" | "model"; content: string }> = []
+): Promise<{ url: string; anchor?: string | null; explicit: boolean } | null> {
+  // 1. Master toggle and whitelist present?
+  const settings = (botData.widget_settings ?? {}) as WidgetSettings;
+  const allowedPages = settings.allowed_pages ?? [];
+  const autoPages = settings.auto_pages ?? [];
+  const pages: KeyActionPage[] = settings.navigation_enabled ? [...allowedPages, ...autoPages] : [];
+  console.log("[SmartHomepage] tryNavigation called", {
+    botId: botData.id ?? null,
+    navigation_enabled: settings.navigation_enabled ?? false,
+    allowedPagesCount: allowedPages.length,
+    autoPagesCount: autoPages.length,
+    totalPages: pages.length,
+    message: message.slice(0, 80),
+  });
+  if (pages.length === 0) {
+    console.log("[SmartHomepage] No pages (whitelist empty or toggle off) → skip");
+    return null;
+  }
+
+  // 2. Plan gating
+  const enabled = await isNavigationEnabledForBot(supabase, {
+    workspace_id: botData.workspace_id ?? null,
+  });
+  if (!enabled) {
+    console.log("[SmartHomepage] Plan gating blocked (not Standard/Pro/Enterprise)");
+    return null;
+  }
+
+  // 3. Match intent (LLM-first, substring fallback)
+  let matchUrl: string | null = null;
+  let matchAnchor: string | null = null;
+  let matchExplicit = false;
+  let matchSource: "llm" | "substring" | null = null;
+
+  if (botData.id) {
+    const llmResult = await matchByLLM({
+      botId: botData.id,
+      userMessage: message,
+      conversationHistory,
+      candidates: pages,
+    });
+    if (llmResult) {
+      matchUrl = llmResult.url;
+      matchAnchor = llmResult.anchor ?? null;
+      matchExplicit = true; // LLM-confident → treat as explicit (no countdown)
+      matchSource = "llm";
+    }
+  }
+
+  if (!matchUrl) {
+    const subMatch = matchKeyAction(message, pages);
+    if (subMatch) {
+      matchUrl = subMatch.url;
+      matchAnchor = subMatch.anchor ?? null;
+      matchExplicit = subMatch.explicit;
+      matchSource = "substring";
+    }
+  }
+
+  if (!matchUrl) {
+    console.log("[SmartHomepage] No intent match (LLM + substring)");
+    return null;
+  }
+  console.log("[SmartHomepage] Intent matched", {
+    url: matchUrl,
+    anchor: matchAnchor,
+    explicit: matchExplicit,
+    source: matchSource,
+  });
+
+  // 4. Security validation (FR-6 Layer 2)
+  const result = validateNavigationTarget(matchUrl, {
+    domain: botData.domain,
+    allowed_domains: botData.allowed_domains,
+  });
+  if (!result.ok) {
+    console.warn(`[SmartHomepage] Blocked navigation target: ${matchUrl}`);
+    return null;
+  }
+  console.log("[SmartHomepage] Security OK → returning NAVIGATE", {
+    url: matchUrl,
+    anchor: matchAnchor,
+    explicit: matchExplicit,
+  });
+
+  return { url: matchUrl, anchor: matchAnchor, explicit: matchExplicit };
+}
+
+/**
+ * FR-11 preflight: build a navigation context block to inject into the chat
+ * system prompt BEFORE the Gemini call, so the bot's reply can acknowledge
+ * the upcoming navigation in the user's language. Returns an empty string
+ * when navigation is disabled, no candidates exist, or no match is found.
+ */
+async function buildNavContext(
+  supabase: ReturnType<typeof createAdminClient>,
+  botData: { id?: string; widget_settings?: unknown; workspace_id?: string | null },
+  message: string,
+  conversationHistory: Array<{ role: "user" | "model"; content: string }>
+): Promise<string> {
+  if (!botData.id) return "";
+  const settings = (botData.widget_settings ?? {}) as WidgetSettings;
+  if (!settings.navigation_enabled) return "";
+  const candidates: KeyActionPage[] = [
+    ...(settings.allowed_pages ?? []),
+    ...(settings.auto_pages ?? []),
+  ];
+  if (candidates.length === 0) return "";
+  const preflight = await preflightNavigation(botData.id, message, conversationHistory, candidates);
+  if (!preflight.matched) return "";
+  return buildNavigationContextBlock(preflight);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>> {
@@ -283,8 +420,24 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
             content: m.content,
           }));
 
+        // FR-11: preflight nav intent and append context to the system prompt
+        // BEFORE the Gemini call so the reply can acknowledge the navigation.
+        const baseSystemPrompt = getSystemPrompt(bot, "", undefined, undefined);
+        const navContext = await buildNavContext(supabase, botData, message, conversationHistory);
+        if (navContext) {
+          console.log("[SmartHomepage] Pre-flight: injecting nav context into system prompt");
+          console.log("[SmartHomepage] Pre-flight nav context", {
+            botId: botData.id,
+            matched: !!navContext,
+            preview: navContext ? navContext.slice(0, 120) : null,
+          });
+        }
+        const augmentedSystemPrompt = navContext
+          ? `${baseSystemPrompt}\n${navContext}`
+          : baseSystemPrompt;
+
         const assistantMessage = await generateChatResponse(
-          getSystemPrompt(bot, "", undefined, undefined),
+          augmentedSystemPrompt,
           message,
           conversationHistory
         ).catch(async (error) => {
@@ -317,6 +470,34 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
           client_ip: clientIp,
           count: 1,
         });
+
+        // Smart Homepage navigation (SH-001) — social flow
+        if (req.headers.get("x-standalone-chat") !== "true") {
+          const nav = await tryNavigation(
+            supabase,
+            { ...botData, id: botId },
+            message,
+            conversationHistory
+          );
+          if (nav) {
+            return NextResponse.json(
+              {
+                success: true,
+                message: "Message processed successfully",
+                data: {
+                  conversationId: currentConversationId,
+                  message: assistantMessage,
+                  noAnswer: false,
+                  type: ChatResponseType.NAVIGATE,
+                  url: nav.url,
+                  anchor: nav.anchor ?? undefined,
+                  explicit: nav.explicit,
+                },
+              },
+              { headers: corsHeaders }
+            );
+          }
+        }
 
         return NextResponse.json(
           {
@@ -462,8 +643,23 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
 
       console.log("conversationHistory:", conversationHistory);
 
+      // FR-11: preflight nav intent and append context to the system prompt
+      // BEFORE the Gemini call so the reply can acknowledge the navigation.
+      const navContext = await buildNavContext(supabase, botData, message, conversationHistory);
+      if (navContext) {
+        console.log("[SmartHomepage] Pre-flight: injecting nav context into system prompt");
+        console.log("[SmartHomepage] Pre-flight nav context", {
+          botId: botData.id,
+          matched: !!navContext,
+          preview: navContext ? navContext.slice(0, 120) : null,
+        });
+      }
+      // Append after the existing system prompt so it does not override the
+      // primary system instructions (CONSTRAINTS / CONTEXT).
+      const augmentedSystemPrompt = navContext ? `${systemPrompt}\n${navContext}` : systemPrompt;
+
       const assistantMessage = await generateChatResponse(
-        systemPrompt,
+        augmentedSystemPrompt,
         message,
         conversationHistory
       ).catch(async (error) => {
@@ -503,6 +699,34 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
         client_ip: clientIp,
         count: 1,
       });
+
+      // Smart Homepage navigation (SH-001) — knowledge flow
+      if (req.headers.get("x-standalone-chat") !== "true") {
+        const nav = await tryNavigation(
+          supabase,
+          { ...botData, id: botId },
+          message,
+          conversationHistory
+        );
+        if (nav) {
+          return NextResponse.json(
+            {
+              success: true,
+              message: "Message processed successfully",
+              data: {
+                conversationId: currentConversationId,
+                message: assistantMessage,
+                noAnswer,
+                type: ChatResponseType.NAVIGATE,
+                url: nav.url,
+                anchor: nav.anchor ?? undefined,
+                explicit: nav.explicit,
+              },
+            },
+            { headers: corsHeaders }
+          );
+        }
+      }
 
       return NextResponse.json(
         {

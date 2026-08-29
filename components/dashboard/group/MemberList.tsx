@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Trash2, StickyNote, Check, Edit2, Loader2, X } from "lucide-react";
+import { Trash2, StickyNote, FileDown, Check, Edit2, Loader2, X } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,6 +62,44 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
       }
     } catch (err) {
       console.error("Toggle note permission error:", err);
+      toast({
+        title: "Lỗi",
+        description: "Không thể kết nối đến máy chủ.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleToggleExportReport = async (member: GroupMemberRow, canExport: boolean) => {
+    setActionLoadingId(member.id);
+    try {
+      const res = await updateMemberApi(botId, member.id, {
+        can_export_report: canExport,
+        canExportReport: canExport,
+      });
+
+      if (res.success && res.data) {
+        onMemberUpdated({
+          ...res.data,
+          display_name: member.display_name,
+          full_name: member.full_name,
+          avatar_url: member.avatar_url,
+        });
+        toast({
+          title: "Cập nhật thành công",
+          description: `Đã ${canExport ? "cấp" : "thu hồi"} quyền xuất báo cáo cho ${member.email}.`,
+        });
+      } else {
+        toast({
+          title: "Cập nhật thất bại",
+          description: res.message || "Không thể cập nhật quyền.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error("Toggle export report permission error:", err);
       toast({
         title: "Lỗi",
         description: "Không thể kết nối đến máy chủ.",
@@ -177,6 +215,13 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
                     Quyền ghi chú
                   </span>
                 )}
+
+                {Boolean(m.can_export_report || m.canExportReport) && (
+                  <span className="inline-flex items-center rounded-md border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[11px] font-semibold text-blue-600 dark:border-blue-500/30 dark:bg-blue-950/40 dark:text-blue-400">
+                    <FileDown className="mr-1 h-3 w-3" />
+                    Quyền xuất báo cáo
+                  </span>
+                )}
               </div>
 
               {/* Role & Joined Date */}
@@ -237,8 +282,8 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
               </div>
             </div>
 
-            {/* Actions: Toggle Quyền ghi chú & Delete Button */}
-            <div className="flex items-center gap-4">
+            {/* Actions: Toggle Quyền ghi chú, Toggle Export Report & Delete Button */}
+            <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center space-x-2">
                 <Switch
                   id={`can-note-${m.id}`}
@@ -251,6 +296,21 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
                   className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground"
                 >
                   Quyền ghi chú
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id={`can-export-${m.id}`}
+                  checked={Boolean(m.can_export_report || m.canExportReport)}
+                  onCheckedChange={(val) => handleToggleExportReport(m, val)}
+                  disabled={isLoading}
+                />
+                <Label
+                  htmlFor={`can-export-${m.id}`}
+                  className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Quyền xuất báo cáo
                 </Label>
               </div>
 

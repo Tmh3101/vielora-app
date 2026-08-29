@@ -61,6 +61,7 @@ import { SettingsTab } from "@/components/dashboard/bot-detail/tabs/SettingsTab"
 import { AIConfigTab } from "@/components/dashboard/bot-detail/tabs/AIConfigTab";
 import { LeadsTab } from "@/components/dashboard/bot-detail/tabs/LeadsTab";
 import { GroupTab } from "@/components/dashboard/bot-detail/tabs/GroupTab";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { getEmbededScript } from "@/lib/helpers";
 import type { Tables } from "@/lib/supabase/types";
 
@@ -237,6 +238,14 @@ export function BotDetailClient({
     onRequireUpgrade: () => openUpgradeModal(),
   });
 
+  const { activeWorkspace } = useWorkspace();
+  const effectivePlan =
+    planCode ||
+    (activeWorkspace?.plans?.code?.toLowerCase() as ESubscriptionPlan) ||
+    ESubscriptionPlan.Free;
+  const isProOrEnterprise =
+    effectivePlan === ESubscriptionPlan.Pro || effectivePlan === ESubscriptionPlan.Enterprise;
+
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     (typeof window !== "undefined" ? window.location.origin : "");
@@ -249,7 +258,9 @@ export function BotDetailClient({
     { id: BotDetailDashboardTabs.AI, label: "Tùy chỉnh", icon: Sparkles },
     { id: BotDetailDashboardTabs.LEADS, label: "Liên hệ", icon: UserPlus },
     { id: BotDetailDashboardTabs.INSTALL, label: "Cài đặt Widget", icon: Code },
-    { id: BotDetailDashboardTabs.GROUP, label: "Nhóm chat", icon: Users },
+    ...(isProOrEnterprise
+      ? [{ id: BotDetailDashboardTabs.GROUP, label: "Nhóm chat", icon: Users }]
+      : []),
     { id: BotDetailDashboardTabs.SETTINGS, label: "Cài đặt", icon: Settings },
   ];
 
@@ -547,7 +558,7 @@ export function BotDetailClient({
           )}
 
           {/* Group Tab */}
-          {activeTab === BotDetailDashboardTabs.GROUP && (
+          {activeTab === BotDetailDashboardTabs.GROUP && isProOrEnterprise && (
             <GroupTab
               bot={bot}
               onNavigateToSettings={() => setActiveTab(BotDetailDashboardTabs.SETTINGS)}

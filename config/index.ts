@@ -11,3 +11,5 @@ export * from "./pricing";
 export * from "./voice-chat";
 export * from "./knowledge-voice";
 export * from "./group-chat";
+export * from "./report";
+export * from "./navigation-intent";

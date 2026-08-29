@@ -23,12 +23,14 @@ declare global {
 }
 
 export function isStandaloneMode(): boolean {
+  if (typeof window === "undefined") return false;
   return (
     window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true
   );
 }
 
 export function isIOS(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
   return (
     /iPad|iPhone|iPod/.test(ua) ||
@@ -37,6 +39,7 @@ export function isIOS(): boolean {
 }
 
 export function isAndroid(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
   return /Android/i.test(navigator.userAgent);
 }
 
@@ -131,10 +134,37 @@ export function getPublicBotPwaVersion(pwaUpdatedAt: string | undefined | null):
   return new Date(pwaUpdatedAt).getTime().toString();
 }
 
+export const PWA_AUTH_RETURN_STORAGE_KEY = "vielora_pwa_auth_return";
+
+export function markPwaAuthReturn(path: string) {
+  try {
+    localStorage.setItem(PWA_AUTH_RETURN_STORAGE_KEY, path);
+  } catch {
+    // Ignore quota / private-mode failures
+  }
+}
+
+export function readPwaAuthReturnPath(): string | null {
+  try {
+    return localStorage.getItem(PWA_AUTH_RETURN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function clearPwaAuthReturnPath() {
+  try {
+    localStorage.removeItem(PWA_AUTH_RETURN_STORAGE_KEY);
+  } catch {
+    // Ignore
+  }
+}
+
 export function createPublicBotManifest(
   bot: PublicBotBranding | null,
   botSlug: string,
-  pwaVersion?: string
+  pwaVersion?: string,
+  isSubdomain = false
 ): MetadataRoute.Manifest {
   const name = bot?.name?.trim() || botSlug;
   const themeColor = getPublicBotThemeColor(bot?.widget_settings ?? null);
@@ -162,15 +192,23 @@ export function createPublicBotManifest(
     },
   ];
 
+  const scope = isSubdomain ? "/" : `/public-bot/${botSlug}/`;
+  const start_url = isSubdomain ? "/?source=pwa" : `/public-bot/${botSlug}/?source=pwa`;
+  const id = isSubdomain ? "/" : `/public-bot/${botSlug}`;
+
   return {
-    id: `/public-bot/${botSlug}`,
+    id,
     name,
     short_name: getPublicBotShortName(name),
     display: "standalone",
-    start_url: `/public-bot/${botSlug}/?source=pwa`,
-    scope: `/public-bot/${botSlug}/`,
+    start_url,
+    scope,
     theme_color: themeColor,
     background_color: themeColor,
     icons,
-  };
+    // Chromium: after OAuth returns in a browser tab, navigate the existing PWA window.
+    launch_handler: {
+      client_mode: ["navigate-existing", "auto"],
+    },
+  } as MetadataRoute.Manifest;
 }

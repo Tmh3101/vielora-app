@@ -10,6 +10,7 @@ import {
   transformRelativeUrls,
   extractMetadata,
   extractCleanHtml,
+  extractAnchors,
   htmlToMarkdown,
   extractLinks,
   classifyError,
@@ -87,6 +88,7 @@ export async function extractStatic(job: CrawlJob): Promise<CrawlResult> {
 
     // Convert to Markdown (HTML already cleaned)
     const markdown = htmlToMarkdown(cleanHtml);
+    const anchors = extractAnchors($);
 
     return {
       success: true,
@@ -99,6 +101,7 @@ export async function extractStatic(job: CrawlJob): Promise<CrawlResult> {
       markdown,
       metadata,
       links,
+      anchors,
       processingTimeMs: Date.now() - startTime,
     };
   } catch (error) {

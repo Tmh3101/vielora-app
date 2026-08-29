@@ -61,15 +61,56 @@ export function parseMarkdown(text: string, primaryColor: string = "#3B82F6"): s
     listItems = [];
   };
 
+  let lastWasEmpty = false;
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+
+    if (!line) {
+      if (!lastWasEmpty && blocks.length > 0) {
+        blocks.push("");
+        lastWasEmpty = true;
+      }
+      continue;
+    }
+    lastWasEmpty = false;
+
     if (line.startsWith("- ") || line.startsWith("* ")) {
-      listItems.push(`<li style="margin-bottom: 3px;">${line.substring(2)}</li>`);
+      listItems.push(`<li style="margin-bottom: 2px;">${line.substring(2)}</li>`);
       continue;
     }
 
     flushList();
-    blocks.push(lines[i]);
+
+    if (line.startsWith("### ")) {
+      blocks.push(
+        `<h4 style="font-weight: 700; font-size: 0.95em; margin-top: 6px; margin-bottom: 2px; color: currentColor;">${line.substring(4)}</h4>`
+      );
+      continue;
+    }
+
+    if (line.startsWith("## ")) {
+      blocks.push(
+        `<h3 style="font-weight: 700; font-size: 1.05em; margin-top: 8px; margin-bottom: 4px; color: currentColor;">${line.substring(3)}</h3>`
+      );
+      continue;
+    }
+
+    if (line.startsWith("# ")) {
+      blocks.push(
+        `<h2 style="font-weight: 700; font-size: 1.15em; margin-top: 10px; margin-bottom: 6px; color: currentColor;">${line.substring(2)}</h2>`
+      );
+      continue;
+    }
+
+    if (line === "---" || line === "***") {
+      blocks.push(
+        `<hr style="margin: 6px 0; border: 0; border-top: 1px solid rgba(128,128,128,0.2);" />`
+      );
+      continue;
+    }
+
+    blocks.push(rawLine);
   }
 
   flushList();

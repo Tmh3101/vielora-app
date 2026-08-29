@@ -619,6 +619,139 @@ CREATE INDEX IF NOT EXISTS idx_credit_transactions_payment_id
 CREATE INDEX IF NOT EXISTS idx_credit_transactions_workspace
   ON public.credit_transactions (workspace_id);
 
+CREATE OR REPLACE FUNCTION public.deduct_workspace_credits(
+  p_workspace_id uuid,
+  p_amount integer,
+  p_transaction_type text,
+  p_description text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_wallet RECORD;
+  v_deduct_sub integer := 0;
+  v_deduct_payg integer := 0;
+  v_next_sub integer;
+  v_next_payg integer;
+BEGIN
+  IF p_amount <= 0 THEN
+    RETURN jsonb_build_object(
+      'success', true,
+      'deducted_from_subscription', 0,
+      'deducted_from_payg', 0
+    );
+  END IF;
+
+  SELECT * INTO v_wallet
+  FROM public.wallets
+  WHERE workspace_id = p_workspace_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    INSERT INTO public.wallets (workspace_id, subscription_credits, payg_credits)
+    VALUES (p_workspace_id, 100, 0)
+    ON CONFLICT (workspace_id) DO NOTHING;
+
+    SELECT * INTO v_wallet
+    FROM public.wallets
+    WHERE workspace_id = p_workspace_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      RETURN jsonb_build_object('success', false, 'message', 'Workspace wallet not found');
+    END IF;
+  END IF;
+
+  IF (COALESCE(v_wallet.subscription_credits, 0) + COALESCE(v_wallet.payg_credits, 0)) < p_amount THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Insufficient workspace credits.');
+  END IF;
+
+  v_deduct_sub := LEAST(COALESCE(v_wallet.subscription_credits, 0), p_amount);
+  v_deduct_payg := p_amount - v_deduct_sub;
+  v_next_sub := COALESCE(v_wallet.subscription_credits, 0) - v_deduct_sub;
+  v_next_payg := COALESCE(v_wallet.payg_credits, 0) - v_deduct_payg;
+
+  UPDATE public.wallets
+  SET subscription_credits = v_next_sub,
+      payg_credits = v_next_payg,
+      updated_at = now()
+  WHERE workspace_id = p_workspace_id;
+
+  INSERT INTO public.credit_transactions (
+    workspace_id,
+    amount,
+    transaction_type,
+    description
+  ) VALUES (
+    p_workspace_id,
+    -p_amount,
+    p_transaction_type::public.transaction_type,
+    p_description
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'deducted_from_subscription', v_deduct_sub,
+    'deducted_from_payg', v_deduct_payg
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.refund_workspace_credits(
+  p_workspace_id uuid,
+  p_deducted_sub integer,
+  p_deducted_payg integer,
+  p_transaction_type text,
+  p_description text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_total_refund integer;
+  v_wallet RECORD;
+BEGIN
+  v_total_refund := COALESCE(p_deducted_sub, 0) + COALESCE(p_deducted_payg, 0);
+  IF v_total_refund <= 0 THEN
+    RETURN jsonb_build_object('success', true, 'message', 'No refund needed');
+  END IF;
+
+  SELECT * INTO v_wallet
+  FROM public.wallets
+  WHERE workspace_id = p_workspace_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Workspace wallet not found');
+  END IF;
+
+  UPDATE public.wallets
+  SET subscription_credits = COALESCE(subscription_credits, 0) + COALESCE(p_deducted_sub, 0),
+      payg_credits = COALESCE(payg_credits, 0) + COALESCE(p_deducted_payg, 0),
+      updated_at = now()
+  WHERE workspace_id = p_workspace_id;
+
+  INSERT INTO public.credit_transactions (
+    workspace_id,
+    amount,
+    transaction_type,
+    description
+  ) VALUES (
+    p_workspace_id,
+    v_total_refund,
+    p_transaction_type::public.transaction_type,
+    p_description
+  );
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
 -- public.jobs definition
 
 CREATE TABLE public.jobs (
@@ -1439,6 +1572,7 @@ CREATE TABLE IF NOT EXISTS public.group_members (
   role_label text NULL,
   can_pin_knowledge boolean DEFAULT false NOT NULL,
   can_create_note boolean DEFAULT false NOT NULL,
+  can_export_report boolean DEFAULT false NOT NULL,
   invited_by uuid NOT NULL,
   last_read_at timestamptz NULL,
   joined_at timestamptz DEFAULT now() NOT NULL,
@@ -1451,13 +1585,46 @@ CREATE TABLE IF NOT EXISTS public.group_members (
 CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON public.group_members (group_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON public.group_members (user_id);
 
+CREATE OR REPLACE FUNCTION public.get_auth_user_by_email(p_email text)
+RETURNS TABLE (id uuid, email varchar)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT u.id, u.email::varchar
+  FROM auth.users u
+  WHERE lower(u.email) = lower(trim(p_email))
+  LIMIT 1;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.enforce_group_member_limit()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = public
 AS $function$
+DECLARE
+  v_current_count integer;
+  v_max_members integer := 5;
 BEGIN
-  IF (SELECT COUNT(*) FROM public.group_members WHERE group_id = NEW.group_id) >= 5 THEN
+  SELECT COUNT(*) INTO v_current_count
+  FROM public.group_members
+  WHERE group_id = NEW.group_id;
+
+  SELECT COALESCE(p.max_members, 5) INTO v_max_members
+  FROM public.group_chats gc
+  JOIN public.bots b ON b.id = gc.bot_id
+  LEFT JOIN public.subscriptions s ON s.workspace_id = b.workspace_id AND s.status = 'active'
+  LEFT JOIN public.plans p ON p.id = s.plan_id
+  WHERE gc.id = NEW.group_id
+  LIMIT 1;
+
+  v_max_members := GREATEST(COALESCE(v_max_members, 5), 5);
+
+  IF v_current_count >= v_max_members THEN
     RAISE EXCEPTION 'GROUP_MEMBER_LIMIT_REACHED';
   END IF;
   RETURN NEW;
@@ -1723,5 +1890,189 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.group_notes;
   END IF;
 END $$;
+
+-- ============================================================================
+-- REPORT EXPORTS & BRANDING SCHEMA (Generic Report Export)
+-- ============================================================================
+
+-- workspace_branding (1-1 with workspaces)
+CREATE TABLE IF NOT EXISTS public.workspace_branding (
+  workspace_id        uuid PRIMARY KEY REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  brand_name          text,
+  logo_url            text,
+  primary_color       text NOT NULL DEFAULT '#3B82F6',
+  secondary_color     text,
+  font_family         text,
+  header_text         text,
+  footer_text         text,
+  watermark_url       text,
+  default_language    text NOT NULL DEFAULT 'vi',
+  supported_languages text[] NOT NULL DEFAULT '{vi}',
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+-- report_templates
+CREATE TABLE IF NOT EXISTS public.report_templates (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  key          text NOT NULL,
+  name         text NOT NULL,
+  version      int NOT NULL DEFAULT 1,
+  schema       jsonb NOT NULL,
+  languages    text[] NOT NULL DEFAULT '{vi}',
+  is_active    boolean NOT NULL DEFAULT true,
+  created_by   uuid REFERENCES auth.users(id),
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT report_templates_workspace_key_version_unique UNIQUE (workspace_id, key, version)
+);
+
+-- report_export_status enum
+DO $$ BEGIN
+  CREATE TYPE public.report_export_status AS ENUM
+    ('pending', 'rendering', 'awaiting_review', 'approved', 'issued', 'failed');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+-- report_exports
+CREATE TABLE IF NOT EXISTS public.report_exports (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id  uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  template_id   uuid NOT NULL REFERENCES public.report_templates(id),
+  bot_id        uuid NOT NULL REFERENCES public.bots(id) ON DELETE CASCADE,
+  scope         jsonb NOT NULL DEFAULT '{}',
+  requested_by  uuid NOT NULL REFERENCES auth.users(id),
+  status        public.report_export_status NOT NULL DEFAULT 'pending',
+  language      text NOT NULL DEFAULT 'vi',
+  file_path     text,
+  error_message text,
+  retry_count   int NOT NULL DEFAULT 0,
+  reviewed_by   uuid REFERENCES auth.users(id),
+  reviewed_at   timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Revoke direct write on report_exports from authenticated/anon (service-role only)
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.report_exports FROM authenticated, anon;
+
+-- Idempotent column addition for group_members.can_export_report
+ALTER TABLE public.group_members
+  ADD COLUMN IF NOT EXISTS can_export_report boolean NOT NULL DEFAULT false;
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_report_templates_workspace_id ON public.report_templates (workspace_id);
+CREATE INDEX IF NOT EXISTS idx_report_exports_workspace_id ON public.report_exports (workspace_id);
+CREATE INDEX IF NOT EXISTS idx_report_exports_bot_id ON public.report_exports (bot_id);
+CREATE INDEX IF NOT EXISTS idx_report_exports_template_id ON public.report_exports (template_id);
+CREATE INDEX IF NOT EXISTS idx_report_exports_status ON public.report_exports (status);
+
+-- Triggers for updated_at
+DROP TRIGGER IF EXISTS trg_workspace_branding_updated_at ON public.workspace_branding;
+CREATE TRIGGER trg_workspace_branding_updated_at
+  BEFORE UPDATE ON public.workspace_branding
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trg_report_templates_updated_at ON public.report_templates;
+CREATE TRIGGER trg_report_templates_updated_at
+  BEFORE UPDATE ON public.report_templates
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trg_report_exports_updated_at ON public.report_exports;
+CREATE TRIGGER trg_report_exports_updated_at
+  BEFORE UPDATE ON public.report_exports
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Storage buckets
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'workspace-branding',
+  'workspace-branding',
+  true,
+  2097152,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'report-exports',
+  'report-exports',
+  false,
+  20971520,
+  ARRAY['application/pdf']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+-- RLS: workspace_branding
+ALTER TABLE public.workspace_branding ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "workspace_branding_member_select" ON public.workspace_branding;
+CREATE POLICY "workspace_branding_member_select" ON public.workspace_branding FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.workspace_members
+    WHERE workspace_members.workspace_id = workspace_branding.workspace_id
+      AND workspace_members.user_id = auth.uid()
+  ));
+
+DROP POLICY IF EXISTS "workspace_branding_admin_write" ON public.workspace_branding;
+CREATE POLICY "workspace_branding_admin_write" ON public.workspace_branding FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.workspace_members wm
+    JOIN public.workspace_roles wr ON wr.id = wm.role_id
+    WHERE wm.workspace_id = workspace_branding.workspace_id
+      AND wm.user_id = auth.uid()
+      AND wr.hierarchy >= 80
+  ));
+
+-- RLS: report_templates
+ALTER TABLE public.report_templates ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "report_templates_member_select" ON public.report_templates;
+CREATE POLICY "report_templates_member_select" ON public.report_templates FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.workspace_members
+    WHERE workspace_members.workspace_id = report_templates.workspace_id
+      AND workspace_members.user_id = auth.uid()
+  ));
+
+DROP POLICY IF EXISTS "report_templates_admin_write" ON public.report_templates;
+CREATE POLICY "report_templates_admin_write" ON public.report_templates FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.workspace_members wm
+    JOIN public.workspace_roles wr ON wr.id = wm.role_id
+    WHERE wm.workspace_id = report_templates.workspace_id
+      AND wm.user_id = auth.uid()
+      AND wr.hierarchy >= 80
+  ));
+
+-- RLS: report_exports
+ALTER TABLE public.report_exports ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "report_exports_member_select" ON public.report_exports;
+CREATE POLICY "report_exports_member_select" ON public.report_exports FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.workspace_members
+    WHERE workspace_members.workspace_id = report_exports.workspace_id
+      AND workspace_members.user_id = auth.uid()
+  ));
+
+-- Storage RLS: workspace-branding
+DROP POLICY IF EXISTS "Public read access for workspace branding" ON storage.objects;
+CREATE POLICY "Public read access for workspace branding"
+  ON storage.objects FOR SELECT TO public
+  USING (bucket_id = 'workspace-branding');
+
 
 

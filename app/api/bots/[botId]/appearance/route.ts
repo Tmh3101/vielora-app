@@ -12,6 +12,9 @@ import {
 import { getBotActivePlanCode } from "@/lib/services/subscription.service";
 import { isHexColor } from "@/lib/helpers";
 import { SUGGESTED_QUESTIONS_ALLOWED_PLANS } from "@/config";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isNavigationEnabledForPlan } from "@/lib/services/navigation-gating";
+import { buildNavigationFromPages } from "@/lib/services/navigation-autobuild.service";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
@@ -128,6 +131,7 @@ export async function POST(
         .eq("id", botId)
         .single();
       const currentSettings = (currentBot.data?.widget_settings as Record<string, unknown>) || {};
+      const navigationWasEnabled = Boolean(currentSettings?.navigation_enabled);
 
       // Merge with new settings
       updatedWidgetSettings = {
@@ -172,7 +176,23 @@ export async function POST(
         ...(widgetSettings.isVoiceEnabled !== undefined && {
           isVoiceEnabled: Boolean(widgetSettings.isVoiceEnabled),
         }),
+        ...(widgetSettings?.navigation_enabled !== undefined && {
+          navigation_enabled: Boolean(widgetSettings.navigation_enabled),
+        }),
       };
+
+      // If navigation just turned on (transition false/undefined -> true) and the
+      // plan supports it, auto-build navigation entries from discovered pages.
+      const navigationNowEnabled = Boolean(widgetSettings?.navigation_enabled);
+      if (navigationNowEnabled && !navigationWasEnabled) {
+        const planCode = await getBotActivePlanCode(supabase, bot);
+        if (isNavigationEnabledForPlan(planCode)) {
+          const adminSupabase = createAdminClient();
+          void buildNavigationFromPages(adminSupabase, botId).catch((err) =>
+            console.error("[Appearance] auto navigation build failed:", err)
+          );
+        }
+      }
     }
 
     // Update bot appearance

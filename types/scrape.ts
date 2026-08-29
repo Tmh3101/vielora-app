@@ -136,6 +136,12 @@ export interface CrawlResult {
   metadata?: PageMetadata;
   /** Links found on the page (for recursive crawling) */
   links?: string[];
+  /**
+   * In-page section anchors extracted during crawl (FR-9 Smart Homepage).
+   * Each entry maps a heading/section element with an id/name to a short
+   * label so navigation can deep-link to specific sections (e.g. /about#contact).
+   */
+  anchors?: Array<{ id: string; text: string; tag: string }>;
   /** Error message if failed */
   error?: string;
   /** Categorized error type (populated when success=false) */

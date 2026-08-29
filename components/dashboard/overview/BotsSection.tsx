@@ -154,10 +154,10 @@ export function BotsSection({
           <h2 className="heading-premium text-xl font-bold">Chatbots của bạn</h2>
           <p className="text-sm text-muted-foreground">Quản lý và theo dõi chatbot</p>
         </div>
-        <div className="bg-gradient-primary btn-glow shadow-glow-sm group inline-flex items-center rounded-xl p-0.5 transition-all">
+        <div className="bg-gradient-primary btn-glow shadow-glow-sm hover:shadow-glow-md inline-flex items-center rounded-xl p-0.5 transition-all duration-200 hover:brightness-105 active:scale-[0.98]">
           <Button
             onClick={onCreateNew}
-            className="h-9 gap-1.5 rounded-l-lg rounded-r-none border-r border-white/20 bg-transparent px-3.5 text-xs font-semibold text-white shadow-none hover:bg-white/15 focus-visible:ring-0"
+            className="h-9 gap-1.5 rounded-l-lg rounded-r-none border-r border-white/20 bg-transparent px-3.5 text-xs font-semibold text-white shadow-none transition-colors hover:bg-white/20 focus-visible:ring-0 active:bg-white/25"
           >
             <Plus className="h-4 w-4" />
             Tạo mới
@@ -166,27 +166,30 @@ export function BotsSection({
             <DropdownMenuTrigger asChild>
               <Button
                 size="icon"
-                className="h-9 w-8 rounded-l-none rounded-r-lg bg-transparent px-0 text-white shadow-none hover:bg-white/15 focus-visible:ring-0"
+                className="group h-9 w-8 rounded-l-none rounded-r-lg bg-transparent px-0 text-white shadow-none transition-colors hover:bg-white/20 focus-visible:ring-0 active:bg-white/25 data-[state=open]:bg-white/20"
                 aria-label="Tùy chọn tạo bot"
               >
                 <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="glass-md w-52 p-1.5 shadow-xl">
+            <DropdownMenuContent
+              align="end"
+              className="w-52 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-md"
+            >
               <DropdownMenuItem
                 onClick={onCreateNew}
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
+                className="group flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary"
               >
-                <Plus className="h-4 w-4 text-primary" />
-                Tạo bot đơn
+                <Plus className="h-4 w-4 text-primary transition-transform group-hover:scale-110" />
+                <span>Tạo bot đơn</span>
               </DropdownMenuItem>
               {onImportCSV && (
                 <DropdownMenuItem
                   onClick={onImportCSV}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
+                  className="group flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary"
                 >
-                  <Upload className="h-4 w-4 text-primary" />
-                  Import file CSV
+                  <Upload className="h-4 w-4 text-primary transition-transform group-hover:scale-110" />
+                  <span>Import file CSV</span>
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>

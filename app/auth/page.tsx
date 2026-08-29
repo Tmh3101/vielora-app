@@ -46,6 +46,7 @@ import {
 } from "@/lib/constants/auth";
 import { ERROR_CODE_ACCESS_DENIED } from "@/lib/constants";
 import type { OauthProviderType, AuthViewType } from "@/lib/constants/auth";
+import { markPwaAuthReturn, isIOS, isStandaloneMode } from "@/lib/helpers/pwa-helpers";
 
 /* ------------------------------------------------------------------ */
 /*  Zod schemas                                                        */
@@ -243,28 +244,43 @@ function AuthPageContent() {
     view === AuthView.LOGIN && cooldownRemaining > 0 && normalizedEmail === cooldownEmail;
 
   /* ---- redirect after auth ---- */
+  const isPwaAuth = searchParams.get("pwa") === "1";
   const targetRedirect = useMemo(
     () => getSafeRedirect(searchParams.get("redirect") || searchParams.get("next")),
     [searchParams]
   );
 
   useEffect(() => {
+    if (isPwaAuth) {
+      markPwaAuthReturn(targetRedirect);
+    }
+  }, [isPwaAuth, targetRedirect]);
+
+  useEffect(() => {
+    const goToApp = (path: string) => {
+      if (isPwaAuth) {
+        window.location.replace(path);
+        return;
+      }
+      window.location.href = path;
+    };
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        window.location.href = targetRedirect;
+        goToApp(targetRedirect);
       }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        window.location.href = targetRedirect;
+        goToApp(targetRedirect);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase, router, targetRedirect]);
+  }, [supabase, router, targetRedirect, isPwaAuth]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -480,15 +496,91 @@ function AuthPageContent() {
   const handleOAuth = async (provider: OauthProviderType) => {
     setIsOAuthLoading(provider);
     try {
+      const isStandalone = isStandaloneMode();
       const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
       if (targetRedirect && targetRedirect !== "/dashboard") {
         callbackUrl.searchParams.set("next", targetRedirect);
       }
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: callbackUrl.toString() },
-      });
-      if (error) throw error;
+
+      if (isStandalone && isIOS()) {
+        // iOS Standalone PWA: Session Bridge with Server Storage
+        const iosSid = crypto.randomUUID();
+        try {
+          localStorage.setItem("pending_ios_auth", iosSid);
+        } catch {
+          // ignore quota or security error
+        }
+        callbackUrl.searchParams.set("ios_sid", iosSid);
+
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo: callbackUrl.toString() },
+        });
+        if (error) throw error;
+      } else if (isStandalone || isPwaAuth) {
+        // Android / Desktop Standalone PWA: Popup Mode
+        callbackUrl.searchParams.set("popup", "1");
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            skipBrowserRedirect: true,
+            redirectTo: callbackUrl.toString(),
+          },
+        });
+        if (error) throw error;
+        if (!data?.url) throw new Error("No OAuth URL returned from provider");
+
+        const width = 500;
+        const height = 700;
+        const left = Math.max(0, (window.innerWidth - width) / 2 + window.screenX);
+        const top = Math.max(0, (window.innerHeight - height) / 2 + window.screenY);
+
+        const popup = window.open(
+          data.url,
+          "oauth_popup",
+          `width=${width},height=${height},left=${left},top=${top},popup=yes,noopener=no`
+        );
+
+        let checkPopupClosed: NodeJS.Timeout | null = null;
+
+        const handlePopupMessage = (event: MessageEvent) => {
+          if (event.origin !== window.location.origin) return;
+          if (event.data?.type === "OAUTH_COMPLETE") {
+            window.removeEventListener("message", handlePopupMessage);
+            if (checkPopupClosed) clearInterval(checkPopupClosed);
+            supabase.auth.getSession().then(({ data: { session } }) => {
+              if (session?.user) {
+                if (isPwaAuth) {
+                  window.location.replace(targetRedirect);
+                } else {
+                  window.location.href = targetRedirect;
+                }
+              }
+            });
+          }
+        };
+
+        window.addEventListener("message", handlePopupMessage);
+
+        checkPopupClosed = setInterval(() => {
+          if (popup?.closed) {
+            if (checkPopupClosed) clearInterval(checkPopupClosed);
+            window.removeEventListener("message", handlePopupMessage);
+            setIsOAuthLoading(null);
+          }
+        }, 1000);
+      } else {
+        // Standard Web Browser: Direct Redirect
+        if (isPwaAuth) {
+          markPwaAuthReturn(targetRedirect);
+        }
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo: callbackUrl.toString() },
+        });
+        if (error) throw error;
+      }
     } catch (error: unknown) {
       console.error("OAuth error:", error);
       toast({
@@ -510,9 +602,14 @@ function AuthPageContent() {
       case AuthView.SIGNUP_SUCCESS:
         return { title: "Đăng ký thành công!", desc: "Kiểm tra email để xác nhận tài khoản" };
       default:
-        return { title: "Đăng nhập", desc: "Đăng nhập để quản lý chatbot của bạn" };
+        return {
+          title: "Đăng nhập",
+          desc: isPwaAuth
+            ? "Đăng nhập để tham gia nhóm chat trên ứng dụng"
+            : "Đăng nhập để quản lý chatbot của bạn",
+        };
     }
-  }, [view]);
+  }, [view, isPwaAuth]);
 
   /* ================================================================ */
   /*  RENDER                                                           */
@@ -531,11 +628,11 @@ function AuthPageContent() {
 
       <div className="relative z-10 w-full max-w-md">
         <Link
-          href="/"
+          href={isPwaAuth ? targetRedirect.split("?")[0] || "/" : "/"}
           className="group mb-4 inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-          Quay lại trang chủ
+          {isPwaAuth ? "Quay lại nhóm chat" : "Quay lại trang chủ"}
         </Link>
 
         <Card className="glass-lg shadow-glow-soft">

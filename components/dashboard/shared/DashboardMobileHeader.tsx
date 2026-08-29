@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { ChevronDown, LogOut, Check, Building2, Plus } from "lucide-react";
 
-import { useWorkspace, WorkspaceItem } from "@/hooks/useWorkspace";
+import { persistActiveWorkspaceId, useWorkspace, WorkspaceItem } from "@/hooks/useWorkspace";
 
 export interface DashboardMobileHeaderProps {
   fullName?: string;
@@ -104,14 +104,16 @@ export function DashboardMobileHeader({ fullName, email, onSignOut }: DashboardM
         throw new Error(errMsg);
       }
 
-      await refreshWorkspaces();
       setIsModalOpen(false);
       setName("");
       setSlug("");
       setSuggestions([]);
-      if (data.workspace?.slug) {
-        switchWorkspace(data.workspace.slug);
+      if (data.workspace?.id && data.workspace?.slug) {
+        persistActiveWorkspaceId(data.workspace.id);
+        window.location.href = "/" + encodeURIComponent(data.workspace.slug);
+        return;
       }
+      await refreshWorkspaces();
     } catch (err: unknown) {
       setError((err as Error).message);
     } finally {

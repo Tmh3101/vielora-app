@@ -86,8 +86,7 @@ export async function getWorkspaceCreditSummary(
 
   const activeClient = createAdminClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: initialWallet, error } = await (activeClient as any)
+  const { data: initialWallet, error } = await activeClient
     .from("wallets")
     .select("*")
     .eq("workspace_id", workspaceId)
@@ -103,8 +102,7 @@ export async function getWorkspaceCreditSummary(
       workspaceId
     );
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: createdWallet } = await (activeClient as any)
+      const { data: createdWallet } = await activeClient
         .from("wallets")
         .insert({
           workspace_id: workspaceId,
@@ -138,8 +136,7 @@ export async function getWorkspaceCreditSummary(
   const chatTypes = [ETransactionType.ChatMessage, ETransactionType.ChatMessageRefund];
   const usageTypes = [...indexTypes, ...chatTypes];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: usageTx, error: usageError } = await (activeClient as any)
+  const { data: usageTx, error: usageError } = await activeClient
     .from("credit_transactions")
     .select("amount, transaction_type")
     .eq("workspace_id", workspaceId)
@@ -175,8 +172,7 @@ export async function getWorkspaceMonthlyMessageCount(
   action: string,
   startOfMonth: Date
 ): Promise<number> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { count } = await (client as any)
+  const { count } = await client
     .from("usage_logs")
     .select("*", { count: "exact", head: true })
     .eq("workspace_id", workspaceId)
@@ -205,9 +201,34 @@ export async function deductWorkspaceCredits(
 
   const adminClient = createAdminClient();
 
+  // 1. Try atomic PostgreSQL RPC execution first
+  try {
+    const { data: rpcRes, error: rpcError } = await adminClient.rpc("deduct_workspace_credits", {
+      p_workspace_id: workspaceId,
+      p_amount: creditAmount,
+      p_transaction_type: transactionType,
+      p_description: transactionDescription,
+    });
+
+    if (!rpcError && rpcRes) {
+      const result = typeof rpcRes === "string" ? JSON.parse(rpcRes) : rpcRes;
+      return {
+        success: result.success ?? false,
+        message: result.message,
+        deductedFromSubscription: result.deducted_from_subscription ?? 0,
+        deductedFromPayg: result.deducted_from_payg ?? 0,
+      };
+    }
+  } catch (rpcErr) {
+    console.warn(
+      "[CreditService] RPC deduct_workspace_credits failed, falling back to atomic retry loop:",
+      rpcErr
+    );
+  }
+
+  // 2. Fallback retry loop with optimistic locking if RPC is unavailable
   for (let attempt = 1; attempt <= MAX_DEDUCTION_RETRIES; attempt += 1) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: initialWallet, error: walletError } = await (adminClient as any)
+    const { data: initialWallet, error: walletError } = await adminClient
       .from("wallets")
       .select("subscription_credits,payg_credits,total_credits,is_payg_enabled")
       .eq("workspace_id", workspaceId)
@@ -225,8 +246,7 @@ export async function deductWorkspaceCredits(
         workspaceId
       );
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: createdWallet } = await (adminClient as any)
+        const { data: createdWallet } = await adminClient
           .from("wallets")
           .insert({
             workspace_id: workspaceId,
@@ -245,7 +265,7 @@ export async function deductWorkspaceCredits(
       return { success: false, message: "Workspace wallet not found" };
     }
 
-    if (wallet.total_credits < creditAmount) {
+    if ((wallet.total_credits ?? 0) < creditAmount) {
       return { success: false, message: "Insufficient workspace credits." };
     }
 
@@ -254,8 +274,7 @@ export async function deductWorkspaceCredits(
     const nextSubscriptionCredits = wallet.subscription_credits - deductedFromSubscription;
     const nextPaygCredits = wallet.payg_credits - deductedFromPayg;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedWallet, error: updateWalletError } = await (adminClient as any)
+    const { data: updatedWallet, error: updateWalletError } = await adminClient
       .from("wallets")
       .update({
         subscription_credits: nextSubscriptionCredits,
@@ -278,15 +297,12 @@ export async function deductWorkspaceCredits(
       continue;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: transactionError } = await (adminClient as any)
-      .from("credit_transactions")
-      .insert({
-        workspace_id: workspaceId,
-        amount: -creditAmount,
-        transaction_type: transactionType,
-        description: transactionDescription,
-      });
+    const { error: transactionError } = await adminClient.from("credit_transactions").insert({
+      workspace_id: workspaceId,
+      amount: -creditAmount,
+      transaction_type: transactionType,
+      description: transactionDescription,
+    });
 
     if (transactionError) {
       console.error("Failed to insert workspace credit transaction:", transactionError);
@@ -327,9 +343,29 @@ export async function refundWorkspaceCredits(
 
   const adminClient = createAdminClient();
 
+  // 1. Try atomic PostgreSQL RPC execution first
+  try {
+    const { error: rpcError } = await adminClient.rpc("refund_workspace_credits", {
+      p_workspace_id: workspaceId,
+      p_deducted_sub: deductedFromSubscription,
+      p_deducted_payg: deductedFromPayg,
+      p_transaction_type: transactionType,
+      p_description: transactionDescription,
+    });
+
+    if (!rpcError) {
+      return;
+    }
+  } catch (rpcErr) {
+    console.warn(
+      "[CreditService] RPC refund_workspace_credits failed, falling back to retry loop:",
+      rpcErr
+    );
+  }
+
+  // 2. Fallback retry loop if RPC is not available
   for (let attempt = 1; attempt <= MAX_DEDUCTION_RETRIES; attempt += 1) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: wallet, error: walletError } = await (adminClient as any)
+    const { data: wallet, error: walletError } = await adminClient
       .from("wallets")
       .select("subscription_credits,payg_credits")
       .eq("workspace_id", workspaceId)
@@ -340,8 +376,7 @@ export async function refundWorkspaceCredits(
     const nextSubscriptionCredits = wallet.subscription_credits + deductedFromSubscription;
     const nextPaygCredits = wallet.payg_credits + deductedFromPayg;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedWallet } = await (adminClient as any)
+    const { data: updatedWallet } = await adminClient
       .from("wallets")
       .update({
         subscription_credits: nextSubscriptionCredits,
@@ -354,8 +389,7 @@ export async function refundWorkspaceCredits(
       .maybeSingle();
 
     if (updatedWallet) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (adminClient as any).from("credit_transactions").insert({
+      await adminClient.from("credit_transactions").insert({
         workspace_id: workspaceId,
         amount: totalRefund,
         transaction_type: transactionType,
@@ -370,26 +404,18 @@ export async function resolveWorkspaceId(
   client: ServiceClient,
   bot: { user_id: string; workspace_id?: string | null }
 ): Promise<string | null> {
-  console.log("[CreditDebug] Resolving workspaceId for bot:", {
-    user_id: bot.user_id,
-    workspace_id: bot.workspace_id,
-  });
-
   if (bot.workspace_id) return bot.workspace_id;
   if (!bot.user_id) return null;
 
   try {
     const adminClient = createAdminClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: member } = await (adminClient as any)
+    const { data: member } = await adminClient
       .from("workspace_members")
       .select("workspace_id")
       .eq("user_id", bot.user_id)
-      .order("created_at", { ascending: true })
       .limit(1)
       .maybeSingle();
 
-    console.log("[CreditDebug] Fallback workspace_members query result:", member);
     return member?.workspace_id ?? null;
   } catch (err) {
     console.error("Error resolving workspace ID for bot:", err);
@@ -407,7 +433,6 @@ export async function deductBotCredits(
   }
 ): Promise<CreditDeductionResult> {
   const workspaceId = await resolveWorkspaceId(client, bot);
-  console.log("[CreditDebug] deductBotCredits resolved workspaceId:", workspaceId);
 
   if (workspaceId) {
     const res = await deductWorkspaceCredits(client, {
@@ -420,8 +445,7 @@ export async function deductBotCredits(
     if (res.success && bot.id) {
       try {
         const adminClient = createAdminClient();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (adminClient as any).from("usage_logs").insert({
+        await adminClient.from("usage_logs").insert({
           workspace_id: workspaceId,
           bot_id: bot.id,
           action: "chat_message",
@@ -432,10 +456,8 @@ export async function deductBotCredits(
       }
     }
 
-    console.log("[CreditDebug] deductWorkspaceCredits result:", res);
     return res;
   }
-  console.warn("[CreditDebug] Bot has no workspace_id!");
   return { success: false, message: "Bot has no workspace, cannot deduct credits." };
 }
 

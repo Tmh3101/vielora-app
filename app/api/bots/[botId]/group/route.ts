@@ -12,7 +12,7 @@ import {
   updateGroupStatus,
 } from "@/lib/services/group-chat.service";
 import { GROUP_CHAT_ALLOWED_PLANS } from "@/lib/config/group-chat";
-import { ESubscriptionPlan, EGroupChatStatus } from "@/types";
+import { ESubscriptionPlan } from "@/types";
 
 export async function OPTIONS() {
   return NextResponse.json(null, { headers: corsHeaders });
@@ -44,13 +44,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ botI
     const requiredPlan = GROUP_CHAT_ALLOWED_PLANS[0] ?? ESubscriptionPlan.Pro;
     const isSufficient = planCode && isPlanSufficient(planCode, requiredPlan);
 
+    if (!isSufficient) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: GROUP_CHAT_REQUIRES_PRO_CODE,
+          message:
+            "Tính năng Nhóm chat chỉ khả dụng cho gói Pro và Enterprise. Vui lòng nâng cấp gói để sử dụng.",
+        },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
     const currentUserInfo = user && user.email ? { id: user.id, email: user.email } : undefined;
     const data = await getGroupWithMembers(supabase, botId, currentUserInfo);
-    if (data && !isSufficient && data.group.status === EGroupChatStatus.Active) {
-      const adminClient = (await import("@/lib/supabase/admin")).createAdminClient();
-      await updateGroupStatus(adminClient, data.group.id, EGroupChatStatus.Disabled);
-      data.group.status = EGroupChatStatus.Disabled;
-    }
 
     return NextResponse.json(
       {
@@ -63,6 +70,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ botI
                 name: bot.name,
                 avatar_url: bot.avatar_url,
                 widget_settings: bot.widget_settings,
+                workspace_id: bot.workspace_id,
               }
             : null,
         },

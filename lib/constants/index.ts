@@ -16,3 +16,5 @@ export * from "./landing";
 export * from "./pagination";
 export * from "./auth";
 export * from "./group-chat";
+export * from "./report";
+export * from "./report-template";

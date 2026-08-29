@@ -97,16 +97,23 @@ export async function PATCH(
       role_label,
       can_pin_knowledge,
       can_create_note,
+      can_export_report,
+      canExportReport,
     }: {
       role_label?: string | null;
       can_pin_knowledge?: boolean;
       can_create_note?: boolean;
+      can_export_report?: boolean;
+      canExportReport?: boolean;
     } = body;
+
+    const exportReportVal = can_export_report !== undefined ? can_export_report : canExportReport;
 
     const updated = await updateGroupMember(supabase, group.id, memberId, {
       ...(role_label !== undefined ? { role_label } : {}),
       ...(can_pin_knowledge !== undefined ? { can_pin_knowledge } : {}),
       ...(can_create_note !== undefined ? { can_create_note } : {}),
+      ...(exportReportVal !== undefined ? { can_export_report: exportReportVal } : {}),
     });
 
     return NextResponse.json({ success: true, data: updated }, { headers: corsHeaders });

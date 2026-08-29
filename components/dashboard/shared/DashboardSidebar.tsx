@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Book,
   CreditCard,
+  FileBarChart,
   Home,
   LogOut,
   HelpCircle,
@@ -55,7 +56,9 @@ export function DashboardSidebar({
     return pathname;
   };
 
-  const isPathActive = (key: "overview" | "knowledge" | "members" | "upgrade" | "support") => {
+  const isPathActive = (
+    key: "overview" | "knowledge" | "reports" | "members" | "upgrade" | "support"
+  ) => {
     if (key === "overview") {
       return getSubPath() === "/" || getSubPath() === "";
     }
@@ -63,6 +66,9 @@ export function DashboardSidebar({
       return (
         getSubPath() === "/workspace-knowledge" || getSubPath().startsWith("/workspace-knowledge/")
       );
+    }
+    if (key === "reports") {
+      return getSubPath() === "/reports" || getSubPath().startsWith("/reports/");
     }
     if (key === "members") {
       return getSubPath() === "/settings/members" || getSubPath().startsWith("/settings/members/");
@@ -85,7 +91,9 @@ export function DashboardSidebar({
     return false;
   };
 
-  const getLinkClass = (key: "overview" | "knowledge" | "members" | "upgrade" | "support") => {
+  const getLinkClass = (
+    key: "overview" | "knowledge" | "reports" | "members" | "upgrade" | "support"
+  ) => {
     const isActive = isPathActive(key);
     return `flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs transition-all border ${
       isActive
@@ -98,6 +106,9 @@ export function DashboardSidebar({
   const knowledgeHref = activeWorkspace?.slug
     ? `/${activeWorkspace.slug}/workspace-knowledge`
     : "/dashboard/workspace-knowledge";
+  const reportsHref = activeWorkspace?.slug
+    ? `/${activeWorkspace.slug}/reports`
+    : "/dashboard/reports";
   const membersHref = activeWorkspace?.slug
     ? `/${activeWorkspace.slug}/settings/members`
     : "/dashboard/settings/members";
@@ -107,6 +118,9 @@ export function DashboardSidebar({
   const supportHref = activeWorkspace?.slug
     ? `/${activeWorkspace.slug}/support`
     : "/dashboard/support";
+
+  const currentPlanCode = activeWorkspace?.plans?.code?.toLowerCase() || "free";
+  const isProOrEnterprise = currentPlanCode === "pro" || currentPlanCode === "enterprise";
 
   return (
     <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-64 flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm lg:flex">
@@ -139,6 +153,12 @@ export function DashboardSidebar({
           <Book className="h-4 w-4" />
           Kiến thức chung
         </Link>
+        {isProOrEnterprise && (
+          <Link href={reportsHref} className={getLinkClass("reports")}>
+            <FileBarChart className="h-4 w-4" />
+            Báo cáo
+          </Link>
+        )}
         <Link href={membersHref} className={getLinkClass("members")}>
           <Users className="h-4 w-4" />
           Thành viên

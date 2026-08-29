@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { Pin, PinOff, Edit3, Trash2, Clock, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +38,19 @@ export function NoteDetailModal({
   onEdit,
   onDelete,
 }: NoteDetailModalProps) {
+  useEffect(() => {
+    if (isOpen && note?.id) {
+      try {
+        const seenKey = `vielora_note_seen_${note.id}`;
+        const currentVal = `${note.id}:${note.title}:${note.content_text?.length || 0}`;
+        localStorage.setItem(seenKey, currentVal);
+        window.dispatchEvent(new Event("vielora_note_seen_update"));
+      } catch {
+        // ignore
+      }
+    }
+  }, [isOpen, note?.id, note?.title, note?.content_text]);
+
   const renderedContent = useMemo(() => {
     if (!note) return "";
     if (
@@ -72,8 +85,8 @@ export function NoteDetailModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-xl overflow-hidden rounded-2xl p-0 sm:max-w-xl">
         {/* Modal Header */}
-        <DialogHeader className="border-b border-border/60 bg-muted/20 p-4 pb-3 sm:p-5 sm:pb-4">
-          <div className="flex items-start justify-between gap-3">
+        <DialogHeader className="border-b border-border/60 bg-muted/20 p-4 pb-3 pr-10 sm:p-5 sm:pb-4 sm:pr-12">
+          <div className="flex min-w-0 items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 {isCurrentlyActive ? (
@@ -98,7 +111,7 @@ export function NoteDetailModal({
                   <span>{formattedDate}</span>
                 </div>
               </div>
-              <DialogTitle className="break-words text-base font-semibold leading-tight text-foreground">
+              <DialogTitle className="min-w-0 break-all text-base font-semibold leading-tight text-foreground">
                 {note.title}
               </DialogTitle>
             </div>
@@ -106,9 +119,9 @@ export function NoteDetailModal({
         </DialogHeader>
 
         {/* Content Body */}
-        <div className="max-h-[55vh] overflow-y-auto p-4 sm:p-5">
+        <div className="max-h-[55vh] min-w-0 overflow-y-auto overflow-x-hidden p-4 sm:p-5">
           <div
-            className="prose-xs prose max-w-none break-words text-xs leading-relaxed text-foreground dark:prose-invert [&_h1]:my-1.5 [&_h1]:text-sm [&_h1]:font-bold [&_h2]:my-1 [&_h2]:text-xs [&_h2]:font-bold [&_h3]:my-1 [&_h3]:text-xs [&_h3]:font-semibold [&_ol]:my-1.5 [&_p]:my-1.5 [&_ul]:my-1.5"
+            className="prose-xs prose max-w-none break-all text-xs leading-relaxed text-foreground dark:prose-invert [&_code]:break-all [&_h1]:my-1.5 [&_h1]:text-sm [&_h1]:font-bold [&_h2]:my-1 [&_h2]:text-xs [&_h2]:font-bold [&_h3]:my-1 [&_h3]:text-xs [&_h3]:font-semibold [&_ol]:my-1.5 [&_p]:my-1.5 [&_pre]:overflow-x-auto [&_ul]:my-1.5"
             dangerouslySetInnerHTML={{ __html: renderedContent }}
           />
         </div>

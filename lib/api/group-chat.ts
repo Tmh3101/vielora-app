@@ -90,6 +90,8 @@ export async function updateMemberApi(
     role_label?: string | null;
     can_pin_knowledge?: boolean;
     can_create_note?: boolean;
+    can_export_report?: boolean;
+    canExportReport?: boolean;
   }
 ): Promise<SingleMemberResponse> {
   const res = await fetch(`/api/bots/${botId}/group/members/${memberId}`, {

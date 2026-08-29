@@ -2,18 +2,24 @@ import { NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { sendWelcomeEmail } from "@/lib/services/email.service";
+import { storePendingAuthSession } from "@/lib/services/auth-bridge.service";
 
 /**
  * OAuth PKCE callback handler.
  */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const requestUrl = new URL(request.url);
+  const { searchParams } = requestUrl;
+  const origin = requestUrl.origin;
 
   const code = searchParams.get("code");
+  const isPopup = searchParams.get("popup") === "1";
+  const iosSid = searchParams.get("ios_sid");
   const nextParam = searchParams.get("next") ?? "/dashboard";
-  const next = nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/dashboard";
+  const next =
+    nextParam.startsWith("/") && !nextParam.startsWith("//") && !nextParam.includes("\\")
+      ? nextParam
+      : "/dashboard";
 
   if (code) {
     const cookieStore = cookies();
@@ -76,11 +82,40 @@ export async function GET(request: Request) {
         console.error("[AuthCallback] Session init error:", err);
       }
 
-      return NextResponse.redirect(new URL(next, appUrl));
+      if (iosSid) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            await storePendingAuthSession(iosSid, session.access_token, session.refresh_token);
+          }
+        } catch (err) {
+          console.error("[AuthCallback] Error saving iOS pending session:", err);
+        }
+
+        return NextResponse.redirect(
+          new URL(`/auth/ios-complete?sid=${encodeURIComponent(iosSid)}`, origin)
+        );
+      }
+
+      if (isPopup) {
+        return NextResponse.redirect(new URL("/auth/popup-complete", origin));
+      }
+
+      return NextResponse.redirect(new URL(next, origin));
     } else {
       console.error("[AuthCallback] Exchange Error:", error.message);
     }
   }
 
-  return NextResponse.redirect(new URL("/auth?error=oauth_failed", appUrl));
+  if (iosSid) {
+    return NextResponse.redirect(new URL("/auth/ios-complete?error=oauth_failed", origin));
+  }
+
+  if (isPopup) {
+    return NextResponse.redirect(new URL("/auth/popup-complete?error=oauth_failed", origin));
+  }
+
+  return NextResponse.redirect(new URL("/auth?error=oauth_failed", origin));
 }

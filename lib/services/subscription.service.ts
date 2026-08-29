@@ -94,7 +94,7 @@ export async function getWorkspaceSubscriptionPlan(
  */
 export async function getBotActivePlanCode(
   client: ServiceClient,
-  bot: { user_id: string; workspace_id?: string | null }
+  bot: { user_id?: string; workspace_id?: string | null }
 ): Promise<ESubscriptionPlan | null> {
   if (!bot.workspace_id) return ESubscriptionPlan.Free;
   const wsPlan = await getWorkspaceSubscriptionPlan(client, bot.workspace_id);

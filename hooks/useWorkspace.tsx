@@ -23,6 +23,19 @@ interface WorkspaceContextType {
   refreshWorkspaces: () => Promise<void>;
 }
 
+const ACTIVE_WORKSPACE_COOKIE = "active_workspace_id";
+const ACTIVE_WORKSPACE_COOKIE_MAX_AGE = 2592000;
+
+export function persistActiveWorkspaceId(workspaceId: string) {
+  document.cookie = `${ACTIVE_WORKSPACE_COOKIE}=${workspaceId}; path=/; max-age=${ACTIVE_WORKSPACE_COOKIE_MAX_AGE}; SameSite=Lax`;
+}
+
+export function readActiveWorkspaceIdFromCookie(): string | null {
+  const cookies = document.cookie.split("; ");
+  const activeCookie = cookies.find((c) => c.startsWith(`${ACTIVE_WORKSPACE_COOKIE}=`));
+  return activeCookie ? activeCookie.split("=")[1] : null;
+}
+
 const WorkspaceContext = createContext<WorkspaceContextType>({
   activeWorkspace: null,
   workspaces: [],
@@ -46,10 +59,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaces(list);
 
       if (list.length > 0) {
-        const cookies = document.cookie.split("; ");
-        const activeCookie = cookies.find((c) => c.startsWith("active_workspace_id="));
-        const savedId = activeCookie ? activeCookie.split("=")[1] : null;
-
+        const savedId = readActiveWorkspaceIdFromCookie();
         const current = list.find((w) => w.id === savedId) || list[0];
         setActiveWorkspace(current);
       }
@@ -68,7 +78,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const target = workspaces.find((w) => w.slug === slug);
     if (!target) return;
 
-    document.cookie = `active_workspace_id=${target.id}; path=/; max-age=2592000; SameSite=Lax`;
+    persistActiveWorkspaceId(target.id);
     setActiveWorkspace(target);
     window.location.href = "/" + encodeURIComponent(slug);
   };

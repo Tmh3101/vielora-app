@@ -6,7 +6,12 @@ import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import type { PageMetadata } from "@/types/scrape";
 import { EPageErrorType } from "@/types/enums";
-import { SOFT_404_TITLE_PATTERNS, LOAD_MORE_KEYWORDS, DEFAULT_USER_AGENT } from "@/config/scraper";
+import {
+  SOFT_404_TITLE_PATTERNS,
+  LOAD_MORE_KEYWORDS,
+  DEFAULT_USER_AGENT,
+  MAX_ANCHORS_PER_PAGE,
+} from "@/config/scraper";
 import { extractBaseDomain } from "@/lib/scraper/core/link-processor";
 import type { Tables } from "@/lib/supabase/types";
 import { normalizeSeedUrl, normalizeUrl } from "./url-helpers";
@@ -206,6 +211,54 @@ export function extractLinks($: CheerioAPI, baseUrl: string): string[] {
   });
 
   return Array.from(links);
+}
+
+/** In-page section anchors extracted for Smart Homepage deep-linking (FR-9). */
+export type ExtractedAnchor = { id: string; text: string; tag: string };
+
+/**
+ * Extract in-page section anchors for Smart Homepage deep-linking (FR-9).
+ *
+ * Collects headings with an `id`/`name` and section-like elements that carry
+ * an `id` so navigation can deep-link to specific sections (e.g. /about#contact).
+ *
+ * @param $ - Cheerio document for the crawled page.
+ * @returns Deduplicated anchors (capped at MAX_ANCHORS_PER_PAGE).
+ */
+export function extractAnchors($: CheerioAPI): ExtractedAnchor[] {
+  const seen = new Set<string>();
+  const anchors: ExtractedAnchor[] = [];
+
+  const push = (id: string | undefined, text: string, tag: string): void => {
+    if (!id) return;
+    const trimmedId = id.trim();
+    const trimmedText = text.replace(/\s+/g, " ").trim();
+    if (!trimmedId || !trimmedText) return;
+    if (seen.has(trimmedId)) return;
+    seen.add(trimmedId);
+    anchors.push({
+      id: trimmedId,
+      text: trimmedText.slice(0, 120),
+      tag,
+    });
+    if (anchors.length >= MAX_ANCHORS_PER_PAGE) return;
+  };
+
+  // Headings h1–h6 with an explicit id or name.
+  $("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]").each((_, el) => {
+    const $el = $(el);
+    const id = $el.attr("id") || $el.attr("name");
+    push(id, $el.text(), $el.prop("tagName").toLowerCase());
+  });
+
+  // Section / article / ARIA region elements carrying an id.
+  $("section[id], article[id], [role='region'][id]").each((_, el) => {
+    const $el = $(el);
+    const id = $el.attr("id") || $el.attr("name");
+    push(id, $el.text(), $el.prop("tagName").toLowerCase());
+  });
+
+  return anchors;
 }
 
 /**

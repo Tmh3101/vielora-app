@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { MessageSquare, Users, ArrowLeftRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { setLastTabPreference } from "@/lib/helpers/group-tab-preference";
+import { isStandaloneMode } from "@/lib/helpers/pwa-helpers";
+import {
+  getBotStandaloneChatPath,
+  getBotGroupChatPath,
+  getPwaScopedBotChatPath,
+  getPwaScopedBotGroupPath,
+} from "@/lib/utils/standalone-chat-url";
 
 interface ChatTabSwitcherProps {
   botId: string;
@@ -28,8 +36,12 @@ export function ChatTabSwitcher({
   className = "",
   children,
 }: ChatTabSwitcherProps) {
-  const chatUrl = `/public-bot/${botSlug}`;
-  const groupUrl = `/public-bot/${botSlug}/group`;
+  const [usePwaScope] = useState(() => isStandaloneMode());
+
+  const chatUrl = usePwaScope
+    ? getPwaScopedBotChatPath(botSlug)
+    : getBotStandaloneChatPath(botSlug);
+  const groupUrl = usePwaScope ? getPwaScopedBotGroupPath(botSlug) : getBotGroupChatPath(botSlug);
 
   return (
     <DropdownMenu>

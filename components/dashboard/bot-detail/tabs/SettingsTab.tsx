@@ -19,6 +19,7 @@ import {
   Share2,
   Key,
   Mic,
+  FileDown,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MAX_ALLOWED_DOMAINS } from "@/lib/security/allowed-domains";
@@ -28,6 +29,9 @@ import { useAppearanceStore } from "@/store/useAppearanceStore";
 import { useBotDetailUIStore } from "@/store/useBotDetailUIStore";
 import { parseRateLimitInput } from "@/lib/bot-rate-limit";
 import { validateAllowedDomains } from "@/lib/security/allowed-domains";
+import { ExportReportButton } from "@/components/dashboard/bot-detail/ExportReportButton";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { ESubscriptionPlan } from "@/types/enums";
 
 type BotType = Tables<"bots">;
 
@@ -37,7 +41,10 @@ export interface SettingsTabProps {
   onSaveRateLimit: () => Promise<void>;
   onSaveAllowedDomains: () => Promise<void>;
   onSaveSlugSettings: () => Promise<void>;
-  onSaveAppearance?: (overrides?: { isVoiceEnabled?: boolean }) => Promise<void>;
+  onSaveAppearance?: (overrides?: {
+    isVoiceEnabled?: boolean;
+    navigation_enabled?: boolean;
+  }) => Promise<void>;
 }
 
 export function SettingsTab({
@@ -49,6 +56,15 @@ export function SettingsTab({
   onSaveAppearance,
 }: SettingsTabProps) {
   const { toast } = useToast();
+  const { activeWorkspace } = useWorkspace();
+
+  const currentPlanCode = activeWorkspace?.plans?.code?.toLowerCase() || ESubscriptionPlan.Free;
+  const isProOrEnterprise =
+    currentPlanCode === ESubscriptionPlan.Pro || currentPlanCode === ESubscriptionPlan.Enterprise;
+  const isNavigationPlan =
+    currentPlanCode === ESubscriptionPlan.Standard ||
+    currentPlanCode === ESubscriptionPlan.Pro ||
+    currentPlanCode === ESubscriptionPlan.Enterprise;
 
   const isSaving = useAppearanceStore((s) => s.isSaving);
   const isSavingRateLimit = useAppearanceStore((s) => s.isSavingRateLimit);
@@ -70,6 +86,8 @@ export function SettingsTab({
   const setIsPublic = useAppearanceStore((s) => s.setIsPublic);
   const isVoiceEnabled = useAppearanceStore((s) => s.isVoiceEnabled);
   const setIsVoiceEnabled = useAppearanceStore((s) => s.setIsVoiceEnabled);
+  const navigationEnabled = useAppearanceStore((s) => s.navigationEnabled);
+  const setNavigationEnabled = useAppearanceStore((s) => s.setNavigationEnabled);
 
   const setStopModalOpen = useBotDetailUIStore((s) => s.setStopModalOpen);
 
@@ -196,53 +214,131 @@ export function SettingsTab({
         </div>
       </Card>
 
-      {/* Tính năng Chatbot */}
-      <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
-        <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-              <Mic className="h-5 w-5" />
-            </div>
-            <div>
-              <CardTitle className="text-base font-semibold">Tính năng Chatbot</CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                Quản lý các tính năng tương tác của chatbot trên Widget và trang Chat
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <Label
-                htmlFor="voice-chat-switch"
-                className="cursor-pointer text-sm font-medium leading-none"
-              >
-                Trò chuyện bằng giọng nói
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {isVoiceEnabled
-                  ? "Đang bật: Người dùng có thể thu âm gửi tin nhắn thoại (dành cho các gói trả phí)."
-                  : "Đang tắt: Nút Micro sẽ bị ẩn hoàn toàn trên widget và trang chat."}
-              </p>
-            </div>
+      {/* Xuất Báo Cáo Bot (Chỉ hiển thị cho gói Pro và Enterprise) */}
+      {isProOrEnterprise && (
+        <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
+          <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div className="flex items-center gap-3">
-              <Switch
-                id="voice-chat-switch"
-                checked={isVoiceEnabled}
-                disabled={isSaving}
-                onCheckedChange={(checked) => {
-                  setIsVoiceEnabled(checked);
-                  if (onSaveAppearance) {
-                    void onSaveAppearance({ isVoiceEnabled: checked });
-                  }
-                }}
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                <FileDown className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold">Xuất báo cáo Bot</CardTitle>
+                <CardDescription className="text-xs text-muted-foreground">
+                  Tạo và tải về báo cáo PDF tổng hợp dữ liệu, hiệu suất và năng lực của chatbot
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <ExportReportButton
+                botId={bot.id}
+                workspaceId={bot.workspace_id}
+                botUserId={bot.user_id}
               />
-              {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </Card>
+      )}
+
+      {/* Tính năng Chatbot (Chỉ hiển thị cho các gói trả phí) */}
+      {isNavigationPlan && (
+        <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
+          <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                <Mic className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold">Tính năng Chatbot</CardTitle>
+                <CardDescription className="text-xs text-muted-foreground">
+                  Quản lý các tính năng tương tác của chatbot trên Widget và trang Chat
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <Label
+                  htmlFor="voice-chat-switch"
+                  className="cursor-pointer text-sm font-medium leading-none"
+                >
+                  Trò chuyện bằng giọng nói
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {isVoiceEnabled
+                    ? "Đang bật: Người dùng có thể thu âm gửi tin nhắn thoại."
+                    : "Đang tắt: Nút Micro sẽ bị ẩn hoàn toàn trên widget và trang chat."}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="voice-chat-switch"
+                  checked={isVoiceEnabled}
+                  disabled={isSaving}
+                  onCheckedChange={(checked) => {
+                    setIsVoiceEnabled(checked);
+                    if (onSaveAppearance) {
+                      void onSaveAppearance({ isVoiceEnabled: checked });
+                    }
+                  }}
+                />
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Chuyển hướng thông minh (Chỉ hiển thị cho các gói trả phí Standard/Pro/Enterprise) */}
+      {isNavigationPlan && (
+        <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
+          <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                <Globe className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold">
+                  Chuyển hướng thông minh (Smart Homepage)
+                </CardTitle>
+                <CardDescription className="text-xs text-muted-foreground">
+                  Điều khiển tính năng tự động đưa khách đến trang đích phù hợp
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <Label
+                  htmlFor="navigation-switch"
+                  className="cursor-pointer text-sm font-medium leading-none"
+                >
+                  Chuyển hướng thông minh
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {navigationEnabled
+                    ? "Đang bật: Chatbot tự động chuyển khách đến trang đích khi nhận ý định phù hợp."
+                    : "Đang tắt: Tính năng chuyển hướng bị vô hiệu hóa hoàn toàn."}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="navigation-switch"
+                  checked={navigationEnabled}
+                  disabled={isSaving}
+                  onCheckedChange={(checked) => {
+                    setNavigationEnabled(checked);
+                    if (onSaveAppearance) void onSaveAppearance({ navigation_enabled: checked });
+                  }}
+                />
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Trang Chat Độc Lập */}
       <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">

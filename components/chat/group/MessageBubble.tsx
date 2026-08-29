@@ -1,7 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Bot, Pin, Copy, Check, Reply, AlertCircle, StickyNote } from "lucide-react";
+import {
+  Bot,
+  Pin,
+  Copy,
+  Check,
+  Reply,
+  AlertCircle,
+  StickyNote,
+  FileText,
+  Download,
+} from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { parseMarkdown } from "@/lib/helpers";
 import { GroupMessageRow } from "@/lib/services/group-chat.service";
@@ -186,6 +196,161 @@ export function MessageBubble({
     }
   };
 
+  const isReportNotification =
+    isBot && message.content.includes("Báo cáo mới đã được tạo thành công");
+
+  const renderReportCard = () => {
+    const lines = message.content.split("\n");
+    let templateName = "";
+    let reportTitle = "";
+    let requester = "";
+
+    for (const line of lines) {
+      if (line.includes("Mẫu báo cáo")) {
+        const parts = line.split(":");
+        if (parts.length > 1) {
+          templateName = parts.slice(1).join(":").replace(/[*_`]/g, "").trim();
+        }
+      } else if (line.includes("Tiêu đề")) {
+        const parts = line.split(":");
+        if (parts.length > 1) {
+          reportTitle = parts.slice(1).join(":").replace(/[*_`]/g, "").trim();
+        }
+      } else if (line.includes("Người yêu cầu") || line.includes("Người xuất")) {
+        const parts = line.split(":");
+        if (parts.length > 1) {
+          requester = parts
+            .slice(1)
+            .join(":")
+            .replace(/[*_`@]/g, "")
+            .trim();
+        }
+      }
+    }
+
+    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    const downloadLinks: Array<{ label: string; url: string }> = [];
+    let match;
+    while ((match = linkRegex.exec(message.content)) !== null) {
+      downloadLinks.push({ label: match[1], url: match[2] });
+    }
+
+    const hasCustomTitle = Boolean(
+      reportTitle && reportTitle.trim() && reportTitle.trim() !== templateName.trim()
+    );
+    const mainTitle = hasCustomTitle
+      ? reportTitle.trim()
+      : templateName && templateName.trim()
+        ? templateName.trim()
+        : "Báo cáo PDF Bot";
+
+    const exportDate = new Date(message.created_at);
+    const formattedExportDate = !isNaN(exportDate.getTime())
+      ? exportDate.toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : "";
+
+    const resolveLanguage = (rawLabel: string) => {
+      const clean = rawLabel.replace(/\s*\(PDF\)\s*/i, "").trim();
+
+      if (clean.includes("Ả Rập") || clean.includes("AR") || clean.includes("ar")) {
+        return { flag: "🇸🇦", name: "Tiếng Ả Rập" };
+      }
+      if (clean.includes("Việt") || clean.includes("vi")) {
+        return { flag: "🇻🇳", name: "Tiếng Việt" };
+      }
+      if (clean.includes("English") || clean.includes("en")) {
+        return { flag: "🇬🇧", name: "English" };
+      }
+      if (clean.includes("Nhật") || clean.includes("ja")) {
+        return { flag: "🇯🇵", name: "Tiếng Nhật" };
+      }
+      if (clean.includes("Hàn") || clean.includes("ko")) {
+        return { flag: "🇰🇷", name: "Tiếng Hàn" };
+      }
+      if (clean.includes("Trung") || clean.includes("zh")) {
+        return { flag: "🇨🇳", name: "Tiếng Trung" };
+      }
+      if (clean.includes("Pháp") || clean.includes("fr")) {
+        return { flag: "🇫🇷", name: "Tiếng Pháp" };
+      }
+      if (clean.includes("Đức") || clean.includes("de")) {
+        return { flag: "🇩🇪", name: "Tiếng Đức" };
+      }
+      if (clean.includes("Tây Ban Nha") || clean.includes("es")) {
+        return { flag: "🇪🇸", name: "Tiếng TBN" };
+      }
+
+      return {
+        flag: "🌐",
+        name: clean,
+      };
+    };
+
+    return (
+      <div className="shadow-2xs rounded-tl-xs flex flex-col gap-2 rounded-2xl border border-border bg-card p-3.5 text-foreground">
+        <div className="flex items-center gap-2.5 border-b border-border/60 pb-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400">
+            <FileText className="h-4.5 w-4.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h4 className="truncate text-xs font-semibold text-foreground" title={mainTitle}>
+              {mainTitle}
+            </h4>
+            {hasCustomTitle && templateName ? (
+              <p className="truncate text-[10.5px] text-muted-foreground">Mẫu: {templateName}</p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+            {formattedExportDate && (
+              <div>
+                <span>Ngày xuất: </span>
+                <span className="font-medium text-foreground">{formattedExportDate}</span>
+              </div>
+            )}
+            {requester && (
+              <div>
+                <span>Người xuất: </span>
+                <span className="font-medium text-foreground">{requester}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {downloadLinks.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            {downloadLinks.map((link, idx) => {
+              const langMeta = resolveLanguage(link.label);
+              return (
+                <a
+                  key={idx}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`Tải báo cáo (${langMeta.name})`}
+                  aria-label={`Tải báo cáo (${langMeta.name})`}
+                  className="shadow-2xs inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-xs font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary active:scale-95"
+                >
+                  <Download className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-xs leading-none">{langMeta.flag}</span>
+                  <span className="py-0.2 rounded bg-background px-1 text-[9px] font-bold text-muted-foreground">
+                    PDF
+                  </span>
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div
       id={`msg-${message.id}`}
@@ -238,16 +403,18 @@ export function MessageBubble({
 
         {/* Message Bubble content */}
         <div
-          className={`shadow-2xs relative rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
-            isCurrentUser
-              ? "rounded-tr-xs text-white"
-              : isBot &&
-                  (message.content.includes("hết credits") ||
-                    message.content.includes("hết credit"))
-                ? "rounded-tl-xs border border-rose-200 bg-rose-50/90 text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/70 dark:text-rose-200"
-                : "rounded-tl-xs border border-border bg-card text-foreground"
+          className={`shadow-2xs relative rounded-2xl text-sm leading-relaxed ${
+            isReportNotification
+              ? "p-0"
+              : isCurrentUser
+                ? "rounded-tr-xs px-3.5 py-2 text-white"
+                : isBot &&
+                    (message.content.includes("hết credits") ||
+                      message.content.includes("hết credit"))
+                  ? "rounded-tl-xs border border-rose-200 bg-rose-50/90 px-3.5 py-2 text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/70 dark:text-rose-200"
+                  : "rounded-tl-xs border border-border bg-card px-3.5 py-2 text-foreground"
           }`}
-          style={isCurrentUser ? { backgroundColor: primaryColor } : {}}
+          style={isCurrentUser && !isReportNotification ? { backgroundColor: primaryColor } : {}}
         >
           {/* High contrast Quoted Reply banner inside current user bubble vs bot/member bubbles */}
           {replyTarget && (
@@ -270,6 +437,8 @@ export function MessageBubble({
 
           {message.deleted_at ? (
             <span>Tin nhắn đã bị xóa</span>
+          ) : isReportNotification ? (
+            renderReportCard()
           ) : isBot ? (
             <div className="flex items-start gap-1.5">
               {(message.content.includes("hết credits") ||
@@ -288,8 +457,8 @@ export function MessageBubble({
           )}
         </div>
 
-        {/* Floating Action toolbar shifted lower to avoid overlapping message text */}
-        {!message.deleted_at && (
+        {/* Floating Action toolbar shifted lower to avoid overlapping message text (disabled for report export cards) */}
+        {!message.deleted_at && !isReportNotification && (
           <div
             className={`shadow-xs absolute -bottom-4 z-10 flex items-center gap-1 rounded-md border border-slate-200/90 bg-white/95 p-0.5 opacity-0 transition-all duration-200 group-hover:opacity-100 dark:border-slate-800 dark:bg-slate-900/95 ${
               isCurrentUser ? "right-1" : "left-1"

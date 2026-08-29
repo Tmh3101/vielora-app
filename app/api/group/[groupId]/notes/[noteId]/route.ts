@@ -31,10 +31,12 @@ export async function PATCH(
     const { user, supabase } = authResult;
 
     const perm = await checkGroupNoteWritePermission(supabase, groupId, user.id, undefined, {
+      display_name: user.user_metadata?.display_name,
       full_name: user.user_metadata?.full_name,
       name: user.user_metadata?.name,
       email: user.email,
     });
+
     if (!perm.allowed || !perm.botId) {
       return NextResponse.json(
         { success: false, message: "Unauthorized: Note edit permission required" },
@@ -133,10 +135,12 @@ export async function DELETE(
     const { user, supabase } = authResult;
 
     const perm = await checkGroupNoteWritePermission(supabase, groupId, user.id, undefined, {
+      display_name: user.user_metadata?.display_name,
       full_name: user.user_metadata?.full_name,
       name: user.user_metadata?.name,
       email: user.email,
     });
+
     if (!perm.allowed || !perm.botId) {
       return NextResponse.json(
         { success: false, message: "Unauthorized: Note deletion permission required" },

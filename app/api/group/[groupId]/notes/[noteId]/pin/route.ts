@@ -31,6 +31,7 @@ export async function POST(
     const { user, supabase } = authResult;
 
     const perm = await checkGroupNoteWritePermission(supabase, groupId, user.id, undefined, {
+      display_name: user.user_metadata?.display_name,
       full_name: user.user_metadata?.full_name,
       name: user.user_metadata?.name,
       email: user.email,

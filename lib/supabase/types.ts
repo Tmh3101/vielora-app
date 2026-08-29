@@ -437,6 +437,7 @@ export type Database = {
           status: Database["public"]["Enums"]["page_status"];
           title: string | null;
           url: string;
+          anchors: Json | null;
         };
         Insert: {
           bot_id: string;
@@ -453,6 +454,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["page_status"];
           title?: string | null;
           url: string;
+          anchors?: Json | null;
         };
         Update: {
           bot_id?: string;
@@ -469,6 +471,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["page_status"];
           title?: string | null;
           url?: string;
+          anchors?: Json | null;
         };
         Relationships: [
           {
@@ -876,6 +879,13 @@ export type Database = {
             referencedRelation: "plans";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "subscriptions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
         ];
       };
       usage_logs: {
@@ -1113,11 +1123,562 @@ export type Database = {
           },
         ];
       };
+      workspaces: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          owner_id: string;
+          status: string;
+          settings: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          owner_id: string;
+          status?: string;
+          settings?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          owner_id?: string;
+          status?: string;
+          settings?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      workspace_roles: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          permissions: Json;
+          hierarchy: number;
+          is_system: boolean;
+        };
+        Insert: {
+          id: string;
+          name: string;
+          description?: string | null;
+          permissions: Json;
+          hierarchy: number;
+          is_system?: boolean;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          permissions?: Json;
+          hierarchy?: number;
+          is_system?: boolean;
+        };
+        Relationships: [];
+      };
+      workspace_members: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          user_id: string;
+          role_id: string;
+          invited_by: string | null;
+          invited_at: string;
+          accepted_at: string | null;
+          status: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          user_id: string;
+          role_id?: string;
+          invited_by?: string | null;
+          invited_at?: string;
+          accepted_at?: string | null;
+          status?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          user_id?: string;
+          role_id?: string;
+          invited_by?: string | null;
+          invited_at?: string;
+          accepted_at?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_invitations: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          email: string;
+          role_id: string;
+          invited_by: string;
+          token: string;
+          token_expires_at: string;
+          status: string;
+          created_at: string;
+          accepted_at: string | null;
+          accepted_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          email: string;
+          role_id?: string;
+          invited_by: string;
+          token?: string;
+          token_expires_at?: string;
+          status?: string;
+          created_at?: string;
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          email?: string;
+          role_id?: string;
+          invited_by?: string;
+          token?: string;
+          token_expires_at?: string;
+          status?: string;
+          created_at?: string;
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+        };
+        Relationships: [];
+      };
+      workspace_branding: {
+        Row: {
+          workspace_id: string;
+          brand_name: string | null;
+          logo_url: string | null;
+          primary_color: string;
+          secondary_color: string | null;
+          font_family: string | null;
+          header_text: string | null;
+          footer_text: string | null;
+          watermark_url: string | null;
+          default_language: string;
+          supported_languages: string[];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          brand_name?: string | null;
+          logo_url?: string | null;
+          primary_color?: string;
+          secondary_color?: string | null;
+          font_family?: string | null;
+          header_text?: string | null;
+          footer_text?: string | null;
+          watermark_url?: string | null;
+          default_language?: string;
+          supported_languages?: string[];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          workspace_id?: string;
+          brand_name?: string | null;
+          logo_url?: string | null;
+          primary_color?: string;
+          secondary_color?: string | null;
+          font_family?: string | null;
+          header_text?: string | null;
+          footer_text?: string | null;
+          watermark_url?: string | null;
+          default_language?: string;
+          supported_languages?: string[];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      group_chats: {
+        Row: {
+          id: string;
+          bot_id: string;
+          status: string;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          bot_id: string;
+          status?: string;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          bot_id?: string;
+          status?: string;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      group_members: {
+        Row: {
+          id: string;
+          group_id: string;
+          user_id: string;
+          email: string;
+          role_label: string | null;
+          can_pin_knowledge: boolean;
+          can_create_note: boolean;
+          can_export_report: boolean;
+          invited_by: string;
+          last_read_at: string | null;
+          joined_at: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          user_id: string;
+          email: string;
+          role_label?: string | null;
+          can_pin_knowledge?: boolean;
+          can_create_note?: boolean;
+          can_export_report?: boolean;
+          invited_by: string;
+          last_read_at?: string | null;
+          joined_at?: string;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          user_id?: string;
+          email?: string;
+          role_label?: string | null;
+          can_pin_knowledge?: boolean;
+          can_create_note?: boolean;
+          can_export_report?: boolean;
+          invited_by?: string;
+          last_read_at?: string | null;
+          joined_at?: string;
+        };
+        Relationships: [];
+      };
+      group_messages: {
+        Row: {
+          id: string;
+          group_id: string;
+          sender_type: "user" | "bot" | "system";
+          sender_id: string | null;
+          content: string;
+          reply_to_id: string | null;
+          mentions: string[];
+          should_bot_reply: boolean;
+          no_answer: boolean | null;
+          deleted_at: string | null;
+          deleted_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          sender_type?: "user" | "bot" | "system";
+          sender_id?: string | null;
+          content: string;
+          reply_to_id?: string | null;
+          mentions?: string[];
+          should_bot_reply?: boolean;
+          no_answer?: boolean | null;
+          deleted_at?: string | null;
+          deleted_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          sender_type?: "user" | "bot" | "system";
+          sender_id?: string | null;
+          content?: string;
+          reply_to_id?: string | null;
+          mentions?: string[];
+          should_bot_reply?: boolean;
+          no_answer?: boolean | null;
+          deleted_at?: string | null;
+          deleted_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      group_notes: {
+        Row: {
+          id: string;
+          group_id: string;
+          bot_id: string;
+          created_by: string;
+          title: string;
+          content_html: string;
+          content_text: string;
+          is_active: boolean;
+          archived_at: string | null;
+          collapsed: boolean;
+          document_id: string | null;
+          source_message_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          bot_id: string;
+          created_by: string;
+          title: string;
+          content_html: string;
+          content_text: string;
+          is_active?: boolean;
+          archived_at?: string | null;
+          collapsed?: boolean;
+          document_id?: string | null;
+          source_message_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          bot_id?: string;
+          created_by?: string;
+          title?: string;
+          content_html?: string;
+          content_text?: string;
+          is_active?: boolean;
+          archived_at?: string | null;
+          collapsed?: boolean;
+          document_id?: string | null;
+          source_message_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      chat_knowledge: {
+        Row: {
+          id: string;
+          bot_id: string;
+          group_id: string;
+          message_id: string | null;
+          question: string;
+          answer: string | null;
+          pinned_by: string;
+          document_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          bot_id: string;
+          group_id: string;
+          message_id?: string | null;
+          question: string;
+          answer?: string | null;
+          pinned_by: string;
+          document_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          bot_id?: string;
+          group_id?: string;
+          message_id?: string | null;
+          question?: string;
+          answer?: string | null;
+          pinned_by?: string;
+          document_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      group_chat_insights: {
+        Row: {
+          bot_id: string;
+          group_id: string;
+          summary: string;
+          document_id: string | null;
+          last_summarized_message_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          bot_id: string;
+          group_id: string;
+          summary?: string;
+          document_id?: string | null;
+          last_summarized_message_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          bot_id?: string;
+          group_id?: string;
+          summary?: string;
+          document_id?: string | null;
+          last_summarized_message_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      report_templates: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          key: string;
+          name: string;
+          version: number;
+          schema: Json;
+          languages: string[];
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          key: string;
+          name: string;
+          version?: number;
+          schema: Json;
+          languages?: string[];
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          key?: string;
+          name?: string;
+          version?: number;
+          schema?: Json;
+          languages?: string[];
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      report_exports: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          template_id: string;
+          bot_id: string;
+          scope: Json;
+          requested_by: string;
+          status: "pending" | "rendering" | "awaiting_review" | "approved" | "issued" | "failed";
+          language: string;
+          file_path: string | null;
+          error_message: string | null;
+          retry_count: number;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          template_id: string;
+          bot_id: string;
+          scope?: Json;
+          requested_by: string;
+          status?: "pending" | "rendering" | "awaiting_review" | "approved" | "issued" | "failed";
+          language?: string;
+          file_path?: string | null;
+          error_message?: string | null;
+          retry_count?: number;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          template_id?: string;
+          bot_id?: string;
+          scope?: Json;
+          requested_by?: string;
+          status?: "pending" | "rendering" | "awaiting_review" | "approved" | "issued" | "failed";
+          language?: string;
+          file_path?: string | null;
+          error_message?: string | null;
+          retry_count?: number;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
+      deduct_workspace_credits: {
+        Args: {
+          p_workspace_id: string;
+          p_amount: number;
+          p_transaction_type: string;
+          p_description: string;
+        };
+        Returns: {
+          success: boolean;
+          deducted_from_subscription: number;
+          deducted_from_payg: number;
+          message?: string;
+        };
+      };
+      refund_workspace_credits: {
+        Args: {
+          p_workspace_id: string;
+          p_deducted_sub: number;
+          p_deducted_payg: number;
+          p_transaction_type: string;
+          p_description: string;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+        };
+      };
+      get_auth_user_by_email: {
+        Args: {
+          p_email: string;
+        };
+        Returns: Array<{
+          id: string;
+          email: string;
+        }>;
+      };
       generate_verification_token: { Args: never; Returns: string };
       get_bot_analytics_v2: {
         Args: {

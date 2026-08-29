@@ -25,6 +25,8 @@ export interface GroupMember {
   role_label: string | null;
   can_pin_knowledge: boolean;
   can_create_note?: boolean;
+  can_export_report?: boolean;
+  canExportReport?: boolean;
   last_read_at: string | null;
   display_name?: string | null;
   full_name?: string | null;
@@ -61,6 +63,7 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     name: string;
     avatar_url?: string | null;
     widget_settings?: unknown;
+    workspace_id?: string | null;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
@@ -99,6 +102,9 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
   );
   const canPin = Boolean(currentMember?.can_create_note || currentMember?.can_pin_knowledge);
   const canCreateNote = Boolean(currentMember?.can_create_note || currentMember?.can_pin_knowledge);
+  const canExportReport = Boolean(
+    currentMember?.can_export_report || currentMember?.canExportReport
+  );
 
   // Notes actions & loaders
   const refetchActiveNote = useCallback(async () => {
@@ -134,6 +140,30 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     [botId]
   );
 
+  const toggleMemberExportReportPermission = useCallback(
+    async (memberId: string, enabled: boolean) => {
+      try {
+        const res = await updateMemberApi(botId, memberId, {
+          can_export_report: enabled,
+          canExportReport: enabled,
+        });
+        if (res.success && res.data) {
+          setMembers((prev) =>
+            prev.map((m) =>
+              m.id === memberId ? { ...m, can_export_report: enabled, canExportReport: enabled } : m
+            )
+          );
+        }
+      } catch (err) {
+        console.error("Error toggling member export report permission:", err);
+        throw err;
+      }
+    },
+    [botId]
+  );
+
+  const nextNotesCursorRef = useRef<string | null>(null);
+
   const loadNotesList = useCallback(
     async (isInitial = false) => {
       const currentGroupId = groupIdRef.current || groupInfo?.id;
@@ -141,7 +171,7 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
 
       try {
         setIsLoadingNotes(true);
-        const cursor = isInitial ? undefined : nextNotesCursor || undefined;
+        const cursor = isInitial ? undefined : nextNotesCursorRef.current || undefined;
         const res = await fetchNotesListApi(currentGroupId, 20, cursor);
         if (isInitial) {
           setNotesList(res.notes);
@@ -152,6 +182,7 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
             return [...prev, ...newUnique];
           });
         }
+        nextNotesCursorRef.current = res.nextCursor;
         setNextNotesCursor(res.nextCursor);
         setHasMoreNotes(res.hasMore);
       } catch (err) {
@@ -160,21 +191,21 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
         setIsLoadingNotes(false);
       }
     },
-    [groupInfo?.id, nextNotesCursor]
+    [groupInfo?.id]
   );
-
-  useEffect(() => {
-    if (groupInfo?.id && GROUP_CHAT_CONFIG.GROUP_NOTES_ENABLED) {
-      refetchActiveNote();
-      loadNotesList(true);
-    }
-  }, [groupInfo?.id, refetchActiveNote, loadNotesList]);
 
   const refetchActiveNoteRef = useRef(refetchActiveNote);
   refetchActiveNoteRef.current = refetchActiveNote;
 
   const loadNotesListRef = useRef(loadNotesList);
   loadNotesListRef.current = loadNotesList;
+
+  useEffect(() => {
+    if (groupInfo?.id && GROUP_CHAT_CONFIG.GROUP_NOTES_ENABLED) {
+      refetchActiveNoteRef.current?.();
+      loadNotesListRef.current?.(true);
+    }
+  }, [groupInfo?.id]);
 
   // Unread messages count
   const lastReadAt = currentMember?.last_read_at;
@@ -613,6 +644,7 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     hasMoreNotes,
     isLoadingNotes,
     canCreateNote,
+    canExportReport,
     refetchActiveNote,
     fetchActiveNote: refetchActiveNote,
     loadNotesList,
@@ -688,16 +720,25 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     },
     toggleNoteCollapse: async (noteId: string, collapsed: boolean) => {
       const currentGroupId = groupIdRef.current || groupInfo?.id;
-      if (!currentGroupId) throw new Error("Group not initialized");
-      await toggleNoteCollapseApi(currentGroupId, noteId, collapsed);
       setActiveNote((prev) => (prev?.id === noteId ? { ...prev, collapsed } : prev));
+      if (!currentGroupId) return;
+      try {
+        await toggleNoteCollapseApi(currentGroupId, noteId, collapsed);
+      } catch (err) {
+        console.warn("Failed to persist note collapse state:", err);
+      }
     },
     toggleCollapse: async (noteId: string, collapsed: boolean) => {
       const currentGroupId = groupIdRef.current || groupInfo?.id;
-      if (!currentGroupId) throw new Error("Group not initialized");
-      await toggleNoteCollapseApi(currentGroupId, noteId, collapsed);
       setActiveNote((prev) => (prev?.id === noteId ? { ...prev, collapsed } : prev));
+      if (!currentGroupId) return;
+      try {
+        await toggleNoteCollapseApi(currentGroupId, noteId, collapsed);
+      } catch (err) {
+        console.warn("Failed to persist note collapse state:", err);
+      }
     },
     toggleMemberNotePermission,
+    toggleMemberExportReportPermission,
   };
 }

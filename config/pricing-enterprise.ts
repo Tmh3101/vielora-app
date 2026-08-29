@@ -1,12 +1,13 @@
 import { ESubscriptionCycle } from "@/types";
+import { CREDIT_UNIT_PRICE_EXPANSION } from "@/config/credit-pricing";
 
 export const ENTERPRISE_PRICE = {
-  bots: { min: 50, max: 2000, step: 1 },
-  monthlyCredits: { min: 10_000, max: 100_000, step: 1_000 },
+  bots: { min: 20, max: 2000, step: 1 },
+  monthlyCredits: { min: 5_000, max: 100_000, step: 1_000 },
   perBotPerMonth: 10_000,
-  perCreditUnitPerMonth: 100_000,
-  base: 1_490_000,
-  floor: 1_490_000,
+  perCreditUnitPerMonth: CREDIT_UNIT_PRICE_EXPANSION * 1_000,
+  base: 1_190_000,
+  floor: 1_190_000,
   discountYearly: 10 / 12,
   currency: "VND",
 };
@@ -19,39 +20,70 @@ export function clampValue(val: number, min: number, max: number, step?: number)
   return clamped;
 }
 
+export interface EnterprisePriceOptions {
+  pricing?: Record<string, Record<string, number>> | null;
+  currency?: string;
+  minBots?: number;
+  minCredits?: number;
+}
+
 export function calculateEnterprisePrice(
   bots: number,
   monthlyCredits: number,
-  cycle: ESubscriptionCycle
+  cycle: ESubscriptionCycle,
+  options?: EnterprisePriceOptions
 ): number {
+  const minBots = options?.minBots ?? ENTERPRISE_PRICE.bots.min;
+  const minCredits = options?.minCredits ?? ENTERPRISE_PRICE.monthlyCredits.min;
+  const currency = options?.currency || ENTERPRISE_PRICE.currency;
+
   const validBots = clampValue(
     bots,
-    ENTERPRISE_PRICE.bots.min,
+    minBots,
     ENTERPRISE_PRICE.bots.max,
     ENTERPRISE_PRICE.bots.step
   );
   const validCredits = clampValue(
     monthlyCredits,
-    ENTERPRISE_PRICE.monthlyCredits.min,
+    minCredits,
     ENTERPRISE_PRICE.monthlyCredits.max,
     ENTERPRISE_PRICE.monthlyCredits.step
   );
 
-  const extraBots = validBots - ENTERPRISE_PRICE.bots.min;
-  const extraCredits = validCredits - ENTERPRISE_PRICE.monthlyCredits.min;
+  const extraBots = validBots - minBots;
+  const extraCredits = validCredits - minCredits;
 
-  const rawMonthly =
-    ENTERPRISE_PRICE.base +
-    extraBots * ENTERPRISE_PRICE.perBotPerMonth +
-    (extraCredits / 1000) * ENTERPRISE_PRICE.perCreditUnitPerMonth;
+  const extraBotsMonthly = extraBots * ENTERPRISE_PRICE.perBotPerMonth;
+  const extraCreditsMonthly = (extraCredits / 1000) * ENTERPRISE_PRICE.perCreditUnitPerMonth;
+  const extraMonthlyTotal = extraBotsMonthly + extraCreditsMonthly;
 
-  const monthlyPrice = Math.max(ENTERPRISE_PRICE.floor, Math.round(rawMonthly));
+  // Resolve base price from DB pricing or fallback
+  const dbMonthly = options?.pricing?.[currency]?.monthly;
+  const dbYearly = options?.pricing?.[currency]?.yearly;
 
   if (cycle === ESubscriptionCycle.Yearly) {
-    return Math.round(monthlyPrice * 10);
+    const baseYearly =
+      typeof dbYearly === "number" && dbYearly > 0
+        ? dbYearly
+        : typeof dbMonthly === "number" && dbMonthly > 0
+          ? dbMonthly * 10
+          : ENTERPRISE_PRICE.base * 10;
+
+    const extraYearlyTotal = extraMonthlyTotal * 10;
+    const finalYearlyPrice = Math.max(baseYearly, Math.round(baseYearly + extraYearlyTotal));
+
+    return finalYearlyPrice;
   }
 
-  return monthlyPrice;
+  const baseMonthly =
+    typeof dbMonthly === "number" && dbMonthly > 0 ? dbMonthly : ENTERPRISE_PRICE.base;
+
+  const monthlyFloor =
+    typeof dbMonthly === "number" && dbMonthly > 0 ? dbMonthly : ENTERPRISE_PRICE.floor;
+
+  const finalMonthlyPrice = Math.max(monthlyFloor, Math.round(baseMonthly + extraMonthlyTotal));
+
+  return finalMonthlyPrice;
 }
 
 export function calculateEnterpriseUpgradePrice(
@@ -67,5 +99,10 @@ export function calculateEnterpriseUpgradePrice(
   const monthlyExtra = extraBotsCost + extraCreditsCost;
   const effectiveMonthlyExtra =
     cycle === ESubscriptionCycle.Yearly ? monthlyExtra * (10 / 12) : monthlyExtra;
-  return Math.max(0, Math.round(effectiveMonthlyExtra * Math.max(1, remainingMonths)));
+  const finalUpgradePrice = Math.max(
+    0,
+    Math.round(effectiveMonthlyExtra * Math.max(1, remainingMonths))
+  );
+
+  return finalUpgradePrice;
 }

@@ -39,6 +39,7 @@ import {
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { OrderSummaryCard } from "@/components/shared/OrderSummaryCard";
 import { calculateRemainingMonths } from "@/lib/helpers/payment-helpers";
+import { CREDIT_UNIT_PRICE_PRORATION } from "@/config/credit-pricing";
 
 function formatVND(amount: number): string {
   if (amount === 0) return "0";
@@ -219,25 +220,27 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
   }, [user, authLoading, router]);
 
   // Fetch Proration (Subscription mode)
+  // Công thức đơn giản: subscription_credits_còn_lại × CREDIT_UNIT_PRICE_PRORATION (100đ/credit)
   useEffect(() => {
-    if (mode !== "subscription" || action !== "upgrade" || !user) return;
+    if (mode !== "subscription" || action !== "upgrade" || !user || !activeWorkspace?.id) return;
 
     const fetchProration = async () => {
       setIsCalculatingProration(true);
       try {
-        const workspaceId = activeWorkspace?.id ?? null;
+        const workspaceId = activeWorkspace.id;
 
-        const subQuery = supabase
+        // Kiểm tra subscription hiện tại còn hiệu lực
+        const { data: subData } = await supabase
           .from("subscriptions")
-          .select("*, plans(code, monthly_credits, pricing)")
-          .eq("status", ESubscriptionStatus.Active);
-        const { data: subData } = workspaceId
-          ? await subQuery.eq("workspace_id", workspaceId).maybeSingle()
-          : await subQuery.eq("user_id", user.id).maybeSingle();
+          .select("*, plans(code)")
+          .eq("workspace_id", workspaceId)
+          .eq("status", ESubscriptionStatus.Active)
+          .maybeSingle();
 
         const sub = subData as
           | (Tables<"subscriptions"> & { plans: Tables<"plans"> | Tables<"plans">[] | null })
           | null;
+
         if (!sub || !sub.plans) return;
 
         const plansData = sub.plans;
@@ -251,57 +254,24 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
         const periodEnd = new Date(sub.current_period_end);
         if (now >= periodEnd) return;
 
-        let pricePaid = 0;
-        if (planData.code === "enterprise") {
-          const { calculateEnterprisePrice, ENTERPRISE_PRICE } =
-            await import("@/config/pricing-enterprise");
-          const bots = sub.bots_limit_override ?? ENTERPRISE_PRICE.bots.min;
-          const credits = sub.monthly_credits_override ?? ENTERPRISE_PRICE.monthlyCredits.min;
-          pricePaid = calculateEnterprisePrice(
-            bots,
-            credits,
-            (sub.billing_cycle as ESubscriptionCycle) || ESubscriptionCycle.Monthly
-          );
-        } else {
-          const pricing = planData.pricing as Record<string, Record<string, number>> | null;
-          pricePaid = pricing?.VND?.[sub.billing_cycle || ESubscriptionCycle.Monthly] ?? 0;
+        // Lấy subscription_credits từ API (để tránh bị RLS chặn trên browser)
+        let subscriptionCredits = 0;
+        try {
+          const creditRes = await fetch(`/api/workspaces/${workspaceId}/credits`);
+          if (creditRes.ok) {
+            const creditJson = await creditRes.json();
+            if (creditJson.success && creditJson.data) {
+              subscriptionCredits = Math.max(0, creditJson.data.subscriptionCredits ?? 0);
+            }
+          }
+        } catch (fetchErr) {
+          console.error("Error fetching credits for proration:", fetchErr);
         }
-        if (pricePaid <= 0) return;
 
-        const isYearly = sub.billing_cycle === ESubscriptionCycle.Yearly;
-        const periodDurationMs = (isYearly ? 365 : 30) * 24 * 60 * 60 * 1000;
-        const periodStart = sub.current_period_start
-          ? new Date(sub.current_period_start)
-          : new Date(periodEnd.getTime() - periodDurationMs);
-
-        const totalTimeMs = Math.max(1, periodEnd.getTime() - periodStart.getTime());
-        const remainingTimeMs = Math.max(0, periodEnd.getTime() - now.getTime());
-        const timeRatio = Math.min(1, Math.max(0, remainingTimeMs / totalTimeMs));
-        const timeBasedDiscount = Math.floor(pricePaid * timeRatio);
-
-        const walletQuery = supabase.from("wallets").select("subscription_credits, credits");
-        const { data: walletData } = workspaceId
-          ? await walletQuery.eq("workspace_id", workspaceId).maybeSingle()
-          : await walletQuery.eq("user_id", user.id).maybeSingle();
-
-        const wallet = walletData as (Tables<"wallets"> & { credits?: number }) | null;
-        const currentCredits = (wallet?.subscription_credits ?? 0) + (wallet?.credits ?? 0);
-        const effectiveMonthlyCredits =
-          sub.monthly_credits_override ?? planData.monthly_credits ?? 0;
-        const totalCreditsPeriod = effectiveMonthlyCredits * (isYearly ? 12 : 1);
-        const creditRatio =
-          totalCreditsPeriod > 0
-            ? Math.min(1, Math.max(0, currentCredits / totalCreditsPeriod))
-            : 0;
-        const creditBasedDiscount = Math.floor(pricePaid * creditRatio);
-
-        const finalDiscount = Math.min(
-          Math.floor(pricePaid * 0.95),
-          Math.max(timeBasedDiscount, creditBasedDiscount)
-        );
+        const finalDiscount = subscriptionCredits * CREDIT_UNIT_PRICE_PRORATION;
         setProrationDiscount(finalDiscount);
       } catch (e) {
-        console.error(e);
+        console.error("Error calculating proration:", e);
       } finally {
         setIsCalculatingProration(false);
       }
@@ -402,26 +372,30 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
   // Resolve Selected Plan (Support Enterprise Virtual Plan object)
   const selectedPlan = useMemo(() => {
     if (mode !== "subscription") return null;
+    const dbEnterprisePlan = plans.find((p) => p.code === ESubscriptionPlan.Enterprise) || null;
+
     if (selectedPlanCode === ESubscriptionPlan.Enterprise) {
-      let desc = "Gói Enterprise tự cấu hình theo yêu cầu";
+      let desc = dbEnterprisePlan?.description || "Gói Enterprise tự cấu hình theo yêu cầu";
       if (isIncrementalUpgrade) {
         desc = `Nâng cấp bổ sung (+${deltaBotsVal} bots, +${deltaCreditsVal.toLocaleString("vi-VN")} credits)`;
       } else if (action === PaymentAction.Renew) {
         desc = "Gia hạn gói Enterprise hiện tại";
       }
 
-      return {
-        id: "enterprise-plan-virtual-id",
+      const planObj = {
+        id: dbEnterprisePlan?.id || "enterprise-plan-virtual-id",
         code: ESubscriptionPlan.Enterprise,
-        name: "Enterprise",
+        name: dbEnterprisePlan?.name || "Enterprise",
         description: desc,
         monthly_credits: resolvedCredits,
         bots_limit: resolvedBots,
-        pricing: { VND: { monthly: 1900000, yearly: 19000000 } },
+        pricing: dbEnterprisePlan?.pricing || null,
         is_active: true,
-        created_at: "",
-        updated_at: "",
+        created_at: dbEnterprisePlan?.created_at || "",
+        updated_at: dbEnterprisePlan?.updated_at || "",
       } as Tables<"plans">;
+
+      return planObj;
     }
     return plans.find((p) => p.code === selectedPlanCode) || null;
   }, [
@@ -447,6 +421,8 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
     if (mode === "subscription") {
       if (!selectedPlan) return 0;
       if (selectedPlanCode === ESubscriptionPlan.Enterprise) {
+        const dbEnterprisePlan = plans.find((p) => p.code === ESubscriptionPlan.Enterprise) || null;
+
         if (queryIsIncremental || queryDeltaBots || queryDeltaCredits) {
           const dBots = Number(queryDeltaBots || 0);
           const dCredits = Number(queryDeltaCredits || 0);
@@ -454,25 +430,39 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
           const remMonths = searchParams.get("remainingMonths")
             ? Number(searchParams.get("remainingMonths"))
             : 1;
-          return calculateEnterpriseUpgradePrice(dBots, dCredits, billingCycle, remMonths);
+          const upgradePrice = calculateEnterpriseUpgradePrice(
+            dBots,
+            dCredits,
+            billingCycle,
+            remMonths
+          );
+          return upgradePrice;
         }
+
+        const minBots = dbEnterprisePlan?.bots_limit ?? ENTERPRISE_PRICE.bots.min;
+        const minCredits = dbEnterprisePlan?.monthly_credits ?? ENTERPRISE_PRICE.monthlyCredits.min;
+
         const bots = clampValue(
-          Number(queryBots || activeSub?.bots_limit_override || ENTERPRISE_PRICE.bots.min),
-          ENTERPRISE_PRICE.bots.min,
+          Number(queryBots || activeSub?.bots_limit_override || minBots),
+          minBots,
           ENTERPRISE_PRICE.bots.max,
           ENTERPRISE_PRICE.bots.step
         );
         const credits = clampValue(
-          Number(
-            queryCredits ||
-              activeSub?.monthly_credits_override ||
-              ENTERPRISE_PRICE.monthlyCredits.min
-          ),
-          ENTERPRISE_PRICE.monthlyCredits.min,
+          Number(queryCredits || activeSub?.monthly_credits_override || minCredits),
+          minCredits,
           ENTERPRISE_PRICE.monthlyCredits.max,
           ENTERPRISE_PRICE.monthlyCredits.step
         );
-        return calculateEnterprisePrice(bots, credits, billingCycle);
+        const fullPrice = calculateEnterprisePrice(bots, credits, billingCycle, {
+          pricing: (dbEnterprisePlan?.pricing || selectedPlan.pricing) as Record<
+            string,
+            Record<string, number>
+          > | null,
+          minBots,
+          minCredits,
+        });
+        return fullPrice;
       }
       return getPriceFromPlan(selectedPlan, billingCycle);
     } else {
@@ -493,6 +483,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
     selectedPackage,
     quantity,
     activeSub,
+    plans,
   ]);
 
   const finalTotalPrice = Math.max(0, calculatedBasePrice - prorationDiscount);

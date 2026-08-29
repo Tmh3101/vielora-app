@@ -8,6 +8,7 @@ import { setBotReadyServer, setBotStatusIfNotReadyServer } from "@/lib/services/
 import { getRedisPublisher } from "@/lib/config/redis";
 import { EBotStatus, EPageStatus, EPageErrorType } from "@/types";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { TablesInsert } from "@/lib/supabase/types";
 import { getRedisConnectionOptions } from "@/lib/config/redis";
 import { NextRequest } from "next/server";
 
@@ -27,6 +28,7 @@ export const upsertPageContent = async (params: {
   errorMessage?: string;
   errorType?: EPageErrorType;
   httpStatusCode?: number;
+  anchors?: Array<{ id: string; text: string; tag: string }>;
 }) => {
   const supabase = createAdminClient();
   const crawledAt = new Date().toISOString();
@@ -45,6 +47,9 @@ export const upsertPageContent = async (params: {
       error_message: params.errorMessage ?? null,
       error_type: params.errorType ?? null,
       http_status_code: params.httpStatusCode ?? null,
+      anchors: params.anchors
+        ? (params.anchors as unknown as TablesInsert<"pages">["anchors"])
+        : null,
       crawled_at: crawledAt,
     });
     return;
@@ -63,6 +68,9 @@ export const upsertPageContent = async (params: {
       error_message: params.errorMessage ?? existingPage.error_message,
       error_type: params.errorType ?? existingPage.error_type,
       http_status_code: params.httpStatusCode ?? existingPage.http_status_code,
+      anchors: params.anchors
+        ? (params.anchors as unknown as TablesInsert<"pages">["anchors"])
+        : ((existingPage.anchors as unknown as TablesInsert<"pages">["anchors"]) ?? null),
       crawled_at: crawledAt,
     });
     return;

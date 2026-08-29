@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ grou
     if (isAuthError(authResult)) return authResult;
     const { user, supabase } = authResult;
 
-    const perm = await checkGroupNoteReadPermission(supabase, groupId, user.id);
+    const perm = await checkGroupNoteReadPermission(supabase, groupId, user.id, user.email);
     if (!perm.allowed) {
       return NextResponse.json(
         { success: false, message: "Forbidden: Not a member of this group" },
@@ -72,6 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gro
     const { user, supabase } = authResult;
 
     const perm = await checkGroupNoteWritePermission(supabase, groupId, user.id, undefined, {
+      display_name: user.user_metadata?.display_name,
       full_name: user.user_metadata?.full_name,
       name: user.user_metadata?.name,
       email: user.email,
@@ -84,14 +85,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gro
     }
 
     const body = await req.json();
-    const { title, content_html, content_text } = body;
+    const { createGroupNoteSchema } = await import("@/lib/validations/group-chat.schema");
+    const parsed = createGroupNoteSchema.safeParse({
+      title: body.title,
+      contentHtml: body.content_html || body.contentHtml || body.contentText || body.content_text,
+      contentText: body.content_text || body.contentText,
+      userName: body.userName,
+    });
 
-    if (!title?.trim() || !content_text?.trim()) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, message: "Title and content cannot be empty" },
+        { success: false, message: parsed.error.issues[0]?.message || "Dữ liệu không hợp lệ" },
         { status: 400, headers: corsHeaders }
       );
     }
+
+    const { title, contentHtml, contentText } = parsed.data;
 
     if (title.trim().length > GROUP_CHAT_CONFIG.MAX_NOTE_TITLE_LENGTH) {
       return NextResponse.json(
@@ -103,7 +112,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gro
       );
     }
 
-    if (content_text.trim().length > GROUP_CHAT_CONFIG.MAX_NOTE_CONTENT_LENGTH) {
+    if (contentText.trim().length > GROUP_CHAT_CONFIG.MAX_NOTE_CONTENT_LENGTH) {
       return NextResponse.json(
         {
           success: false,
@@ -118,8 +127,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gro
       botId: perm.botId,
       userId: user.id,
       title: title.trim(),
-      contentHtml: content_html || content_text,
-      contentText: content_text.trim(),
+      contentHtml,
+      contentText: contentText.trim(),
       userName: perm.userName,
     });
 

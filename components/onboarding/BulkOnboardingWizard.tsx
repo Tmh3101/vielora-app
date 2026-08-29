@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { CheckCircle } from "lucide-react";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { Step1CSVUpload } from "@/components/onboarding/bulk-steps/Step1CSVUpload";
 import { Step2GlobalConfig } from "@/components/onboarding/bulk-steps/Step2GlobalConfig";
 import { Step3RealtimeProgress } from "@/components/onboarding/bulk-steps/Step3RealtimeProgress";
@@ -12,25 +12,10 @@ import { Step4CompletionReport } from "@/components/onboarding/bulk-steps/Step4C
 
 export function BulkOnboardingWizard(_props: { userId?: string }) {
   const router = useRouter();
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const { activeWorkspace } = useWorkspace();
+  const workspaceId = activeWorkspace?.id ?? null;
 
   const bulkStep = useOnboardingStore((state) => state.bulkStep);
-
-  useEffect(() => {
-    async function fetchUserWorkspace() {
-      try {
-        const res = await fetch("/api/workspaces");
-        const json = await res.json();
-        if (json.workspaces && json.workspaces.length > 0) {
-          setWorkspaceId(json.workspaces[0].id);
-        }
-      } catch (err) {
-        console.error("Failed to fetch user workspace:", err);
-      }
-    }
-
-    void fetchUserWorkspace();
-  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 px-4 py-14">

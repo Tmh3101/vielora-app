@@ -285,7 +285,7 @@ export default function WorkspaceMembersPage() {
                 onClick={() => setIsInviteOpen(true)}
                 className="bg-primary font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90"
               >
-                <UserPlus className="mr-2 h-4 w-4" />
+                <UserPlus className="h-4 w-4" />
                 Mời thành viên
               </Button>
             )}

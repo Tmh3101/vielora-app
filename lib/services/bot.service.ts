@@ -2,6 +2,7 @@ import type { ServiceClient } from "@/lib/services/types";
 import type { createServerClient } from "@/lib/supabase/server";
 import type { Json, Tables, TablesUpdate } from "@/lib/supabase/types";
 import { deleteKnowledgeFilesByBotId } from "@/lib/supabase/upload";
+import { deleteReportExportsByBotId } from "@/lib/services/report-export.service";
 import { deletePagesByBotId } from "@/lib/services/page.service";
 import { getJobById, getActiveJobsByBotId } from "@/lib/services/job.service";
 import { validateRateLimitValue } from "@/lib/bot-rate-limit";
@@ -752,9 +753,21 @@ export async function canUserDeleteBot(
  * Xóa một bot cùng toàn bộ pages và storage liên quan.
  */
 export async function deleteBot(_client: ServiceClient, botId: string): Promise<void> {
+  if (typeof window !== "undefined") {
+    const res = await fetch(`/api/bots/${botId}`, {
+      method: "DELETE",
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || "Failed to delete bot");
+    }
+    return;
+  }
+
   const adminClient = createAdminClient();
 
   try {
+    await deleteReportExportsByBotId(adminClient, botId);
     const deleteStorageResult = await deleteKnowledgeFilesByBotId(adminClient, botId);
     if (!deleteStorageResult.success) {
       console.error(
@@ -896,6 +909,33 @@ export async function startBot(client: ServiceClient, botId: string): Promise<vo
  */
 export async function activateBots(client: ServiceClient, botIds: string[]): Promise<void> {
   if (botIds.length === 0) return;
+
+  if (typeof window !== "undefined") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (client as any)
+      .from("bots")
+      .update({ is_stopped: false })
+      .in("id", botIds);
+
+    if (error) {
+      await Promise.all(
+        botIds.map((id) =>
+          fetch(`/api/bots/${id}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isStopped: false }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              const json = await res.json().catch(() => ({}));
+              throw new Error(json.message || "Failed to activate bot");
+            }
+          })
+        )
+      );
+    }
+    return;
+  }
+
   const admin = createAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (admin as any)
@@ -910,6 +950,33 @@ export async function activateBots(client: ServiceClient, botIds: string[]): Pro
  */
 export async function stopBots(client: ServiceClient, botIds: string[]): Promise<void> {
   if (botIds.length === 0) return;
+
+  if (typeof window !== "undefined") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (client as any)
+      .from("bots")
+      .update({ is_stopped: true })
+      .in("id", botIds);
+
+    if (error) {
+      await Promise.all(
+        botIds.map((id) =>
+          fetch(`/api/bots/${id}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isStopped: true }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              const json = await res.json().catch(() => ({}));
+              throw new Error(json.message || "Failed to stop bot");
+            }
+          })
+        )
+      );
+    }
+    return;
+  }
+
   const admin = createAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (admin as any).from("bots").update({ is_stopped: true }).in("id", botIds);
@@ -1120,6 +1187,8 @@ export interface PublicBotData {
   is_stopped: boolean;
   status: string;
   pwa_updated_at: string;
+  workspace_id?: string | null;
+  user_id?: string;
 }
 
 /**
@@ -1133,7 +1202,7 @@ export async function getBotBySlug(
   const { data, error } = await client
     .from("bots")
     .select(
-      "id, slug, name, avatar_url, widget_settings, is_public, is_stopped, status, pwa_updated_at"
+      "id, slug, name, avatar_url, widget_settings, is_public, is_stopped, status, pwa_updated_at, workspace_id, user_id"
     )
     .eq("slug", normalizedSlug)
     .eq("is_public", true)

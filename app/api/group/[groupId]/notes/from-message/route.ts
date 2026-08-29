@@ -32,6 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gro
     const { user, supabase } = authResult;
 
     const perm = await checkGroupNoteWritePermission(supabase, groupId, user.id, undefined, {
+      display_name: user.user_metadata?.display_name,
       full_name: user.user_metadata?.full_name,
       name: user.user_metadata?.name,
       email: user.email,
@@ -45,22 +46,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gro
     }
 
     const body = await req.json();
-    const { message_id, is_active } = body;
+    const { createNoteFromMessageSchema } = await import("@/lib/validations/group-chat.schema");
+    const parsed = createNoteFromMessageSchema.safeParse({
+      messageId: body.message_id || body.messageId,
+      userName: body.userName,
+      isActive: body.is_active !== undefined ? Boolean(body.is_active) : undefined,
+    });
 
-    if (!message_id) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, message: "message_id is required" },
+        { success: false, message: parsed.error.issues[0]?.message || "message_id is required" },
         { status: 400, headers: corsHeaders }
       );
     }
 
+    const { messageId, isActive } = parsed.data;
+
     const note = await createNoteFromMessage(supabase, {
       groupId,
       botId: perm.botId,
-      messageId: message_id,
+      messageId,
       userId: user.id,
       userName: perm.userName,
-      isActive: Boolean(is_active),
+      isActive: Boolean(isActive),
     });
 
     return NextResponse.json({ success: true, data: note }, { status: 201, headers: corsHeaders });

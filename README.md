@@ -16,9 +16,21 @@
 
 Vielora is an AI chatbot platform for creating, training, customizing, and deploying website assistants. It combines website crawling, manual knowledge, file ingestion, and single-URL knowledge with a RAG pipeline so chatbots can answer from the owner's approved content.
 
+## 🚀 Version 3.0.0 Highlights
+
+- **Smart Homepage Navigation (SH-001)**: Intent-driven widget navigation that redirects visitors to configured Key Action Pages via a NAVIGATE response type. LLM-first intent matching with substring fallback (`NAVIGATION_USE_LLM_MATCH`), pre-flight navigation context, client-side countdown banner with cancel, and 3-layer URL validation with blocked attempts logged server-side to a `security_events` audit table. See [Smart Homepage Spec](docs/specs/smart-homepage/SPEC.md) and [Feature Doc](docs/smart-homepage.md).
+- **Report Export**: Report template management, workspace-level reports dashboard, and asynchronous PDF rendering through a dedicated Puppeteer BullMQ worker with HMAC-signed download links (`REPORT_TOKEN_SECRET`).
+- **Voice-to-Report & Dashboard STT**: Speech-to-text transcription endpoint and voice-note formatting so users can dictate report content instead of typing.
+- **Enterprise Plan**: Dedicated enterprise upgrade page with dynamic quote-price API and base pricing of 1.190.000 VND for a 20-bot minimum.
+- **Workspace Branding**: Per-workspace branding customization page with logo/asset upload API.
+- **Unified Workspace Knowledge**: Workspace-scoped knowledge management shared across all bots in a workspace.
+- **Group Chat Additions**: In-group voice recording with STT, group insights API, and message-to-note conversion with pin/unpin and collapse.
+- **PWA Enhancements**: Expanded PWA support and workspace management across dashboard and chat surfaces.
+- **Checkout Refactor**: Unified checkout creation API with slimmed-down checkout and credits-checkout pages.
+
 ## 🚀 Version 2.7.0 Highlights
 
-- **Group Chat Feature**: Multi-user private group chat for Pro/Enterprise bots (up to 5 members per group), real-time message broadcasting, unread receipts, knowledge pinning to bot RAG, daily LLM conversation summaries, inline PWA auth, offline queueing, and plan-gate downgrade management. See [Group Chat Spec](docs/specs/group-chat.md) and [Implementation Log](docs/group-chat-implement-plan/group-chat-implementation-log.md).
+- **Group Chat Feature**: Multi-user private group chat for Pro/Enterprise bots (up to 5 members per group), real-time message broadcasting, unread receipts, knowledge pinning to bot RAG, daily LLM conversation summaries, inline PWA auth, offline queueing, and plan-gate downgrade management.
 
 ## 🚀 Version 2.6.0 Highlights
 
@@ -62,8 +74,9 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - **Server State**: [TanStack Query](https://tanstack.com/query)
 - **Client State**: [Zustand](https://zustand-demo.pmnd.rs/)
 - **AI/LLM**: [Google Gemini](https://ai.google.dev/)
-  - Chat: `gemini-2.5-flash-lite`
+  - Chat: `gemini-3.1-flash-lite` (configurable via `CHAT_MODEL`)
   - Embeddings: `gemini-embedding-001`
+  - STT & navigation intent: `gemini-3.1-flash-lite` (`STT_MODEL`, `NAVIGATION_INTENT_MODEL`)
   - PDF fallback extraction: configurable via `PDF_FALLBACK_MODEL`
 - **Caching**: Redis read-through cache with stampede protection and TTL-based invalidation
 - **Web Scraping**: Self-hosted async crawler
@@ -72,6 +85,7 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
   - Queue: BullMQ + Redis for discovery, page crawl, indexing, and invoice jobs
 - **Billing Cron**: Standalone BullMQ worker for subscription lifecycle jobs
 - **Invoice Worker**: BullMQ worker for automated EasyInvoice e-invoicing with retry and idempotency
+- **Report Export Worker**: BullMQ worker rendering report templates to PDF via Puppeteer with HMAC-signed download tokens
 - **Email**: Resend for transactional emails
 - **Fingerprinting**: [FingerprintJS](https://fingerprint.com/) for visitor identification
 - **PWA**: Service Worker, Web App Manifest, dynamic apple-touch-icon
@@ -113,28 +127,42 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - 🎤 **Voice Chat**: Real-time voice recording with MediaRecorder API, Whisper STT, and soundwave visualizer.
 - 🔔 **Webhook System**: Workspace-level webhooks with 10 event types and HMAC-SHA256 signing.
 - 📧 **Subscription Reminders**: Automated expiry email notifications sent to all workspace members.
+- 🧭 **Smart Homepage Navigation**: Intent-driven widget redirects to Key Action Pages with LLM intent matching and server-side security audit logging.
+- 📄 **Report Export**: Report templates, workspace reports dashboard, and signed PDF downloads via Puppeteer worker.
+- 🗣️ **Voice-to-Report**: Dashboard speech-to-text transcription and voice-note formatting for hands-free report authoring.
+- 💼 **Enterprise Plan**: Quote-based enterprise tier with dedicated upgrade page and 20-bot minimum.
+- 🏷️ **Workspace Branding**: Per-workspace branding customization with asset uploads.
+- 👥 **Group Chat**: Private multi-user group chat for Pro/Enterprise bots with realtime messaging, knowledge pinning, notes, insights, and PWA access.
 
 ## 📂 Project Structure
 
 - `app/`: Next.js App Router pages and API routes.
   - `(public)/`: Public pages (landing, about-us, posts).
   - `api/auth/`: Login with password, auth callback.
-  - `api/bots/`: Bot CRUD, knowledge, analytics, leads, config, personalities, skills.
+  - `api/bots/`: Bot CRUD, knowledge, analytics, leads, config, personalities, skills, and group chat management (members, messages, notes, insights).
+  - `api/dashboard/`: STT transcription and voice-note formatting for report authoring.
+  - `api/enterprise/`: Enterprise plan quote-price calculation.
   - `api/invoices/`: Invoice download, PDF, and payment lookup.
   - `api/invitations/accept/`: Workspace invitation acceptance endpoint.
   - `api/payment/`: PayOS create, return, webhook, cancel, PAYG create.
-  - `api/workspaces/`: Workspace CRUD, members, invitations, webhooks.
-  - `api/widget/`: Widget init, chat, and lead APIs.
+  - `api/reports/`: Signed report export downloads.
+  - `api/workspaces/`: Workspace CRUD, members, invitations, webhooks, branding, templates, knowledge, credits, subscription, and reports.
+  - `api/widget/`: Widget init, chat (with NAVIGATE navigation responses), and lead APIs.
   - `auth/accept-invite/`: Workspace invitation acceptance page.
   - `auth/callback/`: OAuth callback handler.
-  - `chat/[slug]/`: Standalone chat pages.
-  - `dashboard/`: Dashboard pages (bots, overview, checkout, credits, upgrade, history, settings, support).
+  - `chat/[slug]/`: Standalone chat pages, including PWA group chat (`chat/[slug]/group/`).
+  - `dashboard/`: Dashboard pages (bots, overview, checkout, credits, upgrade, history, reports, settings, support).
+  - `dashboard/bots/[botId]/group/`: Group chat management for managers.
+  - `dashboard/reports/`: Workspace report exports dashboard.
   - `dashboard/settings/members/`: Workspace member management with dynamic list and pending invitations.
+  - `dashboard/settings/branding/` and `dashboard/settings/templates/`: Workspace branding and report template management.
+  - `dashboard/upgrade/enterprise/`: Enterprise plan upgrade page.
   - `dashboard/upgrade/history/`: Workspace-scoped payment history.
+  - `dashboard/workspace-knowledge/`: Unified workspace-level knowledge management.
   - `public-bot/[botSlug]/`: Public bot PWA pages.
   - `shopify/`: Shopify embedded app dashboard.
 - `components/`: Feature-oriented UI components plus shared shadcn/ui primitives.
-  - `chat/`: StandaloneChatUI, LeadForm, PWA install components.
+  - `chat/`: StandaloneChatUI, LeadForm, PWA install components, and group chat UI (GroupChatView, GroupDrawer, notes modals).
   - `dashboard/overview/`: Dashboard overview with bots grid, bots section, bots table, and workspace-scoped data.
   - `dashboard/settings/`: Workspace member management, InviteMemberModal.
   - `dashboard/shared/`: WorkspaceSwitcher, DashboardSidebar, DashboardMobileHeader.
@@ -153,7 +181,7 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
   - `helpers/`: EasyInvoice XML builder, invoice token, number-to-words, payment, PWA, and URL helpers.
   - `scraper/`: BullMQ queues, workers, extractors, and job processors.
   - `security/`: Rate limiting, widget security, and login-attempt tracking.
-  - `services/`: Domain services for bots, pages, credits, payments, invoices, analytics, email, AI config, leads, auth, **workspaces**, **subscriptions**, **wallets**, **webhooks**, **subscription-cron**, and **payment-history**.
+  - `services/`: Domain services for bots, pages, credits, payments, invoices, analytics, email, AI config, leads, auth, **workspaces**, **subscriptions**, **wallets**, **webhooks**, **subscription-cron**, **payment-history**, **group-chat**, and **security-events**.
   - `services/server/`: Invoice queue, invoice worker, and bot cache service.
 - `scripts/`: Worker, cron, deployment, test, and maintenance scripts.
 - `plugins/`: Third-party platform extensions (Shopify app, WordPress plugin).
@@ -199,7 +227,12 @@ DATABASE_URL=your_postgresql_connection_string
 # Google Gemini
 GOOGLE_API_KEY=your_google_api_key
 EMBEDDING_MODEL=gemini-embedding-001
-CHAT_MODEL=gemini-2.5-flash-lite
+CHAT_MODEL=gemini-3.1-flash-lite
+STT_MODEL=gemini-3.1-flash-lite
+
+# Smart Homepage navigation (optional)
+NAVIGATION_USE_LLM_MATCH=true
+NAVIGATION_INTENT_MODEL=gemini-3.1-flash-lite
 
 # Redis queue
 REDIS_URL=redis://default:password@localhost:6379
@@ -228,6 +261,9 @@ EASYINVOICE_TAX_CODE=0109xxxxxxxx
 EASYINVOICE_PATTERN=1/001
 EASYINVOICE_SERIAL=C26TAA
 INVOICE_TOKEN_SECRET=your_invoice_token_secret_here
+
+# Report Export (must be distinct from INVOICE_TOKEN_SECRET)
+REPORT_TOKEN_SECRET=your_report_token_secret_here
 
 # Shopify (optional)
 NEXT_PUBLIC_SHOPIFY_CLIENT_ID=your_shopify_client_id
@@ -304,6 +340,15 @@ E-invoices are generated asynchronously via BullMQ:
 4. Signed PDF tokens are generated for secure public access.
 5. Failed jobs retry with exponential backoff; orphaned invoices are scanned on worker start.
 
+### Report Export Pipeline
+
+Report exports render asynchronously via BullMQ:
+
+1. Dashboard requests an export from a report template; the API validates workspace access and creates the export record.
+2. The report export worker picks up the job and signs an internal render token.
+3. Puppeteer renders each language variant of the report to PDF and uploads results to Supabase Storage.
+4. Download links are HMAC-signed with `REPORT_TOKEN_SECRET` (7-day validity) and verified by the download route.
+
 ### Multi-layer Security
 
 Vielora implements layered protection for dashboard, auth, and widget traffic.
@@ -314,6 +359,7 @@ Vielora implements layered protection for dashboard, auth, and widget traffic.
 4. **Bot Rate Limits**: Enforces bot-level daily and per-IP message caps.
 5. **Visitor ID Tracking**: Uses FingerprintJS to reduce anonymous abuse.
 6. **Login Cooldowns**: Tracks failed password attempts and returns cooldown metadata.
+7. **Navigation Security Audit**: Widget NAVIGATE requests are validated in 3 layers server-side; blocked or cancelled attempts are recorded in the `security_events` table.
 
 ## 🐳 Deployment
 
@@ -337,12 +383,12 @@ docker compose --profile hybrid up -d --build
 
 ### Services
 
-| Service  | Description                                 |
-| -------- | ------------------------------------------- |
-| `web`    | Next.js application (monolith only)         |
-| `worker` | BullMQ crawler, indexer, and invoice worker |
-| `cron`   | Subscription lifecycle scheduled jobs       |
-| `redis`  | Message broker and cache store              |
+| Service  | Description                                                |
+| -------- | ---------------------------------------------------------- |
+| `web`    | Next.js application (monolith only)                        |
+| `worker` | BullMQ crawler, indexer, invoice, and report export worker |
+| `cron`   | Subscription lifecycle scheduled jobs                      |
+| `redis`  | Message broker and cache store                             |
 
 ### Environment
 

@@ -48,12 +48,10 @@ export class WorkspaceService {
   /**
    * List all workspaces the current user belongs to (up to max 5).
    */
-
   static async getUserWorkspaces(userId: string) {
     const supabase = createAdminClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: memberships, error: memError } = await (supabase as any)
+    const { data: memberships, error: memError } = await supabase
       .from("workspace_members")
       .select(
         `
@@ -84,42 +82,56 @@ export class WorkspaceService {
 
     if (memError) throw memError;
 
-    return (memberships || []).map(
-      (
-        m: Record<string, unknown> & {
-          role_id?: string;
-          workspaces?: Record<string, unknown> & {
-            subscriptions?: WorkspaceSubscription | WorkspaceSubscription[];
-          };
-        }
-      ) => {
-        const ws = m.workspaces || {};
-        const subsList: WorkspaceSubscription[] = Array.isArray(ws.subscriptions)
-          ? ws.subscriptions
-          : ws.subscriptions
-            ? [ws.subscriptions]
-            : [];
-        const activeSub = subsList.find((s) => s.status === "active") || subsList[0];
-        const planObj = Array.isArray(activeSub?.plans) ? activeSub?.plans[0] : activeSub?.plans;
+    const typedMemberships = (memberships || []) as unknown as Array<{
+      workspace_id: string;
+      role_id: string;
+      status: string;
+      workspaces?: {
+        id: string;
+        name: string;
+        slug: string;
+        owner_id: string;
+        status: string;
+        created_at: string;
+        subscriptions?: WorkspaceSubscription | WorkspaceSubscription[];
+      } | null;
+    }>;
 
-        return {
-          id: ws.id,
-          name: ws.name,
-          slug: ws.slug,
-          owner_id: ws.owner_id,
-          status: ws.status,
-          created_at: ws.created_at,
-          role: m.role_id,
-          plans: planObj
-            ? {
-                id: planObj.id,
-                name: planObj.name,
-                code: planObj.code,
-              }
-            : null,
-        };
-      }
-    );
+    return typedMemberships.map((m) => {
+      const ws = m.workspaces || {
+        id: m.workspace_id,
+        name: "",
+        slug: "",
+        owner_id: "",
+        status: "",
+        created_at: "",
+        subscriptions: [],
+      };
+      const subsList: WorkspaceSubscription[] = Array.isArray(ws.subscriptions)
+        ? ws.subscriptions
+        : ws.subscriptions
+          ? [ws.subscriptions]
+          : [];
+      const activeSub = subsList.find((s) => s.status === "active") || subsList[0];
+      const planObj = Array.isArray(activeSub?.plans) ? activeSub?.plans[0] : activeSub?.plans;
+
+      return {
+        id: ws.id,
+        name: ws.name,
+        slug: ws.slug,
+        owner_id: ws.owner_id,
+        status: ws.status,
+        created_at: ws.created_at,
+        role: m.role_id,
+        plans: planObj
+          ? {
+              id: planObj.id,
+              name: planObj.name,
+              code: planObj.code,
+            }
+          : null,
+      };
+    });
   }
 
   /**
@@ -128,8 +140,7 @@ export class WorkspaceService {
   static async getWorkspaceById(workspaceId: string, userId: string) {
     const supabase = createAdminClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: member, error: memError } = await (supabase as any)
+    const { data: member, error: memError } = await supabase
       .from("workspace_members")
       .select("role_id, status")
       .eq("workspace_id", workspaceId)
@@ -141,8 +152,7 @@ export class WorkspaceService {
       throw new Error("Unauthorized workspace access");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: workspace, error: wsError } = await (supabase as any)
+    const { data: workspace, error: wsError } = await supabase
       .from("workspaces")
       .select(
         `
@@ -160,12 +170,15 @@ export class WorkspaceService {
       .eq("id", workspaceId)
       .single();
 
-    if (wsError) throw wsError;
+    if (wsError || !workspace) throw wsError || new Error("Workspace not found");
 
-    const subsList: WorkspaceSubscription[] = Array.isArray(workspace.subscriptions)
-      ? workspace.subscriptions
-      : workspace.subscriptions
-        ? [workspace.subscriptions]
+    const rawWs = workspace as typeof workspace & {
+      subscriptions?: WorkspaceSubscription | WorkspaceSubscription[];
+    };
+    const subsList: WorkspaceSubscription[] = Array.isArray(rawWs.subscriptions)
+      ? rawWs.subscriptions
+      : rawWs.subscriptions
+        ? [rawWs.subscriptions]
         : [];
     const activeSub = subsList.find((s) => s.status === "active") || subsList[0];
     const planObj = Array.isArray(activeSub?.plans) ? activeSub?.plans[0] : activeSub?.plans;
@@ -194,8 +207,7 @@ export class WorkspaceService {
     if (planErr || !freePlan) throw new Error("Default plan not found");
 
     // 2. Insert workspace
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: workspace, error: wsErr } = await (supabase as any)
+    const { data: workspace, error: wsErr } = await supabase
       .from("workspaces")
       .insert({
         name: input.name,
@@ -209,8 +221,7 @@ export class WorkspaceService {
     if (wsErr) throw wsErr;
 
     // 3. Add user as Owner in workspace_members
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: memErr } = await (supabase as any).from("workspace_members").insert({
+    const { error: memErr } = await supabase.from("workspace_members").insert({
       workspace_id: workspace.id,
       user_id: userId,
       role_id: EWorkspaceRole.Owner,
@@ -221,8 +232,7 @@ export class WorkspaceService {
     if (memErr) throw memErr;
 
     // 4. Create workspace wallet
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("wallets").insert({
+    await supabase.from("wallets").insert({
       workspace_id: workspace.id,
       subscription_credits: freePlan.monthly_credits ?? 1000,
       payg_credits: 0,
@@ -234,8 +244,7 @@ export class WorkspaceService {
     const oneMonthLater = new Date(now);
     oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("subscriptions").insert({
+    await supabase.from("subscriptions").insert({
       workspace_id: workspace.id,
       user_id: userId,
       plan_id: freePlan.id,
@@ -257,8 +266,7 @@ export class WorkspaceService {
     const supabase = createAdminClient();
 
     // 1. Check active workspace membership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: member } = await (supabase as any)
+    const { data: member } = await supabase
       .from("workspace_members")
       .select("workspace_id")
       .eq("user_id", userId)
@@ -271,8 +279,7 @@ export class WorkspaceService {
     }
 
     // 2. Check workspace ownership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: ws } = await (supabase as any)
+    const { data: ws } = await supabase
       .from("workspaces")
       .select("id")
       .eq("owner_id", userId)
@@ -291,8 +298,7 @@ export class WorkspaceService {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     let slug = `${cleanBase}-${randomSuffix}`;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingSlug } = await (supabase as any)
+    const { data: existingSlug } = await supabase
       .from("workspaces")
       .select("id")
       .eq("slug", slug)
@@ -315,8 +321,7 @@ export class WorkspaceService {
     const supabase = createAdminClient();
 
     // Check membership and permissions (owner/admin)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: member } = await (supabase as any)
+    const { data: member } = await supabase
       .from("workspace_members")
       .select("role_id")
       .eq("workspace_id", workspaceId)
@@ -324,12 +329,14 @@ export class WorkspaceService {
       .eq("status", EWorkspaceMemberStatus.Active)
       .single();
 
-    if (!member || ![EWorkspaceRole.Owner, EWorkspaceRole.Admin].includes(member.role_id)) {
+    if (
+      !member ||
+      ![EWorkspaceRole.Owner, EWorkspaceRole.Admin].includes(member.role_id as EWorkspaceRole)
+    ) {
       throw new Error("Forbidden: Insufficient permissions to update workspace");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: currentWs } = await (supabase as any)
+    const { data: currentWs } = await supabase
       .from("workspaces")
       .select("slug, updated_at")
       .eq("id", workspaceId)
@@ -353,8 +360,7 @@ export class WorkspaceService {
     if (input.slug) updatePayload.slug = input.slug.toLowerCase();
     if (input.settings) updatePayload.settings = input.settings;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedWs, error } = await (supabase as any)
+    const { data: updatedWs, error } = await supabase
       .from("workspaces")
       .update(updatePayload)
       .eq("id", workspaceId)
@@ -372,8 +378,7 @@ export class WorkspaceService {
     const supabase = createAdminClient();
 
     // Only owner can delete workspace
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: ws } = await (supabase as any)
+    const { data: ws } = await supabase
       .from("workspaces")
       .select("owner_id")
       .eq("id", workspaceId)
@@ -383,8 +388,7 @@ export class WorkspaceService {
       throw new Error("Forbidden: Only the workspace owner can delete it");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from("workspaces")
       .update({ status: EWorkspaceStatus.Deleted, updated_at: new Date().toISOString() })
       .eq("id", workspaceId);
@@ -394,7 +398,7 @@ export class WorkspaceService {
   }
 
   /**
-   * Create workspace invitation (Only workspace Owner can invite).
+   * Create workspace invitation (Only workspace Owner can invite into active workspaces).
    */
   static async createInvitation(
     workspaceId: string,
@@ -404,9 +408,19 @@ export class WorkspaceService {
   ) {
     const supabase = createAdminClient();
 
-    // 1. Enforce Owner-only permission to invite members
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: inviter } = await (supabase as any)
+    // 1. Verify workspace is active
+    const { data: ws, error: wsError } = await supabase
+      .from("workspaces")
+      .select("status")
+      .eq("id", workspaceId)
+      .single();
+
+    if (wsError || !ws || ws.status !== EWorkspaceStatus.Active) {
+      throw new Error("Không thể tạo lời mời cho workspace không tồn tại hoặc không hoạt động");
+    }
+
+    // 2. Enforce Owner-only permission to invite members
+    const { data: inviter } = await supabase
       .from("workspace_members")
       .select("role_id")
       .eq("workspace_id", workspaceId)
@@ -418,8 +432,7 @@ export class WorkspaceService {
       throw new Error("Chỉ có Chủ workspace (Owner) mới có quyền mời thành viên mới");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existing } = await (supabase as any)
+    const { data: existing } = await supabase
       .from("workspace_invitations")
       .select("id, status")
       .eq("workspace_id", workspaceId)
@@ -431,8 +444,7 @@ export class WorkspaceService {
       throw new Error("Invitation already sent to this email");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from("workspace_invitations")
       .insert({
         workspace_id: workspaceId,
@@ -455,8 +467,7 @@ export class WorkspaceService {
     const supabase = createAdminClient();
 
     // 1. Fetch invitation by token
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: invitation, error: invError } = await (supabase as any)
+    const { data: invitation, error: invError } = await supabase
       .from("workspace_invitations")
       .select("*")
       .eq("token", token)
@@ -473,8 +484,7 @@ export class WorkspaceService {
 
     // 3. If invitation is already accepted, seamlessly return the workspace
     if (invitation.status === EWorkspaceInviteStatus.Accepted) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: workspace } = await (supabase as any)
+      const { data: workspace } = await supabase
         .from("workspaces")
         .select("slug")
         .eq("id", invitation.workspace_id)
@@ -489,8 +499,7 @@ export class WorkspaceService {
     }
 
     // 5. Check if user is already a member of this workspace
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingMember } = await (supabase as any)
+    const { data: existingMember } = await supabase
       .from("workspace_members")
       .select("id")
       .eq("workspace_id", invitation.workspace_id)
@@ -499,8 +508,7 @@ export class WorkspaceService {
 
     if (!existingMember) {
       // Add member record
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: memError } = await (supabase as any).from("workspace_members").insert({
+      const { error: memError } = await supabase.from("workspace_members").insert({
         workspace_id: invitation.workspace_id,
         user_id: userId,
         role_id: invitation.role_id,
@@ -516,8 +524,7 @@ export class WorkspaceService {
 
     // 6. Update invitation status to accepted
     if (invitation.status !== EWorkspaceInviteStatus.Accepted) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
+      await supabase
         .from("workspace_invitations")
         .update({
           status: EWorkspaceInviteStatus.Accepted,
@@ -528,8 +535,7 @@ export class WorkspaceService {
     }
 
     // 7. Get workspace slug for redirection
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: workspace, error: wsError } = await (supabase as any)
+    const { data: workspace, error: wsError } = await supabase
       .from("workspaces")
       .select("slug")
       .eq("id", invitation.workspace_id)
@@ -541,13 +547,12 @@ export class WorkspaceService {
   }
 
   /**
-   * Get workspace members with user details.
+   * Get workspace members with user details (optimized batch lookup).
    */
   static async getWorkspaceMembers(workspaceId: string) {
     const supabase = createAdminClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: members, error } = await (supabase as any)
+    const { data: members, error } = await supabase
       .from("workspace_members")
       .select("user_id, role_id, status, accepted_at, invited_at")
       .eq("workspace_id", workspaceId);
@@ -555,24 +560,36 @@ export class WorkspaceService {
     if (error) throw error;
     if (!members || members.length === 0) return [];
 
-    // Fetch user info from Auth Admin API for each member
-    const memberDetails = await Promise.all(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      members.map(async (m: any) => {
-        const { data: userData } = await supabase.auth.admin.getUserById(m.user_id);
-        const u = userData?.user;
-        return {
-          userId: m.user_id,
-          email: u?.email || null,
-          name: u?.user_metadata?.full_name || u?.user_metadata?.name || null,
-          role: m.role_id,
-          status: m.status,
-          joinedAt: m.accepted_at,
-        };
+    // Parallel fetch user details with cache/map lookup
+    const userIds = members.map((m) => m.user_id);
+    const userMap = new Map<string, { email: string | null; name: string | null }>();
+
+    await Promise.all(
+      userIds.map(async (uid) => {
+        try {
+          const { data: userData } = await supabase.auth.admin.getUserById(uid);
+          const u = userData?.user;
+          userMap.set(uid, {
+            email: u?.email || null,
+            name: u?.user_metadata?.full_name || u?.user_metadata?.name || null,
+          });
+        } catch {
+          userMap.set(uid, { email: null, name: null });
+        }
       })
     );
 
-    return memberDetails;
+    return members.map((m) => {
+      const u = userMap.get(m.user_id);
+      return {
+        userId: m.user_id,
+        email: u?.email || null,
+        name: u?.name || null,
+        role: m.role_id,
+        status: m.status,
+        joinedAt: m.accepted_at,
+      };
+    });
   }
 
   /**
@@ -581,8 +598,7 @@ export class WorkspaceService {
   static async getPendingInvitations(workspaceId: string) {
     const supabase = createAdminClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: invitations, error } = await (supabase as any)
+    const { data: invitations, error } = await supabase
       .from("workspace_invitations")
       .select("*")
       .eq("workspace_id", workspaceId)
@@ -595,17 +611,19 @@ export class WorkspaceService {
     // Check if invited emails exist in Auth DB to retrieve stored name
     try {
       const { data: authData } = await supabase.auth.admin.listUsers();
-      const authUsers = authData?.users || [];
+      const authUsers = (authData?.users || []) as Array<{
+        email?: string | null;
+        user_metadata?: { full_name?: string | null; name?: string | null } | null;
+      }>;
       const emailToUserMap = new Map(authUsers.map((u) => [u.email?.toLowerCase(), u]));
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return invitations.map((inv: any) => {
+      return invitations.map((inv) => {
         const matchedUser = emailToUserMap.get(inv.email?.toLowerCase());
         const name =
           matchedUser?.user_metadata?.full_name || matchedUser?.user_metadata?.name || null;
         return {
           ...inv,
-          name, // null if user is not in database
+          name,
         };
       });
     } catch {
@@ -619,8 +637,7 @@ export class WorkspaceService {
   static async removeMember(workspaceId: string, memberUserId: string, operatorUserId: string) {
     const supabase = createAdminClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: operator } = await (supabase as any)
+    const { data: operator } = await supabase
       .from("workspace_members")
       .select("role_id")
       .eq("workspace_id", workspaceId)
@@ -628,13 +645,15 @@ export class WorkspaceService {
       .eq("status", EWorkspaceMemberStatus.Active)
       .single();
 
-    if (!operator || ![EWorkspaceRole.Owner, EWorkspaceRole.Admin].includes(operator.role_id)) {
+    if (
+      !operator ||
+      ![EWorkspaceRole.Owner, EWorkspaceRole.Admin].includes(operator.role_id as EWorkspaceRole)
+    ) {
       throw new Error("Forbidden: Only workspace owner or admin can remove members");
     }
 
     // Prevent removing owner
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: targetMember } = await (supabase as any)
+    const { data: targetMember } = await supabase
       .from("workspace_members")
       .select("role_id")
       .eq("workspace_id", workspaceId)
@@ -645,8 +664,7 @@ export class WorkspaceService {
       throw new Error("Cannot remove workspace owner");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from("workspace_members")
       .delete()
       .eq("workspace_id", workspaceId)
@@ -662,8 +680,7 @@ export class WorkspaceService {
   static async revokeInvitation(workspaceId: string, invitationId: string, operatorUserId: string) {
     const supabase = createAdminClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: operator } = await (supabase as any)
+    const { data: operator } = await supabase
       .from("workspace_members")
       .select("role_id")
       .eq("workspace_id", workspaceId)
@@ -671,12 +688,14 @@ export class WorkspaceService {
       .eq("status", EWorkspaceMemberStatus.Active)
       .single();
 
-    if (!operator || ![EWorkspaceRole.Owner, EWorkspaceRole.Admin].includes(operator.role_id)) {
+    if (
+      !operator ||
+      ![EWorkspaceRole.Owner, EWorkspaceRole.Admin].includes(operator.role_id as EWorkspaceRole)
+    ) {
       throw new Error("Forbidden: Only workspace owner or admin can revoke invitations");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from("workspace_invitations")
       .update({ status: EWorkspaceInviteStatus.Revoked })
       .eq("id", invitationId)
@@ -707,8 +726,7 @@ export class WorkspaceService {
       `${cleanBase}-${Math.floor(100 + Math.random() * 900)}`,
     ];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existing } = await (supabase as any)
+    const { data: existing } = await supabase
       .from("workspaces")
       .select("slug")
       .in("slug", candidates);
@@ -727,8 +745,7 @@ export class WorkspaceService {
     const supabase = createAdminClient();
 
     // 1. Verify user is an active workspace member
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: member, error: memError } = await (supabase as any)
+    const { data: member, error: memError } = await supabase
       .from("workspace_members")
       .select("role_id, status")
       .eq("workspace_id", workspaceId)

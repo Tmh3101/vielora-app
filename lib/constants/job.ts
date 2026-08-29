@@ -36,6 +36,7 @@ export const JobName = {
   INDEX: "index",
   WORKSPACE_KNOWLEDGE: "workspace_knowledge_index",
   ISSUE_INVOICE: "issue-invoice",
+  REPORT_EXPORT: "export-report",
 } as const;
 
 export const DISCOVER_QUEUE_NAME = "discover-queue";
@@ -55,3 +56,6 @@ export const CRON_WORKER_CONCURRENCY = 1;
 
 export const INVOICE_QUEUE_NAME = "invoice-queue";
 export const INVOICE_WORKER_CONCURRENCY = 1;
+
+export const REPORT_EXPORT_QUEUE_NAME = "report-export";
+export const REPORT_EXPORT_WORKER_CONCURRENCY = 2;

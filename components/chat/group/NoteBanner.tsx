@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { Pin, PinOff, ChevronDown, ChevronUp, Edit3, Trash2, X, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { GroupNoteRow } from "@/types/group-chat";
@@ -17,6 +17,15 @@ export interface NoteBannerProps {
   onToggleCollapse?: (noteId: string, collapsed: boolean) => void;
 }
 
+function subscribeNoteSeen(callback: () => void) {
+  window.addEventListener("vielora_note_seen_update", callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    window.removeEventListener("vielora_note_seen_update", callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
 export function NoteBanner({
   note,
   canManageNote = false,
@@ -25,19 +34,48 @@ export function NoteBanner({
   onUnpin,
   onDelete,
   // onOpenNotesDrawer,
-  onToggleCollapse,
+  onToggleCollapse: _onToggleCollapse,
 }: NoteBannerProps) {
-  const [localCollapsed, setLocalCollapsed] = useState<boolean | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const isExpanded = localCollapsed !== null ? !localCollapsed : !note?.collapsed;
+  const noteId = note?.id;
+  const currentContentHash = note
+    ? `${note.id}:${note.title}:${note.content_text?.length || 0}`
+    : "";
+
+  // Subscribe to external seen storage safely without setState cascading renders
+  const isUnread = useSyncExternalStore(
+    subscribeNoteSeen,
+    () => {
+      if (typeof window === "undefined" || !noteId) return false;
+      try {
+        const seenVal = localStorage.getItem(`vielora_note_seen_${noteId}`);
+        return !seenVal || seenVal !== currentContentHash;
+      } catch {
+        return false;
+      }
+    },
+    () => false
+  );
+
+  const markAsSeen = () => {
+    if (noteId) {
+      try {
+        localStorage.setItem(`vielora_note_seen_${noteId}`, currentContentHash);
+        window.dispatchEvent(new Event("vielora_note_seen_update"));
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   const handleToggle = () => {
     if (!note) return;
     const nextState = !isExpanded;
-    setLocalCollapsed(!nextState);
-    if (onToggleCollapse) {
-      onToggleCollapse(note.id, !nextState);
+    setIsExpanded(nextState);
+    if (nextState) {
+      markAsSeen();
     }
   };
 
@@ -45,15 +83,12 @@ export function NoteBanner({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isExpanded) {
-        setLocalCollapsed(true);
-        if (note && onToggleCollapse) {
-          onToggleCollapse(note.id, true);
-        }
+        setIsExpanded(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isExpanded, note, onToggleCollapse]);
+  }, [isExpanded]);
 
   if (!note || !note.is_active) {
     return null;
@@ -93,13 +128,19 @@ export function NoteBanner({
             }}
           >
             <div
-              className="h-6.5 w-6.5 shadow-3xs flex shrink-0 items-center justify-center rounded-lg transition-transform duration-150 group-hover/toggle:scale-105"
+              className="h-6.5 w-6.5 shadow-3xs relative flex shrink-0 items-center justify-center rounded-lg transition-transform duration-150 group-hover/toggle:scale-105"
               style={{
                 backgroundColor: primaryColor ? `${primaryColor}1a` : undefined,
                 color: primaryColor || undefined,
               }}
             >
               <Pin className="h-3.5 w-3.5" />
+              {isUnread && (
+                <span
+                  className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2 border-background"
+                  style={{ backgroundColor: primaryColor }}
+                />
+              )}
             </div>
 
             <div className="min-w-0 flex-1">
@@ -107,6 +148,29 @@ export function NoteBanner({
                 <h4 className="truncate text-xs font-semibold text-foreground transition-colors group-hover/toggle:text-primary">
                   {note.title}
                 </h4>
+                {isUnread && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span
+                        className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                        style={{ backgroundColor: primaryColor }}
+                      />
+                      <span
+                        className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: primaryColor }}
+                      />
+                    </span>
+                    <span
+                      className="py-0.2 rounded-full px-1.5 text-[10px] font-bold"
+                      style={{
+                        backgroundColor: primaryColor ? `${primaryColor}20` : undefined,
+                        color: primaryColor,
+                      }}
+                    >
+                      Mới
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
