@@ -135,13 +135,29 @@ export default async function ReportRenderPage({
     <html lang={targetLanguages[0]} dir={targetLanguages[0] === "ar" ? "rtl" : "ltr"}>
       <head>
         <meta charSet="utf-8" />
-        {branding.fontFamily && <link rel="preconnect" href="https://fonts.googleapis.com" />}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <style
           dangerouslySetInnerHTML={{
             __html: `
+              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+              ${
+                branding.fontFamily
+                  ? `@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(branding.fontFamily)}:wght@400;600;700&display=swap');`
+                  : ""
+              }
               @page {
                 size: A4;
                 margin: 8mm 10mm;
+              }
+              body, .report-language-page {
+                font-family: 'Inter', 'Noto Sans', 'DejaVu Sans', 'Liberation Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+              }
+              [dir="rtl"], [lang="ar"], .arabic-text {
+                font-family: 'Noto Sans Arabic', 'Noto Naskh Arabic', 'Scheherazade New', 'KacstTitle', 'DejaVu Sans', sans-serif !important;
+                direction: rtl;
               }
               nextjs-portal,
               [data-nextjs-dialog-overlay],

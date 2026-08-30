@@ -7,11 +7,11 @@
 import Header from "@/components/landing/Header";
 import HeroSection from "@/components/landing/HeroSection";
 import LogoShowcase from "@/components/landing/LogoShowcase";
-import ScrollDrivenFeatures from "@/components/landing/ScrollDrivenFeatures";
+import FeaturesSection from "@/components/landing/FeaturesSection";
 import DataSourcesSection from "@/components/landing/DataSourcesSection";
 import PricingSection from "@/components/landing/PricingSection";
 import TestimonialsSection from "@/components/landing/TestimonialsSection";
-import DemoSection from "@/components/landing/DemoSection";
+import AccessMethodsSection from "@/components/landing/AccessMethodsSection";
 import CTASection from "@/components/landing/CTASection";
 import Footer from "@/components/landing/Footer";
 
@@ -52,9 +52,9 @@ export default function Home() {
       <main>
         <HeroSection />
         <LogoShowcase />
-        <ScrollDrivenFeatures />
+        <FeaturesSection />
         <DataSourcesSection />
-        <DemoSection />
+        <AccessMethodsSection />
         <PricingSection />
         <TestimonialsSection />
         <CTASection />

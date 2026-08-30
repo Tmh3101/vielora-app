@@ -154,8 +154,14 @@ function ResetPasswordContent() {
         throw error;
       }
 
+      // Sign out the recovery session so user explicitly logs in with their new password
+      await supabase.auth.signOut();
+
       setSuccess(true);
-      toast({ title: "Thành công", description: "Mật khẩu đã được đặt lại." });
+      toast({
+        title: "Thành công",
+        description: "Mật khẩu đã được đặt lại. Vui lòng đăng nhập bằng mật khẩu mới.",
+      });
 
       // Auto redirect after 3 seconds
       setTimeout(() => router.push("/auth"), 3000);

@@ -129,24 +129,20 @@ export function getPwaScopedBotGroupPath(botSlug: string): string {
  * open Safari/Chrome and never return to the installed PWA.
  */
 export function getBotAuthUrl(botSlug?: string, hostname?: string): string {
+  const mainAppUrl = getMainAppUrl();
+
   if (isBotSubdomainHost(hostname)) {
-    const nextPath = "/group?pwa_return=1";
-    const authPath = `/auth?next=${encodeURIComponent(nextPath)}&pwa=1`;
-    return authPath;
+    const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+    const nextUrl = currentOrigin ? `${currentOrigin}/group` : "/group";
+    return `${mainAppUrl}/auth?next=${encodeURIComponent(nextUrl)}`;
   }
 
   if (!botSlug) {
-    return `${getMainAppUrl()}/auth`;
+    return `${mainAppUrl}/auth`;
   }
 
-  const nextPath = `${getPwaScopedBotGroupPath(botSlug)}?pwa_return=1`;
-  const authPath = `${getPwaScopedBotChatPath(botSlug)}/auth?next=${encodeURIComponent(nextPath)}&pwa=1`;
-
-  if (typeof window !== "undefined") {
-    return authPath;
-  }
-
-  return `${getMainAppUrl()}${authPath}`;
+  const nextPath = getPwaScopedBotGroupPath(botSlug);
+  return `${mainAppUrl}/auth?next=${encodeURIComponent(nextPath)}`;
 }
 
 export function getStandaloneChatUrlParts(appUrl: string, slug: string): StandaloneChatUrlParts {

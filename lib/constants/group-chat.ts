@@ -26,10 +26,4 @@ export const GroupAuthState = {
 export const GROUP_AUTH_MEMBER = "member";
 export const GROUP_AUTH_NOT_MEMBER = "not_member";
 
-export const SupabaseAuthEvent = {
-  SIGNED_IN: "SIGNED_IN",
-  SIGNED_OUT: "SIGNED_OUT",
-} as const;
-
-export const AUTH_EVENT_SIGNED_IN = "SIGNED_IN";
-export const AUTH_EVENT_SIGNED_OUT = "SIGNED_OUT";
+export { SupabaseAuthEvent, AUTH_EVENT_SIGNED_IN, AUTH_EVENT_SIGNED_OUT } from "./auth";

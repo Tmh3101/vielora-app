@@ -601,15 +601,3 @@
     text-shadow: 0 0 40px hsla(217, 91%, 60%, 0.1);
   }
 }
-
-html.lenis {
-  scroll-behavior: auto !important;
-}
-
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
-}
-
-.lenis.lenis-smooth [data-lenis-prevent] {
-  overscroll-behavior: contain;
-}

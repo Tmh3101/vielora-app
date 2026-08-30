@@ -2,11 +2,21 @@
 # Sử dụng bản slim để giảm dung lượng, nhưng vẫn đủ thư viện nền tảng (Debian)
 FROM node:20-bullseye-slim AS base
 
-# Cài đặt Chromium và các thư viện cần thiết cho Puppeteer (Bắt buộc cho dynamic.ts)
+# Cài đặt Chromium, Fontconfig và toàn bộ các gói font đa ngôn ngữ (Tiếng Việt, Ả Rập, CJK, Emojis)
 RUN apt-get update && apt-get install -y \
     chromium \
     ca-certificates \
+    fontconfig \
     fonts-liberation \
+    fonts-noto-core \
+    fonts-noto-ui-core \
+    fonts-noto-extra \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji \
+    fonts-sil-scheherazade \
+    fonts-kacst \
+    fonts-dejavu-core \
+    fonts-dejavu-extra \
     libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
@@ -45,6 +55,7 @@ RUN apt-get update && apt-get install -y \
     libgles2 \
     libxshmfence1 \
     xvfb \
+    && fc-cache -f -v \
     && rm -rf /var/lib/apt/lists/*
 
 # Báo cho Puppeteer biết hãy dùng Chromium của hệ điều hành, đừng tải mới!

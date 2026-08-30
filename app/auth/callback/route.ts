@@ -3,6 +3,38 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { sendWelcomeEmail } from "@/lib/services/email.service";
 import { storePendingAuthSession } from "@/lib/services/auth-bridge.service";
+import { getSharedCookieOptions } from "@/lib/supabase/cookie-options";
+import { getRootDomain } from "@/config";
+import { OAUTH_ERROR_FAILED } from "@/lib/constants/auth";
+
+function getSafeCallbackRedirect(rawNext: string | null, origin: string): URL {
+  const defaultUrl = new URL("/dashboard", origin);
+  if (!rawNext) return defaultUrl;
+
+  if (rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.includes("\\")) {
+    return new URL(rawNext, origin);
+  }
+
+  try {
+    const parsed = new URL(rawNext);
+    const rootDomain = getRootDomain().toLowerCase().split(":")[0];
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === rootDomain ||
+      host.endsWith(`.${rootDomain}`) ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".localhost") ||
+      host.endsWith(".local")
+    ) {
+      return parsed;
+    }
+  } catch {
+    // Ignore invalid url format
+  }
+
+  return defaultUrl;
+}
 
 /**
  * OAuth PKCE callback handler.
@@ -15,28 +47,36 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const isPopup = searchParams.get("popup") === "1";
   const iosSid = searchParams.get("ios_sid");
-  const nextParam = searchParams.get("next") ?? "/dashboard";
-  const next =
-    nextParam.startsWith("/") && !nextParam.startsWith("//") && !nextParam.includes("\\")
-      ? nextParam
-      : "/dashboard";
+  const nextParam = searchParams.get("next");
+  const targetRedirectUrl = getSafeCallbackRedirect(nextParam, origin);
 
   if (code) {
     const cookieStore = cookies();
+    const sharedCookieOpts = getSharedCookieOptions();
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
+        cookieOptions: sharedCookieOpts,
         cookies: {
           get(name: string) {
             return cookieStore.get(name)?.value;
           },
           set(name: string, value: string, options: CookieOptions) {
-            cookieStore.set({ name, value, ...options });
+            cookieStore.set({
+              name,
+              value,
+              ...options,
+              domain: sharedCookieOpts.domain ?? options.domain,
+            });
           },
           remove(name: string, options: CookieOptions) {
-            cookieStore.delete({ name, ...options });
+            cookieStore.delete({
+              name,
+              ...options,
+              domain: sharedCookieOpts.domain ?? options.domain,
+            });
           },
         },
       }
@@ -103,19 +143,21 @@ export async function GET(request: Request) {
         return NextResponse.redirect(new URL("/auth/popup-complete", origin));
       }
 
-      return NextResponse.redirect(new URL(next, origin));
+      return NextResponse.redirect(targetRedirectUrl);
     } else {
       console.error("[AuthCallback] Exchange Error:", error.message);
     }
   }
 
   if (iosSid) {
-    return NextResponse.redirect(new URL("/auth/ios-complete?error=oauth_failed", origin));
+    return NextResponse.redirect(new URL(`/auth/ios-complete?error=${OAUTH_ERROR_FAILED}`, origin));
   }
 
   if (isPopup) {
-    return NextResponse.redirect(new URL("/auth/popup-complete?error=oauth_failed", origin));
+    return NextResponse.redirect(
+      new URL(`/auth/popup-complete?error=${OAUTH_ERROR_FAILED}`, origin)
+    );
   }
 
-  return NextResponse.redirect(new URL("/auth?error=oauth_failed", origin));
+  return NextResponse.redirect(new URL(`/auth?error=${OAUTH_ERROR_FAILED}`, origin));
 }

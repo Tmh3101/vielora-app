@@ -85,6 +85,8 @@ export const reportExportWorker = new Worker<ReportExportJobData>(
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
           "--disable-gpu",
+          "--font-render-hinting=medium",
+          "--enable-font-antialiasing",
         ],
       });
 
@@ -107,6 +109,13 @@ export const reportExportWorker = new Worker<ReportExportJobData>(
         await page.waitForFunction(() => document.getElementById("report-ready") !== null, {
           timeout: 35000,
         });
+
+        // Ensure all fonts (including Arabic & Vietnamese) are fully loaded before capturing PDF
+        try {
+          await page.evaluateHandle("document.fonts.ready");
+        } catch {
+          // Ignore font loading errors
+        }
 
         const pdfBuffer = await page.pdf({
           format: "A4",

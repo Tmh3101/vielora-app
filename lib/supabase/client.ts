@@ -1,5 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "./types";
+import { getSharedCookieOptions } from "./cookie-options";
 
 export function createBrowserSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,5 +12,7 @@ export function createBrowserSupabaseClient() {
     );
   }
 
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
+  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookieOptions: getSharedCookieOptions(),
+  });
 }

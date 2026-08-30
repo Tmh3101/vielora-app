@@ -3,8 +3,7 @@
 import { useEffect, useRef } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { isIOS, isStandaloneMode } from "@/lib/helpers/pwa-helpers";
-
-const PENDING_IOS_AUTH_KEY = "pending_ios_auth";
+import { PENDING_IOS_AUTH_KEY } from "@/lib/constants/auth";
 
 export function useIOSAuthSync(onSuccess?: () => void) {
   const isClaimingRef = useRef(false);

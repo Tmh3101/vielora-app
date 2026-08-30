@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import { OAUTH_COMPLETE_EVENT } from "@/lib/constants/auth";
 
 export default function PopupCompletePage() {
   useEffect(() => {
     try {
       if (window.opener) {
-        window.opener.postMessage({ type: "OAUTH_COMPLETE" }, window.location.origin);
+        window.opener.postMessage({ type: OAUTH_COMPLETE_EVENT }, window.location.origin);
       }
     } catch (e) {
       console.error("[OAuthPopup] Failed to postMessage to opener:", e);

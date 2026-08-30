@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createServerClient as createServerClientSSR } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
+import { getSharedCookieOptions } from "./cookie-options";
 
 function getEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -23,7 +24,10 @@ export async function createServerClient() {
     throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
 
+  const sharedCookieOpts = getSharedCookieOptions();
+
   return createServerClientSSR<Database>(url, anonKey, {
+    cookieOptions: sharedCookieOpts,
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -31,7 +35,10 @@ export async function createServerClient() {
       setAll(cookiesToSet) {
         try {
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
+            cookieStore.set(name, value, {
+              ...options,
+              domain: sharedCookieOpts.domain ?? options.domain,
+            });
           });
         } catch {
           // Ignore cookie writes in contexts where response cookies are immutable.

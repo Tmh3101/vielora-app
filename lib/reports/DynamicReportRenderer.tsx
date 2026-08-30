@@ -389,7 +389,9 @@ export default function DynamicReportRenderer({
   const brandName = branding.brandName || "VIELORA";
   const fontFamily =
     branding.fontFamily ||
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Naskh Arabic', sans-serif";
+    (isRtl
+      ? "'Noto Sans Arabic', 'Noto Naskh Arabic', 'Scheherazade New', 'KacstTitle', 'DejaVu Sans', sans-serif"
+      : "'Inter', 'Noto Sans', 'DejaVu Sans', 'Liberation Sans', -apple-system, BlinkMacSystemFont, sans-serif");
 
   const t = (key: string, fallback?: string) => i18n[key] || fallback || key;
 

@@ -1,16 +1,5 @@
 "use client";
 
-/**
- * Auth page with:
- * - Login / Sign-up with email+password
- * - Confirm password field (sign-up)
- * - Real-time password strength indicator (sign-up)
- * - Success screen after sign-up
- * - Forgot password flow
- * - OAuth: Google + GitHub
- * - Glassmorphism + animated background
- */
-
 import { useState, useEffect, Suspense, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -43,14 +32,16 @@ import {
   LoginWithPasswordError as LoginWithPasswordErrorCode,
   OauthProvider,
   AuthView,
+  SupabaseAuthEvent,
+  OAUTH_ERROR_FAILED,
+  PENDING_IOS_AUTH_KEY,
+  OAUTH_COMPLETE_EVENT,
 } from "@/lib/constants/auth";
 import { ERROR_CODE_ACCESS_DENIED } from "@/lib/constants";
 import type { OauthProviderType, AuthViewType } from "@/lib/constants/auth";
 import { markPwaAuthReturn, isIOS, isStandaloneMode } from "@/lib/helpers/pwa-helpers";
-
-/* ------------------------------------------------------------------ */
-/*  Zod schemas                                                        */
-/* ------------------------------------------------------------------ */
+import { getRootDomain } from "@/config";
+import { getMainAppUrl } from "@/lib/utils/standalone-chat-url";
 
 const PASSWORD_RULES = [
   { key: "minLength", label: "Tối thiểu 8 ký tự", test: (v: string) => v.length >= 8 },
@@ -109,10 +100,6 @@ const forgotSchema = z.object({
     .max(255, { message: "Email không được vượt quá 255 ký tự" }),
 });
 
-/* ------------------------------------------------------------------ */
-/*  Password strength indicator (sign-up only)                         */
-/* ------------------------------------------------------------------ */
-
 function PasswordStrength({ password }: { password: string }) {
   const results = PASSWORD_RULES.map((r) => ({ ...r, passed: r.test(password) }));
   const passedCount = results.filter((r) => r.passed).length;
@@ -128,7 +115,6 @@ function PasswordStrength({ password }: { password: string }) {
 
   return (
     <div className="mt-2 space-y-2">
-      {/* Strength bar */}
       <div className="flex gap-1">
         {PASSWORD_RULES.map((_, i) => (
           <div
@@ -140,7 +126,6 @@ function PasswordStrength({ password }: { password: string }) {
         ))}
       </div>
 
-      {/* Checklist */}
       <ul className="grid grid-cols-1 gap-0.5 text-xs">
         {results.map((r) => (
           <li key={r.key} className="flex items-center gap-1.5">
@@ -160,10 +145,6 @@ function PasswordStrength({ password }: { password: string }) {
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*  Google / GitHub SVG icons                                          */
-/* ------------------------------------------------------------------ */
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -196,10 +177,6 @@ function GitHubIcon({ className }: { className?: string }) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Auth views: "login" | "signup" | "forgot" | "signup-success"       */
-/* ------------------------------------------------------------------ */
-
 function formatCooldown(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -210,6 +187,23 @@ function getSafeRedirect(rawRedirect: string | null): string {
   if (!rawRedirect) return "/dashboard";
   if (rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") && !rawRedirect.includes("\\")) {
     return rawRedirect;
+  }
+  try {
+    const parsed = new URL(rawRedirect);
+    const rootDomain = getRootDomain().toLowerCase().split(":")[0];
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === rootDomain ||
+      host.endsWith(`.${rootDomain}`) ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".localhost") ||
+      host.endsWith(".local")
+    ) {
+      return rawRedirect;
+    }
+  } catch {
+    // Ignore invalid url format
   }
   return "/dashboard";
 }
@@ -223,7 +217,6 @@ function AuthPageContent() {
     searchParams.get("mode") === "signup" ? AuthView.SIGNUP : AuthView.LOGIN;
   const [view, setView] = useState<AuthViewType>(initialView);
 
-  // Form fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -243,7 +236,6 @@ function AuthPageContent() {
   const isLoginCooldownActive =
     view === AuthView.LOGIN && cooldownRemaining > 0 && normalizedEmail === cooldownEmail;
 
-  /* ---- redirect after auth ---- */
   const isPwaAuth = searchParams.get("pwa") === "1";
   const targetRedirect = useMemo(
     () => getSafeRedirect(searchParams.get("redirect") || searchParams.get("next")),
@@ -268,7 +260,14 @@ function AuthPageContent() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
+      // Ignore recovery event so password reset flow doesn't hijack this tab
+      if (event === SupabaseAuthEvent.PASSWORD_RECOVERY) {
+        return;
+      }
+      if (
+        session?.user &&
+        (event === SupabaseAuthEvent.SIGNED_IN || event === SupabaseAuthEvent.USER_UPDATED)
+      ) {
         goToApp(targetRedirect);
       }
     });
@@ -291,7 +290,7 @@ function AuthPageContent() {
     );
 
     const oauthFailed =
-      authError === "oauth_failed" || hashParams.get("error") === ERROR_CODE_ACCESS_DENIED;
+      authError === OAUTH_ERROR_FAILED || hashParams.get("error") === ERROR_CODE_ACCESS_DENIED;
     if (!oauthFailed) {
       handledOAuthErrorRef.current = false;
       return;
@@ -358,7 +357,6 @@ function AuthPageContent() {
     return () => window.clearInterval(timer);
   }, [cooldownUntil]);
 
-  /* ---- validate ---- */
   const validate = useCallback(() => {
     try {
       if (view === AuthView.SIGNUP) {
@@ -383,7 +381,6 @@ function AuthPageContent() {
     }
   }, [view, email, password, confirmPassword, fullName]);
 
-  /* ---- submit ---- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
@@ -492,21 +489,20 @@ function AuthPageContent() {
     }
   };
 
-  /* ---- OAuth ---- */
   const handleOAuth = async (provider: OauthProviderType) => {
     setIsOAuthLoading(provider);
     try {
       const isStandalone = isStandaloneMode();
-      const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
+      const mainAppUrl = getMainAppUrl();
+      const callbackUrl = new URL(`${mainAppUrl}/auth/callback`);
       if (targetRedirect && targetRedirect !== "/dashboard") {
         callbackUrl.searchParams.set("next", targetRedirect);
       }
 
       if (isStandalone && isIOS()) {
-        // iOS Standalone PWA: Session Bridge with Server Storage
         const iosSid = crypto.randomUUID();
         try {
-          localStorage.setItem("pending_ios_auth", iosSid);
+          localStorage.setItem(PENDING_IOS_AUTH_KEY, iosSid);
         } catch {
           // ignore quota or security error
         }
@@ -517,8 +513,7 @@ function AuthPageContent() {
           options: { redirectTo: callbackUrl.toString() },
         });
         if (error) throw error;
-      } else if (isStandalone || isPwaAuth) {
-        // Android / Desktop Standalone PWA: Popup Mode
+      } else if (isStandalone) {
         callbackUrl.searchParams.set("popup", "1");
 
         const { data, error } = await supabase.auth.signInWithOAuth({
@@ -545,8 +540,8 @@ function AuthPageContent() {
         let checkPopupClosed: NodeJS.Timeout | null = null;
 
         const handlePopupMessage = (event: MessageEvent) => {
-          if (event.origin !== window.location.origin) return;
-          if (event.data?.type === "OAUTH_COMPLETE") {
+          if (event.origin !== window.location.origin && event.origin !== mainAppUrl) return;
+          if (event.data?.type === OAUTH_COMPLETE_EVENT) {
             window.removeEventListener("message", handlePopupMessage);
             if (checkPopupClosed) clearInterval(checkPopupClosed);
             supabase.auth.getSession().then(({ data: { session } }) => {
@@ -571,7 +566,6 @@ function AuthPageContent() {
           }
         }, 1000);
       } else {
-        // Standard Web Browser: Direct Redirect
         if (isPwaAuth) {
           markPwaAuthReturn(targetRedirect);
         }
@@ -592,7 +586,6 @@ function AuthPageContent() {
     }
   };
 
-  /* ---- derived ---- */
   const heading = useMemo(() => {
     switch (view) {
       case AuthView.SIGNUP:
@@ -611,17 +604,11 @@ function AuthPageContent() {
     }
   }, [view, isPwaAuth]);
 
-  /* ================================================================ */
-  /*  RENDER                                                           */
-  /* ================================================================ */
-
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-12">
-      {/* Animated gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/5" />
       <div className="grid-pattern absolute inset-0 opacity-30" />
 
-      {/* Floating orbs */}
       <div className="orb orb-primary animate-float-slow -left-48 -top-48 h-96 w-96" />
       <div className="orb orb-accent animate-float-delayed -bottom-40 -right-40 h-80 w-80" />
       <div className="orb orb-primary animate-float right-1/4 top-1/4 h-48 w-48 opacity-50" />
@@ -636,10 +623,8 @@ function AuthPageContent() {
         </Link>
 
         <Card className="glass-lg shadow-glow-soft">
-          {/* Gradient accent line */}
           <div className="bg-gradient-primary absolute left-0 right-0 top-0 h-1 rounded-t-lg" />
 
-          {/* Header - ẩn khi forgot password sent */}
           {!(view === AuthView.FORGOT && forgotSent) && (
             <CardHeader className="pt-8 text-center">
               <Link href="/" className="group mb-2 flex items-center justify-center">
@@ -662,7 +647,6 @@ function AuthPageContent() {
           )}
 
           <CardContent className={view === AuthView.FORGOT && forgotSent ? "pt-8" : ""}>
-            {/* ===== SIGN-UP SUCCESS SCREEN ===== */}
             {view === AuthView.SIGNUP_SUCCESS && (
               <div className="-mt-4 flex flex-col items-center space-y-6 pb-4">
                 <div className="flex w-auto items-center justify-center space-x-4">
@@ -681,7 +665,7 @@ function AuthPageContent() {
 
                 <Button
                   variant="outline"
-                  className="hover:border-primary/50 hover:bg-white hover:text-foreground hover:text-primary hover:shadow-sm hover:shadow-primary/20"
+                  className="hover:border-primary/50 hover:bg-white hover:text-primary hover:shadow-sm hover:shadow-primary/20"
                   onClick={() => switchView(AuthView.LOGIN)}
                 >
                   Quay lại đăng nhập
@@ -689,10 +673,8 @@ function AuthPageContent() {
               </div>
             )}
 
-            {/* ===== FORGOT PASSWORD — sent state ===== */}
             {view === AuthView.FORGOT && forgotSent && (
               <div className="flex flex-col items-center space-y-4 py-2">
-                {/* Logo */}
                 <Link href="/" className="group flex items-center justify-center">
                   <Image
                     src="/images/logo-icon.png"
@@ -705,17 +687,14 @@ function AuthPageContent() {
                 </Link>
 
                 <div className="flex w-auto items-center justify-center space-x-4">
-                  {/* Icon */}
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/10">
                     <Mail className="h-6 w-6 text-blue-500" />
                   </div>
-                  {/* Title */}
                   <h2 className="text-xl font-semibold text-foreground">
                     Email đã gửi thành công!
                   </h2>
                 </div>
 
-                {/* Description */}
                 <div className="max-w-sm px-4">
                   <p className="text-md text-center leading-relaxed text-muted-foreground">
                     Nếu email <strong className="text-foreground">{email}</strong> đã được đăng ký,
@@ -723,10 +702,9 @@ function AuthPageContent() {
                   </p>
                 </div>
 
-                {/* Button */}
                 <Button
                   variant="outline"
-                  className="hover:border-primary/50 hover:bg-white hover:text-foreground hover:text-primary hover:shadow-sm hover:shadow-primary/20"
+                  className="hover:border-primary/50 hover:bg-white hover:text-primary hover:shadow-sm hover:shadow-primary/20"
                   onClick={() => switchView(AuthView.LOGIN)}
                 >
                   Quay lại đăng nhập
@@ -734,11 +712,9 @@ function AuthPageContent() {
               </div>
             )}
 
-            {/* ===== FORMS (login / signup / forgot) ===== */}
             {view !== AuthView.SIGNUP_SUCCESS && !(view === AuthView.FORGOT && forgotSent) && (
               <>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  {/* Full name — sign-up only */}
                   {view === AuthView.SIGNUP && (
                     <div className="space-y-2">
                       <Label htmlFor="fullName">Họ và tên</Label>
@@ -759,7 +735,6 @@ function AuthPageContent() {
                     </div>
                   )}
 
-                  {/* Email */}
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <div>
@@ -778,7 +753,6 @@ function AuthPageContent() {
                     </div>
                   </div>
 
-                  {/* Password — login & sign-up */}
                   {view !== AuthView.FORGOT && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -828,15 +802,13 @@ function AuthPageContent() {
                         )}
                       </div>
 
-                      {/* Password strength — sign-up only */}
-                      {view === "signup" && password.length > 0 && (
+                      {view === AuthView.SIGNUP && password.length > 0 && (
                         <PasswordStrength password={password} />
                       )}
                     </div>
                   )}
 
-                  {/* Confirm password — sign-up only */}
-                  {view === "signup" && (
+                  {view === AuthView.SIGNUP && (
                     <div className="space-y-2">
                       <Label htmlFor="confirmPassword">Xác nhận mật khẩu</Label>
                       <div>
@@ -870,7 +842,6 @@ function AuthPageContent() {
                     </div>
                   )}
 
-                  {/* Submit button */}
                   <Button
                     type="submit"
                     className="bg-gradient-primary btn-glow h-11 w-full"
@@ -883,12 +854,12 @@ function AuthPageContent() {
                       </>
                     ) : isLoginCooldownActive ? (
                       "Tạm khóa đăng nhập"
-                    ) : view === "signup" ? (
+                    ) : view === AuthView.SIGNUP ? (
                       <>
                         <Sparkles className="mr-2 h-4 w-4" />
                         Tạo tài khoản
                       </>
-                    ) : view === "forgot" ? (
+                    ) : view === AuthView.FORGOT ? (
                       "Gửi link đặt lại"
                     ) : (
                       "Đăng nhập"
@@ -896,10 +867,8 @@ function AuthPageContent() {
                   </Button>
                 </form>
 
-                {/* ===== OAuth buttons (login & signup) ===== */}
-                {view !== "forgot" && (
+                {view !== AuthView.FORGOT && (
                   <>
-                    {/* Divider */}
                     <div className="relative my-6">
                       <div className="absolute inset-0 flex items-center">
                         <span className="w-full border-t border-border/60" />
@@ -944,25 +913,24 @@ function AuthPageContent() {
                   </>
                 )}
 
-                {/* ===== Toggle links ===== */}
                 <div className="mt-6 text-center text-sm">
-                  {view === "signup" ? (
+                  {view === AuthView.SIGNUP ? (
                     <p className="text-muted-foreground">
                       Đã có tài khoản?{" "}
                       <button
                         type="button"
-                        onClick={() => switchView("login")}
+                        onClick={() => switchView(AuthView.LOGIN)}
                         className="font-medium text-primary hover:underline"
                       >
                         Đăng nhập
                       </button>
                     </p>
-                  ) : view === "login" ? (
+                  ) : view === AuthView.LOGIN ? (
                     <p className="text-muted-foreground">
                       Chưa có tài khoản?{" "}
                       <button
                         type="button"
-                        onClick={() => switchView("signup")}
+                        onClick={() => switchView(AuthView.SIGNUP)}
                         className="font-medium text-primary hover:underline"
                       >
                         Đăng ký ngay
@@ -973,7 +941,7 @@ function AuthPageContent() {
                       Nhớ mật khẩu?{" "}
                       <button
                         type="button"
-                        onClick={() => switchView("login")}
+                        onClick={() => switchView(AuthView.LOGIN)}
                         className="font-medium text-primary hover:underline"
                       >
                         Đăng nhập
