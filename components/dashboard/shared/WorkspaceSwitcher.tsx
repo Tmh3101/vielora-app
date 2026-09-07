@@ -22,8 +22,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Check, ChevronsUpDown, Plus, Building2, ShieldCheck, LayoutDashboard } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export function WorkspaceSwitcher() {
+  const t = useTranslations("dashboard.shared.workspaceSwitcher");
   const { activeWorkspace, workspaces, switchWorkspace, refreshWorkspaces } = useWorkspace();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [name, setName] = useState("");
@@ -133,7 +135,7 @@ export function WorkspaceSwitcher() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <p className="truncate text-xs font-semibold text-foreground">
-                    {activeWorkspace?.name || "Chọn Workspace"}
+                    {activeWorkspace?.name || t("workspace")}
                   </p>
                   {activeWorkspace && (
                     <span
@@ -141,12 +143,12 @@ export function WorkspaceSwitcher() {
                         activeWorkspace.plans?.name
                       )}`}
                     >
-                      {activeWorkspace.plans?.name || "Free"}
+                      {activeWorkspace.plans?.name || t("freePlan")}
                     </span>
                   )}
                 </div>
                 <p className="truncate text-[11px] text-muted-foreground">
-                  {activeWorkspace?.slug ? activeWorkspace.slug : "Chưa chọn workspace"}
+                  {activeWorkspace?.slug ? activeWorkspace.slug : t("workspace")}
                 </p>
               </div>
             </div>
@@ -158,13 +160,13 @@ export function WorkspaceSwitcher() {
           className="w-60 rounded-xl border-border/60 bg-card p-1.5 shadow-xl"
         >
           <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium text-muted-foreground">
-            Danh sách Workspaces
+            {t("workspace")}
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="my-1 bg-border/40" />
           <div className="max-h-56 space-y-0.5 overflow-y-auto">
             {workspaces.map((ws: WorkspaceItem) => {
               const isActive = activeWorkspace?.id === ws.id;
-              const planName = ws.plans?.name || "Free";
+              const planName = ws.plans?.name || t("freePlan");
               return (
                 <DropdownMenuItem
                   key={ws.id}
@@ -202,7 +204,7 @@ export function WorkspaceSwitcher() {
             className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
           >
             <Plus className="h-4 w-4" />
-            Tạo Workspace mới
+            {t("createNew")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -225,11 +227,8 @@ export function WorkspaceSwitcher() {
               </div>
               <div>
                 <DialogTitle className="text-lg font-bold text-foreground">
-                  Tạo Workspace mới
+                  {t("createTitle")}
                 </DialogTitle>
-                <p className="text-xs text-muted-foreground">
-                  Tạo không gian làm việc riêng để quản lý chatbot, tri thức và thành viên
-                </p>
               </div>
             </div>
           </DialogHeader>
@@ -241,20 +240,20 @@ export function WorkspaceSwitcher() {
           <form onSubmit={handleCreate} className="space-y-4 pt-2">
             <div className="space-y-1.5">
               <Label htmlFor="ws-name" className="text-xs font-semibold">
-                Tên Workspace
+                {t("nameLabel")}
               </Label>
               <Input
                 id="ws-name"
                 required
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="VD: Workspace của tôi"
+                placeholder={t("namePlaceholder")}
                 className="h-10 rounded-xl border-border/60 bg-muted/30 text-xs focus-visible:ring-primary"
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ws-slug" className="text-xs font-semibold">
-                Workspace Slug
+                {t("slugLabel")}
               </Label>
               <Input
                 id="ws-slug"
@@ -266,12 +265,14 @@ export function WorkspaceSwitcher() {
                   if (suggestions.length > 0) setSuggestions([]);
                   if (error) setError(null);
                 }}
-                placeholder="VD: workspace-cua-toi"
+                placeholder={t("slugPlaceholder")}
                 className="h-10 rounded-xl border-border/60 bg-muted/30 text-xs focus-visible:ring-primary"
               />
               {suggestions.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
-                  <span className="text-[11px] font-medium text-muted-foreground">Gợi ý:</span>
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    {t("suggestions")}
+                  </span>
                   {suggestions.map((sug) => (
                     <Badge
                       key={sug}
@@ -297,7 +298,7 @@ export function WorkspaceSwitcher() {
                 onClick={() => setIsModalOpen(false)}
                 className="rounded-xl border-border/60 text-xs font-medium hover:bg-muted"
               >
-                Hủy
+                {t("cancel")}
               </Button>
               <Button
                 type="submit"
@@ -305,7 +306,7 @@ export function WorkspaceSwitcher() {
                 disabled={isLoading}
                 className="rounded-xl bg-primary font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90"
               >
-                {isLoading ? "Đang tạo..." : "Tạo Workspace"}
+                {isLoading ? t("creating") : t("createBtn")}
               </Button>
             </DialogFooter>
           </form>

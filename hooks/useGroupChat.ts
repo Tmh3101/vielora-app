@@ -5,17 +5,28 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { GroupMessageRow } from "@/lib/services/group-chat.service";
 import { useOfflineMessageQueue } from "@/hooks/useOfflineMessageQueue";
 import {
+  fetchGroupDetailsApi,
+  fetchPinnedKnowledgeApi,
+  fetchGroupMessagesApi,
+  sendGroupMessageApi,
+  deleteGroupMessageApi,
+  markGroupMessagesReadApi,
+  leaveGroupApi,
   fetchActiveNoteApi,
   fetchNotesListApi,
   createNoteApi,
   updateNoteApi,
   deleteNoteApi,
+  pinNoteApi,
+  unpinNoteApi,
   toggleNoteCollapseApi,
   updateMemberApi,
   pinMessageAsNoteApi,
-} from "@/lib/api/group-chat";
+} from "@/lib/services/group-chat-client.service";
+import { useGroupChatRealtime } from "@/hooks/useGroupChatRealtime";
 import { GROUP_CHAT_CONFIG } from "@/config/group-chat";
 import type { GroupNoteRow } from "@/types/group-chat";
+import type { ELanguage } from "@/types/enums";
 
 export interface GroupMember {
   id: string;
@@ -50,12 +61,13 @@ export interface UseGroupChatProps {
   botId: string;
   userId?: string;
   userEmail?: string;
+  locale?: ELanguage | string;
 }
 
-export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
+export function useGroupChat({ botId, userId, userEmail, locale }: UseGroupChatProps) {
   const [messages, setMessages] = useState<GroupMessageRow[]>([]);
   const [members, setMembers] = useState<GroupMember[]>([]);
-  const [groupInfo, setGroupInfo] = useState<{ id: string; name: string; status: string } | null>(
+  const [groupInfo, setGroupInfo] = useState<{ id: string; name?: string; status: string } | null>(
     null
   );
   const [botInfo, setBotInfo] = useState<{
@@ -74,10 +86,10 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
   const [initialUnreadInfo, setInitialUnreadInfo] = useState<InitialUnreadInfo | null>(null);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
 
-  // Notes state (Task 3.1)
+  // Notes state
   const [activeNote, setActiveNote] = useState<GroupNoteRow | null>(null);
   const [notesList, setNotesList] = useState<GroupNoteRow[]>([]);
-  const [nextNotesCursor, setNextNotesCursor] = useState<string | null>(null);
+  const [, setNextNotesCursor] = useState<string | null>(null);
   const [hasMoreNotes, setHasMoreNotes] = useState(false);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
 
@@ -87,6 +99,7 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
   const hasComputedInitialUnreadRef = useRef(false);
   const userIdRef = useRef(userId);
   const userEmailRef = useRef(userEmail);
+  const nextNotesCursorRef = useRef<string | null>(null);
 
   useEffect(() => {
     userIdRef.current = userId;
@@ -162,8 +175,6 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     [botId]
   );
 
-  const nextNotesCursorRef = useRef<string | null>(null);
-
   const loadNotesList = useCallback(
     async (isInitial = false) => {
       const currentGroupId = groupIdRef.current || groupInfo?.id;
@@ -195,10 +206,12 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
   );
 
   const refetchActiveNoteRef = useRef(refetchActiveNote);
-  refetchActiveNoteRef.current = refetchActiveNote;
-
   const loadNotesListRef = useRef(loadNotesList);
-  loadNotesListRef.current = loadNotesList;
+
+  useEffect(() => {
+    refetchActiveNoteRef.current = refetchActiveNote;
+    loadNotesListRef.current = loadNotesList;
+  });
 
   useEffect(() => {
     if (groupInfo?.id && GROUP_CHAT_CONFIG.GROUP_NOTES_ENABLED) {
@@ -218,25 +231,20 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
   // 1. Load initial group info and members
   const fetchGroupDetails = useCallback(async () => {
     try {
-      const res = await fetch(`/api/bots/${botId}/group`);
-      if (!res.ok) {
-        if (res.status === 404) {
-          setError("Group chat does not exist for this bot.");
-        } else {
-          setError("Failed to load group chat details.");
-        }
-        return;
-      }
-      const json = await res.json();
+      const json = await fetchGroupDetailsApi(botId);
       if (json.success && json.data) {
         const group = json.data.group;
         const membersList = json.data.members || [];
         setGroupInfo(group);
         setMembers(membersList);
-        groupIdRef.current = group.id;
+        if (group?.id) {
+          groupIdRef.current = group.id;
+        }
 
-        if (json.data.bot) {
-          setBotInfo(json.data.bot);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((json.data as any).bot) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setBotInfo((json.data as any).bot);
         }
 
         const myMember = membersList.find(
@@ -250,6 +258,8 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
           initialLastReadAtRef.current = myMember.last_read_at;
           setInitialLastReadAt(myMember.last_read_at);
         }
+      } else {
+        setError(json.message || "Failed to load group chat details.");
       }
     } catch (err) {
       console.error("Error fetching group details:", err);
@@ -260,14 +270,12 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
   // 2. Fetch pinned knowledge message IDs
   const fetchPinnedKnowledge = useCallback(async () => {
     try {
-      const res = await fetch(`/api/bots/${botId}/group/knowledge`);
-      if (!res.ok) return;
-      const json = await res.json();
+      const json = await fetchPinnedKnowledgeApi(botId);
       if (json.success && Array.isArray(json.data)) {
         const ids = new Set<string>(
           json.data
             .map((k: { message_id?: string }) => k.message_id)
-            .filter((id): id is string => Boolean(id))
+            .filter((id: string | undefined): id is string => Boolean(id))
         );
         setPinnedMessageIds(ids);
       }
@@ -280,17 +288,12 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
   const fetchMessages = useCallback(
     async (before?: string) => {
       try {
-        const url = new URL(`/api/bots/${botId}/group/messages`, window.location.origin);
-        if (before) url.searchParams.set("before", before);
-        url.searchParams.set("limit", "50");
-
-        const res = await fetch(url.toString());
-        if (!res.ok) return;
-
-        const json = await res.json();
+        const json = await fetchGroupMessagesApi(botId, { limit: 50, before });
         if (json.success && json.data) {
-          const incoming: GroupMessageRow[] = json.data.messages || [];
-          setHasMore(json.data.has_more ?? false);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const incoming: GroupMessageRow[] = (json.data as any).messages || json.data || [];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setHasMore((json.data as any).has_more ?? json.hasMore ?? false);
 
           if (before) {
             setMessages((prev) => {
@@ -307,7 +310,6 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
             ) {
               hasComputedInitialUnreadRef.current = true;
               const lastRead = initialLastReadAtRef.current;
-              // Only mark unread if the user had a previous non-null last_read_at timestamp
               if (lastRead) {
                 const lastReadTime = new Date(lastRead).getTime();
                 const unreadMsgs = incoming.filter(
@@ -359,7 +361,7 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
   // 4. Mark read
   const markRead = useCallback(async () => {
     try {
-      await fetch(`/api/bots/${botId}/group/messages/read`, { method: "POST" });
+      await markGroupMessagesReadApi(botId);
       const nowIso = new Date().toISOString();
       initialLastReadAtRef.current = nowIso;
       setInitialUnreadInfo(null);
@@ -393,126 +395,46 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     };
   }, [botId, fetchGroupDetails, fetchPinnedKnowledge, fetchMessages]);
 
-  useEffect(() => {
-    const groupId = groupInfo?.id;
-    if (!groupId) return;
-
-    // 4a. Realtime subscription
-    const channel = supabase
-      .channel(`group_messages:${groupId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "group_messages",
-          filter: `group_id=eq.${groupId}`,
-        },
-        (payload) => {
-          const newMsg = payload.new as GroupMessageRow;
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "group_messages",
-          filter: `group_id=eq.${groupId}`,
-        },
-        (payload) => {
-          const updatedMsg = payload.new as GroupMessageRow;
-          setMessages((prev) => prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m)));
-        }
-      )
-      .subscribe();
-
-    // 4b. Interval polling fallback (5 seconds, only when tab is active)
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        fetchMessages();
-      }
-    }, 5000);
-
-    // 4c. Realtime subscription for pinned knowledge
-    const knowledgeChannel = supabase
-      .channel(`chat_knowledge:${botId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "chat_knowledge",
-          filter: `bot_id=eq.${botId}`,
-        },
-        (payload) => {
-          const newKnowledge = payload.new as { message_id?: string };
-          if (newKnowledge?.message_id) {
-            setPinnedMessageIds((prev) => {
-              const updated = new Set(prev);
-              updated.add(newKnowledge.message_id!);
-              return updated;
-            });
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "chat_knowledge",
-          filter: `bot_id=eq.${botId}`,
-        },
-        (payload) => {
-          const oldKnowledge = payload.old as { message_id?: string };
-          if (oldKnowledge?.message_id) {
-            setPinnedMessageIds((prev) => {
-              const updated = new Set(prev);
-              updated.delete(oldKnowledge.message_id!);
-              return updated;
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    // 4d. Realtime subscription for group notes (Task 3.1)
-    let notesChannel: ReturnType<typeof supabase.channel> | null = null;
-    if (GROUP_CHAT_CONFIG.GROUP_NOTES_ENABLED) {
-      notesChannel = supabase
-        .channel(`group_notes:${groupId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "group_notes",
-            filter: `group_id=eq.${groupId}`,
-          },
-          () => {
-            refetchActiveNoteRef.current?.();
-            loadNotesListRef.current?.(true);
-          }
-        )
-        .subscribe();
-    }
-
-    return () => {
-      supabase.removeChannel(channel);
-      supabase.removeChannel(knowledgeChannel);
-      if (notesChannel) supabase.removeChannel(notesChannel);
-      clearInterval(interval);
-    };
-  }, [groupInfo?.id, botId, supabase, fetchMessages]);
+  // 6. Realtime Subscriptions via dedicated hook
+  useGroupChatRealtime({
+    supabase,
+    groupId: groupInfo?.id,
+    botId,
+    onNewMessage: (newMsg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMsg.id)) return prev;
+        return [...prev, newMsg];
+      });
+    },
+    onUpdateMessage: (updatedMsg) => {
+      setMessages((prev) => prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m)));
+    },
+    onPinKnowledge: (messageId) => {
+      setPinnedMessageIds((prev) => {
+        const updated = new Set(prev);
+        updated.add(messageId);
+        return updated;
+      });
+    },
+    onUnpinKnowledge: (messageId) => {
+      setPinnedMessageIds((prev) => {
+        const updated = new Set(prev);
+        updated.delete(messageId);
+        return updated;
+      });
+    },
+    onNotesChange: () => {
+      refetchActiveNoteRef.current?.();
+      loadNotesListRef.current?.(true);
+    },
+    onPollMessages: () => {
+      fetchMessages();
+    },
+  });
 
   const { queueMessage } = useOfflineMessageQueue();
 
-  // 5. Send message action
+  // 7. Send message action
   const sendMessage = useCallback(
     async (
       content: string,
@@ -520,29 +442,25 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     ) => {
       if (!content.trim() || isSending) return;
 
-      const payload = JSON.stringify({
+      const payload = {
         content,
         reply_to_id: options?.replyToId,
         mentions: options?.mentions,
         should_bot_reply: options?.shouldBotReply ?? shouldBotReplyDefault,
-      });
+      };
 
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         await queueMessage(
           `/api/bots/${botId}/group/messages`,
           { "Content-Type": "application/json" },
-          payload
+          JSON.stringify(payload)
         );
         return;
       }
 
       try {
         setIsSending(true);
-        const res = await fetch(`/api/bots/${botId}/group/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: payload,
-        });
+        const res = await sendGroupMessageApi(botId, payload);
 
         if (!res.ok) {
           const json = await res.json();
@@ -570,13 +488,11 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     [botId, isSending, shouldBotReplyDefault, queueMessage]
   );
 
-  // 6. Soft delete message action
+  // 8. Soft delete message action
   const deleteMessage = useCallback(
     async (messageId: string) => {
       try {
-        const res = await fetch(`/api/bots/${botId}/group/messages/${messageId}`, {
-          method: "PATCH",
-        });
+        const res = await deleteGroupMessageApi(botId, messageId);
 
         if (!res.ok) {
           const json = await res.json();
@@ -596,10 +512,10 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     [botId]
   );
 
-  // 7. Leave group action
+  // 9. Leave group action
   const leaveGroup = useCallback(async () => {
     try {
-      const res = await fetch(`/api/bots/${botId}/group/me`, { method: "DELETE" });
+      const res = await leaveGroupApi(botId);
       if (!res.ok) throw new Error("Failed to leave group");
       window.location.reload();
     } catch (err) {
@@ -637,7 +553,7 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     refetchGroup: fetchGroupDetails,
     refetchPinnedKnowledge: fetchPinnedKnowledge,
 
-    // Notes State & Actions (Task 3.1)
+    // Notes State & Actions
     activeNote,
     setActiveNote,
     notesList,
@@ -649,21 +565,37 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     fetchActiveNote: refetchActiveNote,
     loadNotesList,
     fetchNotes: (isInitial?: boolean) => loadNotesList(isInitial),
-    createNote: async (payload: { title: string; content_html: string; content_text: string }) => {
+    createNote: async (payload: {
+      title: string;
+      content_html: string;
+      content_text: string;
+      locale?: string;
+    }) => {
       const currentGroupId = groupIdRef.current || groupInfo?.id;
       if (!currentGroupId) throw new Error("Group not initialized");
-      const note = await createNoteApi(currentGroupId, payload);
+      const noteLocale =
+        payload.locale ||
+        (typeof locale === "string" ? locale : undefined) ||
+        (botInfo?.widget_settings as { ui_language?: string; locale?: string })?.ui_language;
+      const note = await createNoteApi(currentGroupId, { ...payload, locale: noteLocale });
       setActiveNote(note);
       await loadNotesList(true);
       return note;
     },
     updateNote: async (
       noteId: string,
-      payload: { title?: string; content_html?: string; content_text?: string }
+      payload: { title?: string; content_html?: string; content_text?: string; locale?: string }
     ) => {
       const currentGroupId = groupIdRef.current || groupInfo?.id;
       if (!currentGroupId) throw new Error("Group not initialized");
-      const updated = await updateNoteApi(currentGroupId, noteId, payload);
+      const noteLocale =
+        payload.locale ||
+        (typeof locale === "string" ? locale : undefined) ||
+        (botInfo?.widget_settings as { ui_language?: string; locale?: string })?.ui_language;
+      const updated = await updateNoteApi(currentGroupId, noteId, {
+        ...payload,
+        locale: noteLocale,
+      });
       setActiveNote((prev) => (prev?.id === noteId ? updated : prev));
       await loadNotesList(true);
       return updated;
@@ -671,22 +603,21 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     pinNote: async (noteId: string) => {
       const currentGroupId = groupIdRef.current || groupInfo?.id;
       if (!currentGroupId) throw new Error("Group not initialized");
-      const res = await fetch(`/api/group/${currentGroupId}/notes/${noteId}/pin`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const json = await res.json();
-        throw new Error(json.message || "Failed to pin note");
-      }
-      const json = await res.json();
-      setActiveNote(json.data);
+      const noteLocale =
+        (typeof locale === "string" ? locale : undefined) ||
+        (botInfo?.widget_settings as { ui_language?: string; locale?: string })?.ui_language;
+      const note = await pinNoteApi(currentGroupId, noteId, noteLocale);
+      setActiveNote(note);
       await loadNotesList(true);
-      return json.data;
+      return note;
     },
     pinMessageAsNote: async (messageId: string, isActive: boolean = false) => {
       const currentGroupId = groupIdRef.current || groupInfo?.id;
       if (!currentGroupId) throw new Error("Group not initialized");
-      const note = await pinMessageAsNoteApi(currentGroupId, messageId, isActive);
+      const noteLocale =
+        (typeof locale === "string" ? locale : undefined) ||
+        (botInfo?.widget_settings as { ui_language?: string; locale?: string })?.ui_language;
+      const note = await pinMessageAsNoteApi(currentGroupId, messageId, isActive, noteLocale);
       setPinnedMessageIds((prev) => {
         const next = new Set(prev);
         next.add(messageId);
@@ -701,20 +632,20 @@ export function useGroupChat({ botId, userId, userEmail }: UseGroupChatProps) {
     unpinNote: async (noteId: string) => {
       const currentGroupId = groupIdRef.current || groupInfo?.id;
       if (!currentGroupId) throw new Error("Group not initialized");
-      const res = await fetch(`/api/group/${currentGroupId}/notes/${noteId}/unpin`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const json = await res.json();
-        throw new Error(json.message || "Failed to unpin note");
-      }
+      const noteLocale =
+        (typeof locale === "string" ? locale : undefined) ||
+        (botInfo?.widget_settings as { ui_language?: string; locale?: string })?.ui_language;
+      await unpinNoteApi(currentGroupId, noteId, noteLocale);
       setActiveNote((prev) => (prev?.id === noteId ? null : prev));
       await loadNotesList(true);
     },
     deleteNote: async (noteId: string) => {
       const currentGroupId = groupIdRef.current || groupInfo?.id;
       if (!currentGroupId) throw new Error("Group not initialized");
-      await deleteNoteApi(currentGroupId, noteId);
+      const noteLocale =
+        (typeof locale === "string" ? locale : undefined) ||
+        (botInfo?.widget_settings as { ui_language?: string; locale?: string })?.ui_language;
+      await deleteNoteApi(currentGroupId, noteId, noteLocale);
       setActiveNote((prev) => (prev?.id === noteId ? null : prev));
       await loadNotesList(true);
     },

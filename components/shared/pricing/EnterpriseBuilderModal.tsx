@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ export function EnterpriseBuilderModal({
   currentPlanCode,
 }: EnterpriseBuilderModalProps) {
   const router = useRouter();
+  const t = useTranslations("dashboard.checkout");
   const [botsLimit, setBotsLimit] = useState<number>(ENTERPRISE_PRICE.bots.min);
   const [monthlyCredits, setMonthlyCredits] = useState<number>(ENTERPRISE_PRICE.monthlyCredits.min);
   const [billingCycle, setBillingCycle] = useState<ESubscriptionCycle>(initialCycle);
@@ -154,7 +156,7 @@ export function EnterpriseBuilderModal({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Bot className="h-5 w-5 text-primary" />
-                <span className="text-sm font-semibold text-foreground">Số lượng Bots tối đa</span>
+                <span className="text-sm font-semibold text-foreground">{t("maxBots")}</span>
               </div>
               <span className="text-lg font-bold text-primary">{botsLimit} bots</span>
             </div>
@@ -168,8 +170,12 @@ export function EnterpriseBuilderModal({
               className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-muted accent-primary"
             />
             <div className="flex justify-between text-[11px] text-muted-foreground">
-              <span>Tối thiểu: {ENTERPRISE_PRICE.bots.min} bots</span>
-              <span>Tối đa: {ENTERPRISE_PRICE.bots.max} bots</span>
+              <span>
+                {t("minLabel")} {ENTERPRISE_PRICE.bots.min} bots
+              </span>
+              <span>
+                {t("maxLabel")} {ENTERPRISE_PRICE.bots.max} bots
+              </span>
             </div>
           </div>
 
@@ -178,7 +184,9 @@ export function EnterpriseBuilderModal({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Zap className="h-5 w-5 text-primary" />
-                <span className="text-sm font-semibold text-foreground">Credits hàng tháng</span>
+                <span className="text-sm font-semibold text-foreground">
+                  {t("creditsPerMonth")}
+                </span>
               </div>
               <span className="text-lg font-bold text-primary">
                 {monthlyCredits.toLocaleString("vi-VN")} credits
@@ -195,10 +203,10 @@ export function EnterpriseBuilderModal({
             />
             <div className="flex justify-between text-[11px] text-muted-foreground">
               <span>
-                Tối thiểu: {ENTERPRISE_PRICE.monthlyCredits.min.toLocaleString("vi-VN")} credits
+                {t("minLabel")} {ENTERPRISE_PRICE.monthlyCredits.min.toLocaleString()} credits
               </span>
               <span>
-                Tối đa: {ENTERPRISE_PRICE.monthlyCredits.max.toLocaleString("vi-VN")} credits
+                {t("maxLabel")} {ENTERPRISE_PRICE.monthlyCredits.max.toLocaleString()} credits
               </span>
             </div>
           </div>
@@ -207,19 +215,19 @@ export function EnterpriseBuilderModal({
           <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-              <span>Áp dụng ngay sau thanh toán</span>
+              <span>{t("featureHighlight1")}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-              <span>Không giới hạn Knowledge Base</span>
+              <span>{t("featureHighlight2")}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-              <span>Hỗ trợ Voice Chat & Mobile App</span>
+              <span>{t("featureHighlight3")}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-              <span>Gia hạn tự động theo cấu hình</span>
+              <span>{t("featureHighlight4")}</span>
             </div>
           </div>
 
@@ -227,8 +235,8 @@ export function EnterpriseBuilderModal({
           <div className="flex items-center justify-between rounded-xl border border-border bg-gradient-to-r from-muted/50 via-card to-muted/30 p-4">
             <div>
               <p className="text-xs font-medium text-muted-foreground">
-                Tổng chi phí (
-                {billingCycle === ESubscriptionCycle.Yearly ? "Theo năm" : "Theo tháng"})
+                {t("totalLabel")} (
+                {billingCycle === ESubscriptionCycle.Yearly ? t("yearlyPlan") : t("monthlyPlan")})
               </p>
               <div className="mt-1 flex items-baseline gap-1">
                 <span className="text-2xl font-extrabold text-foreground">
@@ -236,7 +244,9 @@ export function EnterpriseBuilderModal({
                 </span>
                 <span className="text-xs font-semibold text-muted-foreground">VND</span>
                 {isQuoting && (
-                  <span className="ml-2 animate-pulse text-xs text-primary">Đang tính…</span>
+                  <span className="ml-2 animate-pulse text-xs text-primary">
+                    {t("calculating")}
+                  </span>
                 )}
               </div>
             </div>
@@ -244,7 +254,7 @@ export function EnterpriseBuilderModal({
               onClick={handleProceedCheckout}
               className="rounded-xl bg-primary px-5 font-semibold text-primary-foreground shadow-md hover:bg-primary/90"
             >
-              <span>Thanh toán ngay</span>
+              <span>{t("payNow")}</span>
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import createIntlMiddleware from "next-intl/middleware";
+import { routing } from "@/i18n/routing";
 import {
   LOCAL_ROOT,
   PRODUCTION_ROOT,
@@ -10,10 +12,31 @@ import {
 import { createServerClient } from "@supabase/ssr";
 import { getDeviceType } from "@/lib/utils/device-type";
 import { createAdminClient } from "@/lib/supabase/server";
+import {
+  ACTIVE_WORKSPACE_COOKIE,
+  ACTIVE_WORKSPACE_COOKIE_MAX_AGE,
+} from "@/lib/constants/workspace";
+
+const intlMiddleware = createIntlMiddleware(routing);
 
 const SHOPIFY_FRAME_ANCESTORS_CSP =
   "frame-ancestors https://admin.shopify.com https://*.myshopify.com;";
 const RESERVED_SUBDOMAINS = new Set<string>(RESERVED_SUBDOMAINS_LIST);
+
+const PUBLIC_I18N_PATHS = new Set(["/", "/about-us", "/posts", "/privacy", "/terms"]);
+
+function isPublicI18nPath(pathname: string): boolean {
+  const localePattern = new RegExp(`^\\/(?:${routing.locales.join("|")})(?=\\/|$)`);
+  const normalizedPath = pathname.replace(localePattern, "") || "/";
+  const trimmedPath =
+    normalizedPath.length > 1 && normalizedPath.endsWith("/")
+      ? normalizedPath.slice(0, -1)
+      : normalizedPath;
+
+  if (PUBLIC_I18N_PATHS.has(trimmedPath)) return true;
+  if (trimmedPath.startsWith("/posts/")) return true;
+  return false;
+}
 
 interface WorkspaceCacheEntry {
   workspaceId: string | null;
@@ -39,14 +62,16 @@ function isExcludedPath(pathname: string): boolean {
   );
 }
 
-function withShopifyCsp(response: NextResponse): NextResponse {
+function withShopifyCsp(response: NextResponse, pathname?: string): NextResponse {
   response.headers.set("Content-Security-Policy", SHOPIFY_FRAME_ANCESTORS_CSP);
+  if (pathname) response.headers.set("x-pathname", pathname);
   return response;
 }
 
 function buildRequestHeaders(request: NextRequest): Headers {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-device-type", getDeviceType(request.headers.get("user-agent") ?? ""));
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
   return requestHeaders;
 }
 
@@ -105,17 +130,44 @@ export async function middleware(request: NextRequest) {
       const rewriteUrl = request.nextUrl.clone();
       rewriteUrl.pathname = `/public-bot/${subdomain}`;
       return withShopifyCsp(
-        NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } })
+        NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } }),
+        pathname
       );
     }
   }
 
+  const localePattern = new RegExp(`^\\/(?:${routing.locales.join("|")})(?=\\/|$)`);
+  if (!subdomain && localePattern.test(pathname)) {
+    if (isPublicI18nPath(pathname)) {
+      const intlResponse = intlMiddleware(request);
+      if (intlResponse) {
+        intlResponse.headers.set("x-pathname", pathname);
+        return withShopifyCsp(intlResponse, pathname);
+      }
+    } else {
+      const strippedPath = pathname.replace(localePattern, "") || "/";
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = strippedPath;
+      const redirectResponse = NextResponse.redirect(redirectUrl);
+      redirectResponse.headers.set("x-pathname", pathname);
+      return withShopifyCsp(redirectResponse, pathname);
+    }
+  }
+
+  if (!subdomain && isPublicI18nPath(pathname)) {
+    const intlResponse = intlMiddleware(request);
+    if (intlResponse) {
+      intlResponse.headers.set("x-pathname", pathname);
+      return withShopifyCsp(intlResponse, pathname);
+    }
+  }
+
   if (isExcludedPath(pathname)) {
-    return withShopifyCsp(NextResponse.next({ request: { headers: requestHeaders } }));
+    return withShopifyCsp(NextResponse.next({ request: { headers: requestHeaders } }), pathname);
   }
 
   if (pathname.startsWith("/api/shopify") || pathname.startsWith("/shopify")) {
-    return withShopifyCsp(NextResponse.next({ request: { headers: requestHeaders } }));
+    return withShopifyCsp(NextResponse.next({ request: { headers: requestHeaders } }), pathname);
   }
 
   // Workspace path-based routing detection with in-memory caching
@@ -157,15 +209,16 @@ export async function middleware(request: NextRequest) {
           request: { headers: requestHeaders },
         });
 
-        response.cookies.set("active_workspace_id", workspaceId, {
+        response.cookies.set(ACTIVE_WORKSPACE_COOKIE, workspaceId, {
           path: "/",
-          maxAge: 2592000,
+          maxAge: ACTIVE_WORKSPACE_COOKIE_MAX_AGE,
           sameSite: "lax",
         });
 
         response.headers.set("x-workspace-id", workspaceId);
+        response.headers.set("x-pathname", pathname);
 
-        return withShopifyCsp(response);
+        return withShopifyCsp(response, pathname);
       }
     } catch {
       // Workspace lookup error; fall through to bot subdomain logic
@@ -191,23 +244,46 @@ export async function middleware(request: NextRequest) {
       } = await supabaseAuth.auth.getSession();
 
       if (session) {
-        const activeWorkspaceId = request.cookies.get("active_workspace_id")?.value;
+        const activeWorkspaceId = request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value;
 
         if (activeWorkspaceId) {
           const supabase = createAdminClient();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: workspace } = await (supabase as any)
-            .from("workspaces")
-            .select("slug")
-            .eq("id", activeWorkspaceId)
+
+          // Validate workspace ownership: check if user is a member
+          const { data: membership } = await (supabase as ReturnType<typeof createAdminClient>)
+            .from("workspace_members")
+            .select("workspace_id")
+            .eq("workspace_id", activeWorkspaceId)
+            .eq("user_id", session.user.id)
             .maybeSingle();
 
-          if (workspace?.slug) {
-            const remainingPath = pathname.slice("/dashboard".length);
-            const redirectUrl = request.nextUrl.clone();
-            redirectUrl.pathname = `/${workspace.slug}${remainingPath}`;
+          if (membership) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: workspace } = await (supabase as any)
+              .from("workspaces")
+              .select("slug")
+              .eq("id", activeWorkspaceId)
+              .maybeSingle();
 
-            return withShopifyCsp(NextResponse.redirect(redirectUrl, 308));
+            if (workspace?.slug) {
+              const remainingPath = pathname.slice("/dashboard".length);
+              const redirectUrl = request.nextUrl.clone();
+              redirectUrl.pathname = `/${workspace.slug}${remainingPath}`;
+
+              const redirectResponse = NextResponse.redirect(redirectUrl, 308);
+              redirectResponse.headers.set("x-pathname", pathname);
+              return withShopifyCsp(redirectResponse, pathname);
+            }
+          } else {
+            // Cookie points to a workspace the user doesn't belong to (stale from previous login).
+            // Clear the cookie and fall through to find the user's own workspace.
+            const response = NextResponse.next({ request: { headers: requestHeaders } });
+            response.cookies.set(ACTIVE_WORKSPACE_COOKIE, "", {
+              path: "/",
+              maxAge: 0,
+              sameSite: "lax",
+            });
+            // Don't return — let the page load and WorkspaceProvider will pick the correct workspace.
           }
         }
       }
@@ -222,7 +298,8 @@ export async function middleware(request: NextRequest) {
     const rewriteUrl = request.nextUrl.clone();
     rewriteUrl.pathname = `/public-bot/${botSlug}${pathname === "/" ? "" : pathname}`;
     return withShopifyCsp(
-      NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } })
+      NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } }),
+      pathname
     );
   }
 
@@ -232,11 +309,12 @@ export async function middleware(request: NextRequest) {
     const rewriteUrl = request.nextUrl.clone();
     rewriteUrl.pathname = `/public-bot/${devBotSlug}`;
     return withShopifyCsp(
-      NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } })
+      NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } }),
+      pathname
     );
   }
 
-  return withShopifyCsp(NextResponse.next({ request: { headers: requestHeaders } }));
+  return withShopifyCsp(NextResponse.next({ request: { headers: requestHeaders } }), pathname);
 }
 
 export const config = {

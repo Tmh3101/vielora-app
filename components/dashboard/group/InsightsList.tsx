@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Sparkles, Calendar, Clock, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { parseMarkdown } from "@/lib/helpers";
@@ -19,6 +20,7 @@ interface InsightData {
 }
 
 export function InsightsList({ botId }: InsightsListProps) {
+  const t = useTranslations("dashboard.group.insightsList");
   const [insight, setInsight] = useState<InsightData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -48,7 +50,7 @@ export function InsightsList({ botId }: InsightsListProps) {
     return (
       <div className="flex min-h-[180px] flex-col items-center justify-center gap-2 p-6 text-center text-xs text-muted-foreground">
         <RefreshCw className="h-5 w-5 animate-spin text-primary" />
-        <span>Đang tải bản tổng hợp tự động...</span>
+        <span>{t("loading")}</span>
       </div>
     );
   }
@@ -59,10 +61,9 @@ export function InsightsList({ botId }: InsightsListProps) {
         <div className="mx-auto mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <Sparkles className="h-5 w-5 opacity-80" />
         </div>
-        <p className="text-xs font-semibold text-foreground">Chưa có bản tổng hợp 24h</p>
+        <p className="text-xs font-semibold text-foreground">{t("emptyTitle")}</p>
         <p className="mx-auto mt-1 max-w-sm text-[11px] leading-relaxed text-muted-foreground">
-          Hệ thống sẽ tự động tổng hợp hội thoại nhóm lúc 02:00 AM hàng ngày khi nhóm có từ 2 tin
-          nhắn trở lên và tự động nạp vào kho kiến thức RAG.
+          {t("emptyDesc")}
         </p>
       </div>
     );
@@ -77,7 +78,7 @@ export function InsightsList({ botId }: InsightsListProps) {
           className="shadow-2xs h-6 shrink-0 border-primary/25 bg-primary/10 px-2.5 text-[11px] font-medium text-primary"
         >
           <Sparkles className="mr-1.5 h-3 w-3" />
-          Bản tổng hợp 24h gần nhất
+          {t("badgeLatest")}
         </Badge>
 
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">

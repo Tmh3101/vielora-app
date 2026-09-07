@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CREDIT_PER_PAGE, MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH } from "@/config";
 import { FileText, Link, Loader2, Plus, Upload } from "lucide-react";
 import { VoiceInputButton } from "@/components/dashboard/shared/VoiceInputButton";
+import { useTranslations } from "next-intl";
 
 export interface AddKnowledgeModalProps {
   open: boolean;
@@ -42,6 +43,7 @@ export function AddKnowledgeModal({
   onConfirmFile,
   onConfirmUrl,
 }: AddKnowledgeModalProps) {
+  const t = useTranslations();
   const [inputMode, setInputMode] = useState<"manual" | "file" | "url">("manual");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -69,16 +71,16 @@ export function AddKnowledgeModal({
 
   const validateUrl = (value: string) => {
     const trimmed = value.trim();
-    if (!trimmed) return "Vui lòng nhập URL.";
+    if (!trimmed) return t("dashboard.botDetail.modals.addKnowledge.urlRequired");
 
     try {
       const parsed = new URL(trimmed);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        return "URL phải bắt đầu bằng http:// hoặc https://.";
+        return t("dashboard.botDetail.modals.addKnowledge.urlMustStartWithHttp");
       }
       return null;
     } catch {
-      return "URL không hợp lệ.";
+      return t("dashboard.botDetail.modals.addKnowledge.urlInvalid");
     }
   };
 
@@ -107,8 +109,10 @@ export function AddKnowledgeModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Thêm dữ liệu</DialogTitle>
-          <DialogDescription>Thêm văn bản, tệp hoặc URL cho bot.</DialogDescription>
+          <DialogTitle>{t("dashboard.botDetail.modals.addKnowledge.title")}</DialogTitle>
+          <DialogDescription>
+            {t("dashboard.botDetail.modals.addKnowledge.description")}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -123,15 +127,15 @@ export function AddKnowledgeModal({
                 className="flex items-center gap-2"
               >
                 <FileText className="h-4 w-4" />
-                Văn bản
+                {t("dashboard.botDetail.modals.addKnowledge.tabText")}
               </TabsTrigger>
               <TabsTrigger value="file" disabled={isSubmitting} className="flex items-center gap-2">
                 <Upload className="h-4 w-4" />
-                Tệp
+                {t("dashboard.botDetail.modals.addKnowledge.tabFile")}
               </TabsTrigger>
               <TabsTrigger value="url" disabled={isSubmitting} className="flex items-center gap-2">
                 <Link className="h-4 w-4" />
-                Đường dẫn
+                {t("dashboard.botDetail.modals.addKnowledge.tabUrl")}
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -140,11 +144,12 @@ export function AddKnowledgeModal({
             <>
               <div className="space-y-2">
                 <Label htmlFor="manual-title">
-                  Tiêu đề <span className="font-normal text-destructive">*</span>
+                  {t("dashboard.botDetail.modals.addKnowledge.fieldTitle")}{" "}
+                  <span className="font-normal text-destructive">*</span>
                 </Label>
                 <Input
                   id="manual-title"
-                  placeholder="VD: Hướng dẫn sử dụng sản phẩm"
+                  placeholder={t("dashboard.botDetail.modals.addKnowledge.fieldTitlePlaceholder")}
                   value={title}
                   onChange={(e) => {
                     if (e.target.value.length <= MAX_MANUAL_TITLE_LENGTH) {
@@ -166,7 +171,8 @@ export function AddKnowledgeModal({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="manual-content">
-                    Nội dung <span className="font-normal text-destructive">*</span>
+                    {t("dashboard.botDetail.modals.addKnowledge.fieldContent")}{" "}
+                    <span className="font-normal text-destructive">*</span>
                   </Label>
                   {botId && (
                     <VoiceInputButton
@@ -185,7 +191,7 @@ export function AddKnowledgeModal({
                 </div>
                 <Textarea
                   id="manual-content"
-                  placeholder="Nhập nội dung văn bản hoặc markdown..."
+                  placeholder={t("dashboard.botDetail.modals.addKnowledge.fieldContentPlaceholder")}
                   value={content}
                   onChange={(e) => {
                     if (e.target.value.length <= MAX_MANUAL_CONTENT_LENGTH) {
@@ -198,7 +204,9 @@ export function AddKnowledgeModal({
                   className="resize-none"
                 />
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Hỗ trợ định dạng Markdown.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("dashboard.botDetail.modals.addKnowledge.markdownHint")}
+                  </p>
                   <p
                     className={`text-xs ${content.length >= MAX_MANUAL_CONTENT_LENGTH ? "text-destructive" : "text-muted-foreground"}`}
                   >
@@ -210,7 +218,8 @@ export function AddKnowledgeModal({
           ) : inputMode === "file" ? (
             <div className="space-y-2">
               <Label>
-                Tệp <span className="font-normal text-destructive">*</span>
+                {t("dashboard.botDetail.modals.addKnowledge.fieldFile")}{" "}
+                <span className="font-normal text-destructive">*</span>
               </Label>
               <KnowledgeFileDropzone
                 files={selectedFiles}
@@ -223,7 +232,8 @@ export function AddKnowledgeModal({
           ) : (
             <div className="space-y-2">
               <Label htmlFor="knowledge-url">
-                URL bài viết/tài liệu <span className="font-normal text-destructive">*</span>
+                {t("dashboard.botDetail.modals.addKnowledge.fieldUrl")}{" "}
+                <span className="font-normal text-destructive">*</span>
               </Label>
 
               <Input
@@ -242,8 +252,7 @@ export function AddKnowledgeModal({
                 <p className="text-xs font-medium text-destructive">{urlError}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Dùng cho một trang cụ thể như bài viết, blog hoặc tài liệu online. Với toàn bộ
-                  website, hãy dùng Reindex.
+                  {t("dashboard.botDetail.modals.addKnowledge.urlHint")}
                 </p>
               )}
             </div>
@@ -254,12 +263,14 @@ export function AddKnowledgeModal({
           <div className="space-y-2">
             {totalCredits < requiredCredits && (
               <p className="text-xs font-medium text-amber-600">
-                Không đủ credits để thêm dữ liệu mới.
+                {t("dashboard.botDetail.modals.addKnowledge.notEnoughCredits")}
               </p>
             )}
             <div className="inline-flex min-w-[250px] items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
               <div>
-                <p className="text-[11px] tracking-wide text-muted-foreground">Credits hiện có</p>
+                <p className="text-[11px] tracking-wide text-muted-foreground">
+                  {t("dashboard.botDetail.modals.addKnowledge.creditsAvailable")}
+                </p>
                 <p className="text-xs font-medium text-foreground">
                   {totalCredits.toLocaleString()} credits
                 </p>
@@ -267,8 +278,13 @@ export function AddKnowledgeModal({
               <div className="h-8 w-px bg-border" />
               <p className="text-xs text-muted-foreground">
                 {inputMode === "file" && selectedFiles.length > 1
-                  ? `Cần ${fileCreditsCost} credits cho ${selectedFiles.length} tệp`
-                  : `Cần ${CREDIT_PER_PAGE} credit để thêm`}
+                  ? t("dashboard.botDetail.modals.addKnowledge.creditsNeededForFiles", {
+                      cost: fileCreditsCost,
+                      count: selectedFiles.length,
+                    })
+                  : t("dashboard.botDetail.modals.addKnowledge.creditsNeeded", {
+                      count: CREDIT_PER_PAGE,
+                    })}
               </p>
             </div>
           </div>
@@ -279,7 +295,7 @@ export function AddKnowledgeModal({
               disabled={isSubmitting}
               className="hover:border-red-600 hover:bg-white hover:text-red-600"
             >
-              Hủy
+              {t("dashboard.botDetail.modals.addKnowledge.cancel")}
             </Button>
             <Button
               onClick={handleSubmit}
@@ -296,7 +312,9 @@ export function AddKnowledgeModal({
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {inputMode === "url" ? "Đang gửi..." : "Đang thêm..."}
+                  {inputMode === "url"
+                    ? t("dashboard.botDetail.modals.addKnowledge.sending")
+                    : t("dashboard.botDetail.modals.addKnowledge.adding")}
                 </>
               ) : (
                 <>
@@ -307,7 +325,7 @@ export function AddKnowledgeModal({
                   ) : (
                     <Link className="mr-2 h-4 w-4" />
                   )}
-                  Thêm dữ liệu
+                  {t("dashboard.botDetail.modals.addKnowledge.add")}
                 </>
               )}
             </Button>

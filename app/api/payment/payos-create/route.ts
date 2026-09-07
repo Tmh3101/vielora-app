@@ -36,6 +36,7 @@ import {
 } from "@/lib/helpers/payos-helpers";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import { validateInvoiceFields } from "@/lib/utils/invoice-validation";
+import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/constants/workspace";
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     const workspaceId: string | null =
       bodyWorkspaceId ||
       request.headers.get("x-workspace-id") ||
-      request.cookies.get("active_workspace_id")?.value ||
+      request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value ||
       null;
 
     if (!planCode || !billingCycle) {

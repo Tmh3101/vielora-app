@@ -1,6 +1,6 @@
 import type { ServiceClient } from "@/lib/services/types";
 import { GROUP_INSUFFICIENT_CREDITS_CODE } from "@/lib/constants";
-import { GROUP_MESSAGES } from "@/lib/constants/group-chat-messages";
+import { getGroupChatMessages, GROUP_MESSAGES } from "@/lib/constants/group-chat-messages";
 import { EGroupSenderType, ETransactionType } from "@/types/enums";
 import { deductWorkspaceCredits, refundWorkspaceCredits } from "@/lib/services/credit.service";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -13,7 +13,7 @@ import {
 } from "@/types/group-chat";
 
 /**
- * 1. Helper: Resolve workspaceId from botId
+ * 1. Helper: Resolve workspaceId and locale from botId
  */
 export async function resolveBotWorkspaceId(client: ServiceClient, botId: string): Promise<string> {
   const { data: bot, error } = await client
@@ -26,6 +26,29 @@ export async function resolveBotWorkspaceId(client: ServiceClient, botId: string
     throw new Error(GROUP_MESSAGES.ERRORS.BOT_WORKSPACE_NOT_FOUND);
   }
   return bot.workspace_id;
+}
+
+export async function resolveBotWorkspaceAndLocale(
+  client: ServiceClient,
+  botId: string,
+  providedLocale?: string
+): Promise<{ workspaceId: string; locale: string }> {
+  const { data: bot, error } = await client
+    .from("bots")
+    .select("workspace_id, widget_settings")
+    .eq("id", botId)
+    .single();
+
+  const botLocale =
+    providedLocale ||
+    (bot?.widget_settings as { ui_language?: string } | null)?.ui_language ||
+    "vi";
+
+  if (error || !bot?.workspace_id) {
+    const msgs = getGroupChatMessages(botLocale);
+    throw new Error(msgs.ERRORS.BOT_WORKSPACE_NOT_FOUND);
+  }
+  return { workspaceId: bot.workspace_id, locale: botLocale };
 }
 
 /**
@@ -130,10 +153,13 @@ export async function createGroupNote(
     title,
     contentHtml,
     contentText,
-    userName = GROUP_MESSAGES.ROLES.DEFAULT_MEMBER,
+    userName,
+    locale: explicitLocale,
   } = input;
 
-  const workspaceId = await resolveBotWorkspaceId(client, botId);
+  const { workspaceId, locale } = await resolveBotWorkspaceAndLocale(client, botId, explicitLocale);
+  const msgs = getGroupChatMessages(locale);
+  const safeUserName = userName || msgs.ROLES.DEFAULT_MEMBER;
 
   // A. Deduct 1 credit atomically via RPC
   const deductRes = await deductWorkspaceCredits(client, {
@@ -145,7 +171,7 @@ export async function createGroupNote(
 
   if (!deductRes.success) {
     throw new GroupServiceError(
-      deductRes.message || GROUP_MESSAGES.ERRORS.INSUFFICIENT_CREDITS_CREATE,
+      deductRes.message || msgs.ERRORS.INSUFFICIENT_CREDITS_CREATE,
       GROUP_INSUFFICIENT_CREDITS_CODE
     );
   }
@@ -172,20 +198,27 @@ export async function createGroupNote(
       .single();
 
     if (noteError || !noteData) {
-      throw noteError || new Error(GROUP_MESSAGES.ERRORS.CREATE_NOTE_FAILED);
+      throw noteError || new Error(msgs.ERRORS.CREATE_NOTE_FAILED);
     }
     createdNote = noteData as GroupNoteRow;
 
     // C. Generate RAG embedding & insert into documents table
-    const formattedDate = new Date(createdNote.created_at || Date.now()).toLocaleString("vi-VN", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    const contentToEmbed = `[Ghi chú nhóm]\n- Tiêu đề: ${title}\n- Người tạo: ${userName}\n- Thời gian tạo: ${formattedDate}\n- Nội dung:\n${contentText}`;
+    const formattedDate = new Date(createdNote.created_at || Date.now()).toLocaleString(
+      locale.startsWith("en") ? "en-US" : "vi-VN",
+      {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
+    const contentToEmbed = msgs.NOTE_FORMAT.RAG_EMBEDDING_TEMPLATE(
+      title,
+      safeUserName,
+      formattedDate,
+      contentText
+    );
     const { generateEmbedding } = await import("@/lib/rag/generative");
     const embedding = await generateEmbedding({ text: contentToEmbed });
 
@@ -203,7 +236,7 @@ export async function createGroupNote(
           group_id: groupId,
           title,
           created_by: userId,
-          author_name: userName,
+          author_name: safeUserName,
           created_at: createdNote.created_at,
           is_active: true,
         },
@@ -212,7 +245,7 @@ export async function createGroupNote(
       .single();
 
     if (docError || !docData) {
-      throw docError || new Error(GROUP_MESSAGES.ERRORS.RAG_INDEX_FAILED);
+      throw docError || new Error(msgs.ERRORS.RAG_INDEX_FAILED);
     }
     documentId = docData.id;
 
@@ -228,7 +261,7 @@ export async function createGroupNote(
     const safeTitle = title.length > 35 ? `${title.slice(0, 35)}...` : title;
     await insertGroupSystemMessage(adminClient, {
       groupId,
-      content: GROUP_MESSAGES.NOTE_CREATED(userName, safeTitle),
+      content: msgs.NOTE_CREATED(safeUserName, safeTitle),
     });
 
     return createdNote;
@@ -266,10 +299,13 @@ export async function updateGroupNote(
     title,
     contentHtml,
     contentText,
-    userName = GROUP_MESSAGES.ROLES.DEFAULT_MEMBER,
+    userName,
+    locale: explicitLocale,
   } = input;
 
-  const workspaceId = await resolveBotWorkspaceId(client, botId);
+  const { workspaceId, locale } = await resolveBotWorkspaceAndLocale(client, botId, explicitLocale);
+  const msgs = getGroupChatMessages(locale);
+  const safeUserName = userName || msgs.ROLES.DEFAULT_MEMBER;
   const adminClient = createAdminClient();
 
   const { data: existingNote, error: fetchError } = await adminClient
@@ -280,7 +316,7 @@ export async function updateGroupNote(
     .single();
 
   if (fetchError || !existingNote) {
-    throw new Error(GROUP_MESSAGES.ERRORS.NOTE_NOT_FOUND);
+    throw new Error(msgs.ERRORS.NOTE_NOT_FOUND);
   }
 
   const deductRes = await deductWorkspaceCredits(adminClient, {
@@ -292,7 +328,7 @@ export async function updateGroupNote(
 
   if (!deductRes.success) {
     throw new GroupServiceError(
-      deductRes.message || GROUP_MESSAGES.ERRORS.INSUFFICIENT_CREDITS_UPDATE,
+      deductRes.message || msgs.ERRORS.INSUFFICIENT_CREDITS_UPDATE,
       GROUP_INSUFFICIENT_CREDITS_CODE
     );
   }
@@ -322,9 +358,8 @@ export async function updateGroupNote(
     // Update RAG Document Embedding
     if (existingNote.document_id) {
       const formattedDate = new Date(existingNote.created_at || Date.now()).toLocaleString(
-        "vi-VN",
+        locale.startsWith("en") ? "en-US" : "vi-VN",
         {
-          timeZone: "Asia/Ho_Chi_Minh",
           year: "numeric",
           month: "2-digit",
           day: "2-digit",
@@ -332,7 +367,12 @@ export async function updateGroupNote(
           minute: "2-digit",
         }
       );
-      const contentToEmbed = `[Ghi chú nhóm]\n- Tiêu đề: ${updatedTitle}\n- Người tạo: ${userName}\n- Thời gian tạo: ${formattedDate}\n- Nội dung:\n${updatedText}`;
+      const contentToEmbed = msgs.NOTE_FORMAT.RAG_EMBEDDING_TEMPLATE(
+        updatedTitle,
+        safeUserName,
+        formattedDate,
+        updatedText
+      );
       const { generateEmbedding } = await import("@/lib/rag/generative");
       const embedding = await generateEmbedding({ text: contentToEmbed });
 
@@ -348,7 +388,7 @@ export async function updateGroupNote(
             group_id: groupId,
             title: updatedTitle,
             created_by: existingNote.created_by,
-            author_name: userName,
+            author_name: safeUserName,
             created_at: existingNote.created_at,
             is_active: existingNote.is_active,
           },
@@ -359,7 +399,7 @@ export async function updateGroupNote(
     const safeTitle = updatedTitle.length > 35 ? `${updatedTitle.slice(0, 35)}...` : updatedTitle;
     await insertGroupSystemMessage(adminClient, {
       groupId,
-      content: GROUP_MESSAGES.NOTE_UPDATED(userName, safeTitle),
+      content: msgs.NOTE_UPDATED(safeUserName, safeTitle),
     });
 
     return updatedNote as GroupNoteRow;
@@ -389,10 +429,23 @@ export async function deleteGroupNote(
     groupId: string;
     botId?: string;
     userName?: string;
+    locale?: string;
   }
 ): Promise<void> {
-  const { noteId, groupId, userName = GROUP_MESSAGES.ROLES.DEFAULT_MEMBER } = params;
+  const { noteId, groupId, botId, userName, locale: explicitLocale } = params;
   const adminClient = createAdminClient();
+
+  let locale = explicitLocale;
+  if (!locale && botId) {
+    const { data: bot } = await adminClient
+      .from("bots")
+      .select("widget_settings")
+      .eq("id", botId)
+      .maybeSingle();
+    locale = (bot?.widget_settings as { ui_language?: string } | null)?.ui_language || "vi";
+  }
+  const msgs = getGroupChatMessages(locale);
+  const safeUserName = userName || msgs.ROLES.DEFAULT_MEMBER;
 
   const { data: note, error: fetchError } = await adminClient
     .from("group_notes")
@@ -402,7 +455,7 @@ export async function deleteGroupNote(
     .single();
 
   if (fetchError || !note) {
-    throw new Error(GROUP_MESSAGES.ERRORS.NOTE_NOT_FOUND);
+    throw new Error(msgs.ERRORS.NOTE_NOT_FOUND);
   }
 
   if (note.document_id) {
@@ -419,7 +472,7 @@ export async function deleteGroupNote(
   const safeTitle = note.title.length > 35 ? `${note.title.slice(0, 35)}...` : note.title;
   await insertGroupSystemMessage(adminClient, {
     groupId,
-    content: GROUP_MESSAGES.NOTE_DELETED(userName, safeTitle),
+    content: msgs.NOTE_DELETED(safeUserName, safeTitle),
   });
 }
 
@@ -449,10 +502,13 @@ export async function unpinGroupNote(
     noteId: string;
     groupId: string;
     userName?: string;
+    locale?: string;
   }
 ): Promise<void> {
-  const { noteId, groupId, userName = GROUP_MESSAGES.ROLES.DEFAULT_MEMBER } = params;
+  const { noteId, groupId, userName, locale } = params;
   const adminClient = createAdminClient();
+  const msgs = getGroupChatMessages(locale);
+  const safeUserName = userName || msgs.ROLES.DEFAULT_MEMBER;
 
   const { data: note, error: fetchError } = await adminClient
     .from("group_notes")
@@ -462,7 +518,7 @@ export async function unpinGroupNote(
     .single();
 
   if (fetchError || !note) {
-    throw new Error(GROUP_MESSAGES.ERRORS.NOTE_NOT_FOUND);
+    throw new Error(msgs.ERRORS.NOTE_NOT_FOUND);
   }
 
   const { error: updateError } = await adminClient
@@ -482,7 +538,7 @@ export async function unpinGroupNote(
   const safeTitle = note.title.length > 35 ? `${note.title.slice(0, 35)}...` : note.title;
   await insertGroupSystemMessage(adminClient, {
     groupId,
-    content: GROUP_MESSAGES.NOTE_UNPINNED(userName, safeTitle),
+    content: msgs.NOTE_UNPINNED(safeUserName, safeTitle),
   });
 }
 
@@ -495,10 +551,13 @@ export async function pinGroupNote(
     noteId: string;
     groupId: string;
     userName?: string;
+    locale?: string;
   }
 ): Promise<GroupNoteRow> {
-  const { noteId, groupId, userName = GROUP_MESSAGES.ROLES.DEFAULT_MEMBER } = params;
+  const { noteId, groupId, userName, locale } = params;
   const adminClient = createAdminClient();
+  const msgs = getGroupChatMessages(locale);
+  const safeUserName = userName || msgs.ROLES.DEFAULT_MEMBER;
 
   const { data: note, error: fetchError } = await adminClient
     .from("group_notes")
@@ -508,7 +567,7 @@ export async function pinGroupNote(
     .single();
 
   if (fetchError || !note) {
-    throw new Error(GROUP_MESSAGES.ERRORS.NOTE_NOT_FOUND);
+    throw new Error(msgs.ERRORS.NOTE_NOT_FOUND);
   }
 
   const { data: updated, error: updateError } = await adminClient
@@ -531,7 +590,7 @@ export async function pinGroupNote(
   const safeTitle = note.title.length > 35 ? `${note.title.slice(0, 35)}...` : note.title;
   await insertGroupSystemMessage(adminClient, {
     groupId,
-    content: GROUP_MESSAGES.NOTE_PINNED(userName, safeTitle),
+    content: msgs.NOTE_PINNED(safeUserName, safeTitle),
   });
 
   return updated as GroupNoteRow;

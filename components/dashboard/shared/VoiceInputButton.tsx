@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Mic, Square, Loader2, Lock, X } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 export interface VoiceInputButtonProps {
   scope: "bot" | "workspace";
@@ -73,6 +74,7 @@ export function VoiceInputButton({
   isPaidPlan = true,
   className = "",
 }: VoiceInputButtonProps) {
+  const t = useTranslations("dashboard.shared.voiceInput");
   const [isProcessing, setIsProcessing] = useState(false);
   const onTranscriptRef = useRef(onTranscript);
   const processedBlobRef = useRef<Blob | null>(null);
@@ -132,18 +134,14 @@ export function VoiceInputButton({
           const data = await res.json();
 
           if (!res.ok || !data.success) {
-            toast.error(data.message || "Không nhận diện được giọng nói. Vui lòng thử lại.");
+            toast.error(data.message || t("error"));
           } else if (data.text) {
-            if (data.title) {
-              toast.success("Đã nhận diện giọng nói & tự động đề xuất tiêu đề!");
-            } else {
-              toast.success("Đã nhận diện giọng nói thành công!");
-            }
+            toast.success(t("success"));
             onTranscriptRef.current(data.text, data.title);
           }
         } catch (err) {
           console.error("Lỗi gửi voice STT:", err);
-          toast.error("Không thể kết nối đến máy chủ nhận diện giọng nói.");
+          toast.error(t("error"));
         } finally {
           setIsProcessing(false);
         }
@@ -151,7 +149,7 @@ export function VoiceInputButton({
 
       void processAudio();
     }
-  }, [audioBlob, isRecording, isProcessing, scope, targetId]);
+  }, [audioBlob, isRecording, isProcessing, scope, targetId, t]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -168,7 +166,6 @@ export function VoiceInputButton({
   const handleCancelRecording = () => {
     isCancelledRef.current = true;
     stopRecording();
-    toast.info("Đã hủy lượt thu âm.");
   };
 
   return (
@@ -189,8 +186,7 @@ export function VoiceInputButton({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left" className="max-w-xs text-xs">
-              Tính năng Nhập kiến thức bằng giọng nói (Speech-to-Text) chỉ hỗ trợ từ gói Standard
-              trở lên. Vui lòng nâng cấp gói cước để sử dụng.
+              {t("tooltipFree")}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -210,7 +206,7 @@ export function VoiceInputButton({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left" className="text-xs font-medium">
-              Nhập bằng giọng nói
+              {t("tooltipReady")}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -228,7 +224,7 @@ export function VoiceInputButton({
                 size="icon"
                 onClick={handleCancelRecording}
                 className="h-7 w-7 rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
-                aria-label="Hủy thu âm"
+                aria-label={t("cancel")}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -255,19 +251,14 @@ export function VoiceInputButton({
                 <div className="font-mono text-2xl font-semibold tracking-tight text-foreground">
                   {formatTime(recordingSeconds)}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Nói nội dung bạn muốn thêm vào kiến thức
-                </p>
+                <p className="text-xs text-muted-foreground">{t("recording")}</p>
               </div>
             ) : (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-center gap-2 text-sm font-medium text-primary">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Đang nhận diện giọng nói...
+                  {t("processing")}
                 </div>
-                <p className="max-w-xs text-xs text-muted-foreground">
-                  Vui lòng chờ trong giây lát.
-                </p>
               </div>
             )}
           </div>
@@ -282,7 +273,7 @@ export function VoiceInputButton({
                 onClick={handleCancelRecording}
                 className="h-8 rounded-lg text-xs transition-colors duration-200 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
               >
-                Hủy bỏ
+                {t("cancel")}
               </Button>
 
               <Button
@@ -292,7 +283,7 @@ export function VoiceInputButton({
                 className="h-8 gap-1.5 text-xs"
               >
                 <Square className="h-3 w-3 fill-current" />
-                Hoàn thành
+                {t("stop")}
               </Button>
             </div>
           )}

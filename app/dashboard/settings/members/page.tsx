@@ -27,6 +27,7 @@ import {
   Users,
 } from "lucide-react";
 import { EWorkspaceRole, EWorkspaceInviteStatus, EWorkspaceMemberStatus } from "@/types/enums";
+import { useTranslations } from "next-intl";
 
 interface Member {
   userId: string;
@@ -56,6 +57,7 @@ interface TableRowItem {
 }
 
 export default function WorkspaceMembersPage() {
+  const t = useTranslations("dashboard.workspaceSettings.members");
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const { signOut } = useAuth();
@@ -85,22 +87,22 @@ export default function WorkspaceMembersPage() {
     const res = await fetch(`/api/workspaces/${activeWorkspace.id}/members`);
     if (!res.ok) {
       const data = await res.json();
-      throw new Error(data.error || "Không thể tải danh sách thành viên");
+      throw new Error(data.error || t("errorLoadMembers"));
     }
     const data = await res.json();
     setMembers(data.members || []);
-  }, [activeWorkspace?.id]);
+  }, [activeWorkspace?.id, t]);
 
   const fetchInvitations = useCallback(async () => {
     if (!activeWorkspace?.id) return;
     const res = await fetch(`/api/workspaces/${activeWorkspace.id}/invitations`);
     if (!res.ok) {
       const data = await res.json();
-      throw new Error(data.error || "Không thể tải danh sách lời mời");
+      throw new Error(data.error || t("errorLoadInvitations"));
     }
     const data = await res.json();
     setInvitations(data.invitations || []);
-  }, [activeWorkspace?.id]);
+  }, [activeWorkspace?.id, t]);
 
   const loadData = useCallback(async () => {
     if (!activeWorkspace?.id) return;
@@ -109,12 +111,12 @@ export default function WorkspaceMembersPage() {
     try {
       await Promise.all([fetchMembers(), fetchInvitations()]);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Có lỗi xảy ra khi tải dữ liệu";
+      const msg = err instanceof Error ? err.message : t("errorGeneric");
       setError(msg);
     } finally {
       setIsLoading(false);
     }
-  }, [activeWorkspace?.id, fetchMembers, fetchInvitations]);
+  }, [activeWorkspace?.id, fetchMembers, fetchInvitations, t]);
 
   useEffect(() => {
     loadData();
@@ -167,12 +169,12 @@ export default function WorkspaceMembersPage() {
         method: "DELETE",
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Không thể hủy lời mời");
+      if (!res.ok) throw new Error(data.error || t("revokeError"));
 
-      toast.success("Đã hủy lời mời thành công");
+      toast.success(t("revokeSuccess"));
       loadData();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Có lỗi xảy ra khi hủy lời mời");
+      toast.error(err instanceof Error ? err.message : t("revokeError"));
     } finally {
       setActionLoadingId(null);
     }
@@ -187,12 +189,12 @@ export default function WorkspaceMembersPage() {
         method: "DELETE",
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Không thể xóa thành viên");
+      if (!res.ok) throw new Error(data.error || t("removeError"));
 
-      toast.success(`Đã xóa ${memberEmail} khỏi workspace`);
+      toast.success(t("removeSuccess", { email: memberEmail }));
       loadData();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Có lỗi xảy ra khi xóa thành viên");
+      toast.error(err instanceof Error ? err.message : t("removeError"));
     } finally {
       setActionLoadingId(null);
     }
@@ -241,14 +243,14 @@ export default function WorkspaceMembersPage() {
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-500">
           <CheckCircle2 className="h-3.5 w-3.5" />
-          Đang hoạt động
+          {t("statusActive")}
         </span>
       );
     }
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-500">
         <Clock className="h-3.5 w-3.5" />
-        {status === EWorkspaceInviteStatus.Pending ? "Đang chờ" : status}
+        {status === EWorkspaceInviteStatus.Pending ? t("statusPending") : status}
       </span>
     );
   };
@@ -272,10 +274,10 @@ export default function WorkspaceMembersPage() {
         <div className="container mx-auto space-y-8 px-4 pb-24 pt-8 sm:px-6 lg:px-8">
           {/* Header Banner */}
           <PageHeader
-            title="Thành viên Workspace"
+            title={t("title")}
             description={
               <>
-                Quản lý danh sách thành viên và quyền truy cập không gian làm việc của{" "}
+                {t("subtitle")}{" "}
                 <span className="font-semibold text-foreground">{activeWorkspace?.name}</span>
               </>
             }
@@ -286,7 +288,7 @@ export default function WorkspaceMembersPage() {
                 className="bg-primary font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90"
               >
                 <UserPlus className="h-4 w-4" />
-                Mời thành viên
+                {t("inviteMember")}
               </Button>
             )}
           </PageHeader>
@@ -295,9 +297,7 @@ export default function WorkspaceMembersPage() {
             <Card className="border border-border/50 bg-card/50 p-12 text-center shadow-md backdrop-blur-sm">
               <div className="flex flex-col items-center justify-center gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm font-medium text-muted-foreground">
-                  Đang tải danh sách thành viên...
-                </p>
+                <p className="text-sm font-medium text-muted-foreground">{t("loadingMembers")}</p>
               </div>
             </Card>
           ) : error ? (
@@ -306,7 +306,7 @@ export default function WorkspaceMembersPage() {
                 <AlertCircle className="h-6 w-6" />
                 <p className="text-sm font-medium">{error}</p>
                 <Button variant="outline" size="sm" onClick={loadData} className="mt-2 text-xs">
-                  Thử lại
+                  {t("retry")}
                 </Button>
               </div>
             </Card>
@@ -317,10 +317,10 @@ export default function WorkspaceMembersPage() {
                   <table className="w-full text-left text-sm">
                     <thead className="border-b border-border/50 bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       <tr>
-                        <th className="px-6 py-4">Thành viên</th>
-                        <th className="px-6 py-4">Vai trò</th>
-                        <th className="px-6 py-4">Trạng thái</th>
-                        {isOwner && <th className="px-6 py-4 text-right">Thao tác</th>}
+                        <th className="px-6 py-4">{t("colMember")}</th>
+                        <th className="px-6 py-4">{t("colRole")}</th>
+                        <th className="px-6 py-4">{t("colStatus")}</th>
+                        {isOwner && <th className="px-6 py-4 text-right">{t("colActions")}</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
@@ -331,7 +331,7 @@ export default function WorkspaceMembersPage() {
                             className="px-6 py-8 text-center text-xs text-muted-foreground"
                           >
                             <Users className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                            Chưa có thành viên nào.
+                            {t("emptyMembers")}
                           </td>
                         </tr>
                       ) : (
@@ -367,13 +367,13 @@ export default function WorkspaceMembersPage() {
                                       ) : (
                                         <>
                                           <UserX className="mr-1.5 h-3.5 w-3.5" />
-                                          Hủy lời mời
+                                          {t("revokeInvite")}
                                         </>
                                       )}
                                     </Button>
                                   ) : item.id === user?.id ? (
                                     <span className="text-xs font-medium text-muted-foreground">
-                                      (Bạn)
+                                      {t("youLabel")}
                                     </span>
                                   ) : (
                                     <Button
@@ -390,7 +390,7 @@ export default function WorkspaceMembersPage() {
                                       ) : (
                                         <>
                                           <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                          Xóa
+                                          {t("remove")}
                                         </>
                                       )}
                                     </Button>
@@ -437,18 +437,16 @@ export default function WorkspaceMembersPage() {
           setConfirmModal({ isOpen: false, type: null, targetId: null, targetName: null });
         }}
         isLoading={actionLoadingId !== null}
-        title={
-          confirmModal.type === "revoke"
-            ? "Hủy lời mời tham gia?"
-            : "Xóa thành viên khỏi Workspace?"
-        }
+        title={confirmModal.type === "revoke" ? t("confirmRevokeTitle") : t("confirmRemoveTitle")}
         description={
           confirmModal.type === "revoke"
-            ? `Bạn có chắc chắn muốn hủy lời mời tham gia gửi đến ${confirmModal.targetName}? Lời mời sẽ không còn hiệu lực.`
-            : `Bạn có chắc chắn muốn xóa ${confirmModal.targetName} khỏi workspace? Người dùng này sẽ mất toàn bộ quyền truy cập vào các bot và tài nguyên.`
+            ? t("confirmRevokeDesc", { email: confirmModal.targetName })
+            : t("confirmRemoveDesc", { email: confirmModal.targetName })
         }
-        confirmText={confirmModal.type === "revoke" ? "Hủy lời mời" : "Xóa thành viên"}
-        cancelText="Bỏ qua"
+        confirmText={
+          confirmModal.type === "revoke" ? t("confirmRevokeText") : t("confirmRemoveText")
+        }
+        cancelText={t("confirmCancel")}
         variant="destructive"
         icon={
           confirmModal.type === "revoke" ? (

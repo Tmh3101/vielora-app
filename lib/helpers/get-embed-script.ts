@@ -25,8 +25,7 @@ onMounted(() => {
 }
 
 function getPhpEmbedScript(botId: string, appUrl: string): string {
-  return `<!-- Thêm trước </body> trong file layout chính -->
-<script
+  return `<script
   src="${appUrl}/widget.js"
   data-bot-id="<?php echo '${botId}'; ?>"
   data-base-url="${appUrl}"

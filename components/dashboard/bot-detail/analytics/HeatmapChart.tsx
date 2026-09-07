@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DAY_LABELS_BY_INDEX, DISPLAY_DAYS } from "@/lib/constants/analytics";
+import { useTranslations } from "next-intl";
 
 export interface HeatmapChartProps {
   data: AnalyticsHeatmapCell[];
@@ -37,6 +38,7 @@ function getIntensity(value: number, maxValue: number) {
  * @returns The rendered heatmap chart component
  */
 export function HeatmapChart({ data }: HeatmapChartProps) {
+  const t = useTranslations();
   const maxValue = Math.max(...data.map((cell) => cell.value), 0);
   const hasActivity = maxValue > 0;
   const cellMap = useMemo(
@@ -63,7 +65,7 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
       <CardHeader className="pb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle>Khung giờ hoạt động</CardTitle>
+            <CardTitle>{t("dashboard.botDetail.analytics.heatmap.title")}</CardTitle>
             {/* <CardDescription>
               Heatmap rút gọn để xem nhanh lúc người dùng nhắn nhiều nhất
             </CardDescription> */}
@@ -71,10 +73,15 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
           {hasActivity && (
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">
-                Thời gian cao điểm: {DAY_LABELS_BY_INDEX[peakCell.day]} {peakCell.hour}:00
+                {t("dashboard.botDetail.analytics.heatmap.peakTime", {
+                  day: DAY_LABELS_BY_INDEX[peakCell.day],
+                  hour: peakCell.hour,
+                })}
               </Badge>
               <Badge variant="outline">
-                Ngày hoạt động nhiều nhất: {peakDayTotal?.label ?? "CN"}
+                {t("dashboard.botDetail.analytics.heatmap.mostActiveDay", {
+                  day: peakDayTotal?.label ?? "CN",
+                })}
               </Badge>
             </div>
           )}
@@ -85,7 +92,7 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
           <div className="flex h-[220px] items-center justify-center text-muted-foreground">
             <div className="text-center">
               <Clock3 className="mx-auto mb-3 h-8 w-8 opacity-50" />
-              <p className="text-sm">Chưa có hoạt động để hiển thị heatmap</p>
+              <p className="text-sm">{t("dashboard.botDetail.analytics.heatmap.noActivity")}</p>
             </div>
           </div>
         ) : (
@@ -116,7 +123,11 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
                           </TooltipTrigger>
                           <TooltipContent side="top">
                             <p className="text-xs">
-                              {dayItem.label} {hour}:00 - {value} tin nhắn
+                              {t("dashboard.botDetail.analytics.heatmap.tooltip", {
+                                day: dayItem.label,
+                                hour,
+                                count: value,
+                              })}
                             </p>
                           </TooltipContent>
                         </Tooltip>
@@ -128,7 +139,7 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
             </TooltipProvider>
 
             <div className="flex items-center justify-end gap-2 text-[11px] text-muted-foreground">
-              <span>Thấp</span>
+              <span>{t("dashboard.botDetail.analytics.heatmap.low")}</span>
               <div className="flex items-center gap-1">
                 {[0.2, 0.4, 0.6, 0.8, 1].map((opacity) => (
                   <div
@@ -138,7 +149,7 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
                   />
                 ))}
               </div>
-              <span>Cao</span>
+              <span>{t("dashboard.botDetail.analytics.heatmap.high")}</span>
             </div>
           </div>
         )}

@@ -82,51 +82,55 @@ const frameworks = [
   },
 ];
 
-const integrations = [
-  {
-    name: "Google Tag Manager",
-    logo: "/images/google_tag_manager_logo.png",
-    color: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20",
-    badge: null,
-  },
-  {
-    name: "Trang chat độc lập",
-    icon: () => (
-      <div className="ml-3 flex items-center gap-1">
-        <QrCode className="h-4 w-4 shrink-0 text-current" />
-        <Link className="h-4 w-4 shrink-0 text-current" />
-      </div>
-    ),
-    color: "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20",
-    badge: null,
-    qrAndLink: true,
-  },
-  {
-    name: "WordPress Plugin",
-    logo: "/images/wordpress_logo.png",
-    color: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20",
-    badge: null,
-  },
-  {
-    name: "Shopify App Embed",
-    logo: "/images/shopify_logo.png",
-    color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
-    badge: {
-      label: "S\u1eafp ra m\u1eaft",
-      className:
-        "border-amber-500/25 bg-amber-500/15 text-[7px] font-semibold text-amber-600 dark:text-amber-400",
-    },
-  },
-];
+import { useTranslations } from "next-intl";
 
 export function MockupIntegration() {
+  const t = useTranslations("features.mockups.integration");
+
+  const integrations = [
+    {
+      name: t("gtm"),
+      logo: "/images/google_tag_manager_logo.png",
+      color: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20",
+      badge: null,
+    },
+    {
+      name: t("standalone"),
+      icon: () => (
+        <div className="ml-3 flex items-center gap-1">
+          <QrCode className="h-4 w-4 shrink-0 text-current" />
+          <Link className="h-4 w-4 shrink-0 text-current" />
+        </div>
+      ),
+      color: "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20",
+      badge: null,
+      qrAndLink: true,
+    },
+    {
+      name: t("wordpress"),
+      logo: "/images/wordpress_logo.png",
+      color: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20",
+      badge: null,
+    },
+    {
+      name: t("shopify"),
+      logo: "/images/shopify_logo.png",
+      color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
+      badge: {
+        label: t("comingSoon"),
+        className:
+          "border-amber-500/25 bg-amber-500/15 text-[7px] font-semibold text-amber-600 dark:text-amber-400",
+      },
+    },
+  ];
+
   return (
     <Mockup3DWrapper overflowVisible>
       <div className="relative">
         <div className="mb-1 flex items-center gap-2" style={{ transform: "translateZ(8px)" }}>
           <span className="flex h-2 w-2 rounded-full bg-green-500" />
           <span className="text-[13px] font-extrabold uppercase text-foreground">
-            Website Widget
+            {t("widgetTitle")}
           </span>
         </div>
 
@@ -134,7 +138,7 @@ export function MockupIntegration() {
           className="mb-4 text-[10px] text-muted-foreground"
           style={{ transform: "translateZ(6px)" }}
         >
-          Tích hợp đa nền tảng
+          {t("multiPlatform")}
         </p>
 
         <div className="relative mb-4">

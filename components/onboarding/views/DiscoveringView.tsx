@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { AlertCircle, Sparkles } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -25,36 +26,38 @@ export function DiscoveringView({
   progress,
   scopeLabel,
 }: DiscoveringViewProps) {
+  const t = useTranslations("onboarding.views.discovering");
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            Crawl dữ liệu từ website
+            {t("title")}
           </span>
           <Badge className={getPhaseBadgeClass(EBotStatus.Discovering)}>
             {getPhaseLabel(EBotStatus.Discovering)}
           </Badge>
         </CardTitle>
-        <CardDescription>Đang quét và thu thập dữ liệu từ website</CardDescription>
+        <CardDescription>{t("description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         <div className="text-xs text-muted-foreground">
-          Phạm vi: <span className="font-medium text-foreground">{scopeLabel}</span>
+          {t("scopePrefix")}: <span className="font-medium text-foreground">{scopeLabel}</span>
         </div>
 
         {pipelineError && (
           <Alert variant="destructive">
-            <AlertTitle>Discover thất bại</AlertTitle>
+            <AlertTitle>{t("failedTitle")}</AlertTitle>
             <AlertDescription>{pipelineError}</AlertDescription>
           </Alert>
         )}
 
         <div className="space-y-3 rounded-lg border p-4">
           <ElegantProgress
-            title="Đang thu thập dữ liệu..."
-            currentAction={currentAction || "Đang kiểm tra các trang để thu thập dữ liệu..."}
+            title={t("progressTitle")}
+            currentAction={currentAction || t("defaultAction")}
             crawledCount={crawledCount}
             progress={progress}
           />
@@ -63,7 +66,7 @@ export function DiscoveringView({
         {pagesFailed > 0 && (
           <div className="flex items-center gap-2 text-sm text-destructive">
             <AlertCircle className="h-4 w-4" />
-            <span>{pagesFailed} trang lỗi trong quá trình discover</span>
+            <span>{t("failedPagesCount", { count: pagesFailed })}</span>
           </div>
         )}
       </CardContent>

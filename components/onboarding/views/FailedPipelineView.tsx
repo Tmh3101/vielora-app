@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -19,24 +20,26 @@ export function FailedPipelineView({
   onRetry,
   onBackToDashboard,
 }: FailedPipelineViewProps) {
+  const t = useTranslations("onboarding.views.failed");
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-destructive" />
-            Pipeline thất bại
+            {t("title")}
           </span>
           <Badge className={getPhaseBadgeClass(EBotStatus.Failed)}>
             {getPhaseLabel(EBotStatus.Failed)}
           </Badge>
         </CardTitle>
-        <CardDescription>Đã xảy ra lỗi khi xử lý dữ liệu website.</CardDescription>
+        <CardDescription>{t("description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         <Alert variant="destructive">
-          <AlertTitle>Lỗi</AlertTitle>
-          <AlertDescription>{pipelineError || "Không thể hoàn tất pipeline."}</AlertDescription>
+          <AlertTitle>{t("errorTitle")}</AlertTitle>
+          <AlertDescription>{pipelineError || t("defaultError")}</AlertDescription>
         </Alert>
 
         <div className="flex items-center justify-end gap-2">
@@ -45,9 +48,9 @@ export function FailedPipelineView({
             className="hover:border-primary hover:bg-white hover:text-primary"
             onClick={onRetry}
           >
-            Thử lại Discover
+            {t("retryDiscover")}
           </Button>
-          <Button onClick={onBackToDashboard}>Về Dashboard</Button>
+          <Button onClick={onBackToDashboard}>{t("backToDashboard")}</Button>
         </div>
       </CardContent>
     </Card>

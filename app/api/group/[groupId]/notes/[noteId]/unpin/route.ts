@@ -43,10 +43,12 @@ export async function POST(
       );
     }
 
+    const body = await req.json().catch(() => ({}));
     await unpinGroupNote(supabase, {
       noteId,
       groupId,
       userName: perm.userName,
+      locale: body?.locale || perm.botLocale,
     });
 
     return NextResponse.json(

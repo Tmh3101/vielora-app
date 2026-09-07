@@ -27,7 +27,9 @@ import {
 } from "lucide-react";
 import { ReportDocumentPreview } from "./templates";
 import { ALLOWED_LOGO_MIME_TYPES, MAX_LOGO_SIZE } from "@/config/storage";
-import { ELanguage } from "@/types";
+import { EReportLanguage } from "@/types";
+import { FONT_FAMILY_OPTIONS, DEFAULT_FONT_FAMILY } from "@/lib/constants";
+import { useTranslations } from "next-intl";
 
 export interface BrandingTabProps {
   workspaceId: string;
@@ -43,8 +45,8 @@ interface BrandingFormState {
   header_text: string;
   footer_text: string;
   watermark_url: string;
-  default_language: ELanguage;
-  supported_languages: ELanguage[];
+  default_language: EReportLanguage;
+  supported_languages: EReportLanguage[];
 }
 
 const DEFAULT_BRANDING: BrandingFormState = {
@@ -52,46 +54,16 @@ const DEFAULT_BRANDING: BrandingFormState = {
   logo_url: "",
   primary_color: "#3B82F6",
   secondary_color: "",
-  font_family: "Inter, sans-serif",
+  font_family: DEFAULT_FONT_FAMILY,
   header_text: "",
   footer_text: "",
   watermark_url: "",
-  default_language: ELanguage.Vi,
-  supported_languages: [ELanguage.Vi],
+  default_language: EReportLanguage.Vi,
+  supported_languages: [EReportLanguage.Vi],
 };
 
-const FONT_FAMILY_OPTIONS = [
-  {
-    value: "Inter, sans-serif",
-    label: "Inter — Hiện đại, rõ ràng, tiêu chuẩn",
-  },
-  {
-    value: '"Be Vietnam Pro", sans-serif',
-    label: "Be Vietnam Pro — Tối ưu hóa tiếng Việt",
-  },
-  {
-    value: "Roboto, sans-serif",
-    label: "Roboto — Chuẩn mực doanh nghiệp",
-  },
-  {
-    value: "Outfit, sans-serif",
-    label: "Outfit — Trẻ trung, phong cách công nghệ",
-  },
-  {
-    value: '"Plus Jakarta Sans", sans-serif',
-    label: "Plus Jakarta Sans — Hình học cao cấp",
-  },
-  {
-    value: '"Noto Sans", "Noto Naskh Arabic", sans-serif',
-    label: "Noto Sans — Đa ngôn ngữ & Ả Rập (RTL)",
-  },
-  {
-    value: "Merriweather, serif",
-    label: "Merriweather — Có chân (Serif) trang trọng",
-  },
-] as const;
-
 export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
+  const t = useTranslations("dashboard.workspaceSettings.branding");
   const [formData, setFormData] = useState<BrandingFormState>(DEFAULT_BRANDING);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -107,7 +79,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/branding`);
       if (!res.ok) {
-        throw new Error("Không thể tải thông tin thương hiệu workspace");
+        throw new Error(t("errorFetchBranding"));
       }
       const json = await res.json();
       if (json.success && json.data) {
@@ -121,11 +93,11 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
           header_text: d.header_text || "",
           footer_text: d.footer_text || "",
           watermark_url: d.watermark_url || "",
-          default_language: (d.default_language as ELanguage) || ELanguage.Vi,
+          default_language: (d.default_language as EReportLanguage) || EReportLanguage.Vi,
           supported_languages:
             Array.isArray(d.supported_languages) && d.supported_languages.length > 0
-              ? (d.supported_languages as ELanguage[])
-              : [ELanguage.Vi],
+              ? (d.supported_languages as EReportLanguage[])
+              : [EReportLanguage.Vi],
         });
         if (d.logo_url) {
           setLogoPreviewUrl(d.logo_url);
@@ -137,11 +109,11 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
       }
     } catch (err) {
       console.error("fetchBranding error:", err);
-      toast.error(err instanceof Error ? err.message : "Lỗi khi tải cấu hình branding");
+      toast.error(err instanceof Error ? err.message : t("errorFetchGeneric"));
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId]);
+  }, [workspaceId, t]);
 
   useEffect(() => {
     fetchBranding();
@@ -154,14 +126,14 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
 
     // Validate type
     if (!(ALLOWED_LOGO_MIME_TYPES as readonly string[]).includes(file.type)) {
-      toast.error("Định dạng file không hỗ trợ. Vui lòng chọn ảnh JPEG, PNG, WEBP hoặc SVG.");
+      toast.error(t("errorInvalidFileType"));
       if (logoInputRef.current) logoInputRef.current.value = "";
       return;
     }
 
     // Validate size (2MB)
     if (file.size > MAX_LOGO_SIZE) {
-      toast.error("Kích thước file vượt quá giới hạn 2MB.");
+      toast.error(t("errorFileTooLarge"));
       if (logoInputRef.current) logoInputRef.current.value = "";
       return;
     }
@@ -178,17 +150,17 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
 
       const json = await res.json();
       if (!res.ok || !json.success || !json.url) {
-        throw new Error(json.message || json.error || "Tải lên logo thất bại");
+        throw new Error(json.message || json.error || t("errorUploadFailed"));
       }
 
       // Append timestamp to break browser image cache on preview
       const cacheBustedUrl = `${json.url}?t=${Date.now()}`;
       setFormData((prev) => ({ ...prev, logo_url: json.url }));
       setLogoPreviewUrl(cacheBustedUrl);
-      toast.success("Tải lên logo thành công");
+      toast.success(t("successUpload"));
     } catch (err) {
       console.error("Logo upload error:", err);
-      toast.error(err instanceof Error ? err.message : "Tải lên logo thất bại");
+      toast.error(err instanceof Error ? err.message : t("errorUploadFailed"));
     } finally {
       setIsUploadingLogo(false);
       if (logoInputRef.current) logoInputRef.current.value = "";
@@ -204,7 +176,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isOwnerOrAdmin) {
-      toast.error("Chỉ chủ sở hữu hoặc quản trị viên mới có quyền cập nhật cấu hình thương hiệu.");
+      toast.error(t("errorPermissionDenied"));
       return;
     }
 
@@ -218,13 +190,13 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.message || "Không thể lưu cấu hình branding");
+        throw new Error(json.message || t("errorSaveFailed"));
       }
 
-      toast.success("Đã cập nhật cấu hình thương hiệu thành công!");
+      toast.success(t("successSave"));
     } catch (err) {
       console.error("Save branding error:", err);
-      toast.error(err instanceof Error ? err.message : "Lỗi khi lưu cấu hình thương hiệu");
+      toast.error(err instanceof Error ? err.message : t("errorSaveGeneric"));
     } finally {
       setIsSaving(false);
     }
@@ -235,9 +207,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
       <Card className="border border-border/50 bg-card/50 p-12 text-center shadow-md backdrop-blur-sm">
         <div className="flex flex-col items-center justify-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm font-medium text-muted-foreground">
-            Đang tải cấu hình thương hiệu...
-          </p>
+          <p className="text-sm font-medium text-muted-foreground">{t("loading")}</p>
         </div>
       </Card>
     );
@@ -248,10 +218,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
       {!isOwnerOrAdmin && (
         <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-amber-600 dark:text-amber-400">
           <ShieldAlert className="h-5 w-5 shrink-0" />
-          <p className="text-xs font-medium">
-            Bạn đang xem cấu hình ở chế độ chỉ đọc. Chỉ Chủ sở hữu hoặc Quản trị viên workspace (vai
-            trò cấp cao) mới có quyền chỉnh sửa và lưu cài đặt này.
-          </p>
+          <p className="text-xs font-medium">{t("readOnlyNotice")}</p>
         </div>
       )}
 
@@ -267,9 +234,9 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                     <Building2 className="h-4 w-4" />
                   </div>
                   <div>
-                    <CardTitle className="text-base font-semibold">Nhận diện thương hiệu</CardTitle>
+                    <CardTitle className="text-base font-semibold">{t("identityTitle")}</CardTitle>
                     <CardDescription className="text-xs">
-                      Tên thương hiệu và logo chính thức xuất hiện trên báo cáo xuất PDF
+                      {t("identityDescription")}
                     </CardDescription>
                   </div>
                 </div>
@@ -277,7 +244,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
               <CardContent className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="brand_name" className="text-xs font-semibold text-foreground">
-                    Tên thương hiệu
+                    {t("brandNameLabel")}
                   </Label>
                   <Input
                     id="brand_name"
@@ -286,16 +253,16 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, brand_name: e.target.value }))
                     }
-                    placeholder="VD: Vielora"
+                    placeholder={t("brandNamePlaceholder")}
                     className="h-9 rounded-xl border-border/60 bg-muted/30 text-xs focus-visible:ring-primary"
                   />
-                  <p className="text-[11px] text-muted-foreground">
-                    Tên tổ chức / doanh nghiệp hiển thị ở tiêu đề trang và bìa báo cáo.
-                  </p>
+                  <p className="text-[11px] text-muted-foreground">{t("brandNameHint")}</p>
                 </div>
 
                 <div className="space-y-2.5">
-                  <Label className="text-xs font-semibold text-foreground">Logo Workspace</Label>
+                  <Label className="text-xs font-semibold text-foreground">
+                    {t("logoWorkspace")}
+                  </Label>
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                     <input
                       ref={logoInputRef}
@@ -338,7 +305,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                             <div className="backdrop-blur-xs absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                               <Camera className="mb-1 h-5 w-5 text-white" />
                               <span className="text-[10px] font-medium text-white">
-                                Thay đổi logo
+                                {t("changeLogo")}
                               </span>
                             </div>
                           )}
@@ -347,7 +314,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                           {isOwnerOrAdmin && !isUploadingLogo && (
                             <button
                               type="button"
-                              title="Xóa logo"
+                              title={t("removeLogo")}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleRemoveLogo();
@@ -364,10 +331,10 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                             <Upload className="h-4 w-4" />
                           </div>
                           <span className="text-xs font-semibold text-foreground group-hover:text-primary">
-                            Tải lên logo
+                            {t("uploadLogo")}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
-                            Bấm để chọn file
+                            {t("selectFileHint")}
                           </span>
                         </div>
                       )}
@@ -377,23 +344,20 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                         <div className="backdrop-blur-xs absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/85">
                           <Loader2 className="mb-1 h-6 w-6 animate-spin text-primary" />
                           <span className="text-[10px] font-medium text-muted-foreground">
-                            Đang tải lên...
+                            {t("uploading")}
                           </span>
                         </div>
                       )}
                     </div>
 
                     <div className="space-y-1 text-xs text-muted-foreground">
-                      <p className="font-medium text-foreground">Quy cách hình ảnh khuyên dùng:</p>
+                      <p className="font-medium text-foreground">{t("specTitle")}</p>
                       <p className="text-[11px] leading-relaxed">
-                        • Định dạng:{" "}
-                        <span className="font-medium text-foreground">PNG, JPEG, WEBP, SVG</span>{" "}
-                        (tối đa 2MB).
+                        • {t("specFormatLabel")}{" "}
+                        <span className="font-medium text-foreground">{t("specFormatValue")}</span>{" "}
+                        {t("specSize")}
                       </p>
-                      <p className="text-[11px] leading-relaxed">
-                        • Logo nền trong suốt hiển thị đẹp nhất trên báo cáo PDF và các mẫu giao
-                        diện.
-                      </p>
+                      <p className="text-[11px] leading-relaxed">{t("specHint")}</p>
                     </div>
                   </div>
                 </div>
@@ -408,10 +372,8 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                     <Palette className="h-4 w-4" />
                   </div>
                   <div>
-                    <CardTitle className="text-base font-semibold">Màu sắc & Phông chữ</CardTitle>
-                    <CardDescription className="text-xs">
-                      Tông màu chủ đạo và kiểu chữ thương hiệu áp dụng cho biểu đồ & văn bản
-                    </CardDescription>
+                    <CardTitle className="text-base font-semibold">{t("colorTitle")}</CardTitle>
+                    <CardDescription className="text-xs">{t("colorDescription")}</CardDescription>
                   </div>
                 </div>
               </CardHeader>
@@ -424,7 +386,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                       htmlFor="primary_color"
                       className="text-xs font-semibold text-foreground"
                     >
-                      Màu chủ đạo <span className="text-destructive">*</span>
+                      {t("primaryColorLabel")} <span className="text-destructive">*</span>
                     </Label>
                     <div className="flex items-center gap-2.5">
                       <div className="shadow-xs relative flex h-9 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/60">
@@ -450,9 +412,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                         className="h-9 flex-1 rounded-xl border-border/60 bg-muted/30 font-mono text-xs uppercase focus-visible:ring-primary"
                       />
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Màu nền tiêu đề, đường viền nhấn và biểu đồ trong báo cáo.
-                    </p>
+                    <p className="text-[11px] text-muted-foreground">{t("primaryColorHint")}</p>
                   </div>
 
                   {/* Secondary Color */}
@@ -461,7 +421,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                       htmlFor="secondary_color"
                       className="text-xs font-semibold text-foreground"
                     >
-                      Màu phụ
+                      {t("secondaryColorLabel")}
                     </Label>
                     <div className="flex items-center gap-2.5">
                       <div className="shadow-xs relative flex h-9 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/60">
@@ -494,13 +454,11 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                           onClick={() => setFormData((prev) => ({ ...prev, secondary_color: "" }))}
                           className="h-9 rounded-xl text-xs text-muted-foreground hover:text-foreground"
                         >
-                          Đặt lại
+                          {t("reset")}
                         </Button>
                       )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Màu phụ trợ cho các chuỗi số liệu thứ 2 hoặc nhãn phụ.
-                    </p>
+                    <p className="text-[11px] text-muted-foreground">{t("secondaryColorHint")}</p>
                   </div>
                 </div>
 
@@ -530,7 +488,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                         htmlFor="font_family"
                         className="text-xs font-semibold text-foreground"
                       >
-                        Phông chữ thương hiệu
+                        {t("fontLabel")}
                       </Label>
                       <Select
                         disabled={!isOwnerOrAdmin}
@@ -543,7 +501,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                           id="font_family"
                           className="h-9 w-full rounded-xl border-border/60 bg-muted/30 text-xs transition-all hover:border-border hover:bg-muted/50 focus:bg-background focus:ring-1 focus:ring-primary/20"
                         >
-                          <SelectValue placeholder="Chọn phông chữ cho báo cáo..." />
+                          <SelectValue placeholder={t("fontPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent className="max-h-64 rounded-2xl border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-md">
                           {FONT_FAMILY_OPTIONS.map((f) => (
@@ -553,15 +511,14 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                               hideIndicator
                               className="cursor-pointer rounded-xl px-3 py-2 text-xs transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary"
                             >
-                              <span style={{ fontFamily: f.value }}>{f.label}</span>
+                              <span style={{ fontFamily: f.value }}>
+                                {t(f.translationKey) || f.label}
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-[11px] text-muted-foreground">
-                        Phông chữ sẽ được áp dụng đồng bộ cho toàn bộ nội dung văn bản và bảng số
-                        liệu trên tệp PDF.
-                      </p>
+                      <p className="text-[11px] text-muted-foreground">{t("fontHint")}</p>
                     </div>
                   );
                 })()}
@@ -576,19 +533,15 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                     <FileText className="h-4 w-4" />
                   </div>
                   <div>
-                    <CardTitle className="text-base font-semibold">
-                      Nội dung trang báo cáo
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      Cấu hình tiêu đề đầu trang, chân trang và watermark bảo vệ tài liệu
-                    </CardDescription>
+                    <CardTitle className="text-base font-semibold">{t("reportTitle")}</CardTitle>
+                    <CardDescription className="text-xs">{t("reportDescription")}</CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="header_text" className="text-xs font-semibold text-foreground">
-                    Tiêu đề đầu trang
+                    {t("headerLabel")}
                   </Label>
                   <Input
                     id="header_text"
@@ -597,14 +550,14 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, header_text: e.target.value }))
                     }
-                    placeholder="VD: Vielora Analytics - Monthly Intelligence Report"
+                    placeholder={t("headerPlaceholder")}
                     className="h-9 rounded-xl border-border/60 bg-muted/30 text-xs focus-visible:ring-primary"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="footer_text" className="text-xs font-semibold text-foreground">
-                    Chân trang
+                    {t("footerLabel")}
                   </Label>
                   <Input
                     id="footer_text"
@@ -613,14 +566,14 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, footer_text: e.target.value }))
                     }
-                    placeholder="VD: Tài liệu nội bộ mật - Không sao chép dưới mọi hình thức"
+                    placeholder={t("footerPlaceholder")}
                     className="h-9 rounded-xl border-border/60 bg-muted/30 text-xs focus-visible:ring-primary"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="watermark_url" className="text-xs font-semibold text-foreground">
-                    Watermark URL
+                    {t("watermarkLabel")}
                   </Label>
                   <Input
                     id="watermark_url"
@@ -632,9 +585,7 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                     placeholder="https://..."
                     className="h-9 rounded-xl border-border/60 bg-muted/30 text-xs focus-visible:ring-primary"
                   />
-                  <p className="text-[11px] text-muted-foreground">
-                    Hình ảnh chìm chống sao chép xuất hiện mờ phía sau nội dung PDF.
-                  </p>
+                  <p className="text-[11px] text-muted-foreground">{t("watermarkHint")}</p>
                 </div>
               </CardContent>
             </Card>
@@ -650,12 +601,12 @@ export function BrandingTab({ workspaceId, isOwnerOrAdmin }: BrandingTabProps) {
                   {isSaving ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Đang lưu...
+                      {t("saving")}
                     </>
                   ) : (
                     <>
                       <CheckCircle2 className="h-4 w-4" />
-                      Lưu thay đổi
+                      {t("saveChanges")}
                     </>
                   )}
                 </Button>

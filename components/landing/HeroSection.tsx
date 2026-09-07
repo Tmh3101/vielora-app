@@ -14,12 +14,13 @@
  *   moved below the fold of the primary hero content.
  */
 
-import Link from "next/link";
+import NextLink from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { motion, type Variants } from "framer-motion";
 import { Mockup3DWrapper } from "@/components/landing/features/Mockup3DWrapper";
 import { ArrowRight, MessageSquare, Bot, Globe, Send, Clock, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 const containerVariants: Variants = {
   hidden: {},
@@ -33,13 +34,15 @@ const itemVariants: Variants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
-const stats = [
-  { icon: Bot, value: "500+", label: "chatbot đã tạo" },
-  { icon: MessageSquare, value: "24/7", label: "hỗ trợ tự động" },
-  { icon: Clock, value: "<5 phút", label: "thời gian cài đặt" },
-];
-
 const HeroSection = () => {
+  const t = useTranslations("hero");
+
+  const stats = [
+    { icon: Bot, value: "500+", label: t("statBots") },
+    { icon: MessageSquare, value: "24/7", label: t("statSupport") },
+    { icon: Clock, value: t("statSetupValue"), label: t("statSetup") },
+  ];
+
   return (
     <section className="relative overflow-hidden pb-20 pt-32 lg:pb-12 lg:pt-52">
       {/* Background with subtle grid pattern */}
@@ -94,17 +97,20 @@ const HeroSection = () => {
               className="glass-primary shadow-glow-sm mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase text-primary"
             >
               <Bot className="h-4 w-4" />
-              <span>Trợ lý AI cho mọi người</span>
+              <span>{t("badge")}</span>
             </motion.div>
 
             <motion.h1
               variants={itemVariants}
               className="mb-8 text-4xl font-bold leading-tight text-foreground sm:text-5xl lg:text-[3.4rem]"
             >
-              Tạo <span className="text-gradient-animated pr-2 uppercase italic">trợ lý AI</span>{" "}
-              cho mọi người{" "}
+              {t("titlePart1")}{" "}
+              <span className="text-gradient-animated pr-2 uppercase italic">
+                {t("titleHighlight1")}
+              </span>{" "}
+              {t("titlePart2")}{" "}
               <span className="relative inline-block whitespace-nowrap pb-2">
-                trong vài phút
+                {t("titleHighlight2")}
                 <svg
                   viewBox="0 0 300 14"
                   className="absolute bottom-0 left-0 h-3 w-full text-primary"
@@ -126,8 +132,7 @@ const HeroSection = () => {
               variants={itemVariants}
               className="mb-10 max-w-xl text-base text-muted-foreground"
             >
-              Chỉ cần 1 URL hoặc các tệp tài liệu, hệ thống tự động xây dựng kho tri thức cho Trợ lý
-              AI của bạn. Linh hoạt tiếp cận khách hàng ở mọi nơi, &ldquo;no code&rdquo;.
+              {t("description")}
             </motion.p>
 
             <motion.div variants={itemVariants} className="mb-6 flex flex-col gap-4 sm:flex-row">
@@ -136,10 +141,10 @@ const HeroSection = () => {
                 asChild
                 className="bg-gradient-primary btn-glow shadow-glow-sm h-12 rounded-xl px-6 text-sm hover:opacity-90"
               >
-                <Link href="/auth?mode=signup">
-                  Bắt đầu miễn phí
+                <NextLink href="/auth?mode=signup">
+                  {t("ctaPrimary")}
                   <ArrowRight className="ml-1 h-5 w-5" />
-                </Link>
+                </NextLink>
               </Button>
               <Button
                 size="lg"
@@ -147,7 +152,7 @@ const HeroSection = () => {
                 asChild
                 className="h-12 rounded-xl border-primary/30 px-6 text-sm text-primary/80 transition-all hover:border-primary hover:bg-white hover:text-primary"
               >
-                <a href="#demo">Xem demo</a>
+                <a href="#demo">{t("ctaSecondary")}</a>
               </Button>
             </motion.div>
 
@@ -157,7 +162,7 @@ const HeroSection = () => {
             >
               {stats.map((stat, index) => (
                 <div
-                  key={stat.label}
+                  key={index}
                   className={`${index > 0 ? "border-l border-border/60 pl-2 sm:pl-4" : ""}`}
                 >
                   <div className="glass flex items-center gap-1 rounded-full px-4 py-2">
@@ -241,8 +246,8 @@ const HeroSection = () => {
                         <Bot className="h-4 w-4 text-white" />
                       </div>
                       <div className="leading-tight">
-                        <p className="text-xs font-semibold text-white">Trợ lý AI của bạn</p>
-                        <p className="text-[10px] text-white/70">Trực tuyến</p>
+                        <p className="text-xs font-semibold text-white">{t("mockup.botName")}</p>
+                        <p className="text-[10px] text-white/70">{t("mockup.online")}</p>
                       </div>
                     </div>
                     <X
@@ -259,7 +264,7 @@ const HeroSection = () => {
                       className="w-fit max-w-[85%] rounded-xl rounded-bl-sm bg-muted px-3 py-2 text-[10px] leading-relaxed text-foreground/80"
                       style={{ transform: "translateZ(30px)" }}
                     >
-                      👋 Chào bạn! Tôi có thể giúp gì cho bạn?
+                      {t("mockup.welcomeMsg")}
                     </motion.div>
 
                     <motion.div
@@ -269,7 +274,7 @@ const HeroSection = () => {
                       className="ml-auto w-fit max-w-[85%] rounded-xl rounded-br-sm bg-primary px-3 py-2 text-[10px] leading-relaxed text-white"
                       style={{ transform: "translateZ(35px)" }}
                     >
-                      Tôi cần hỗ trợ
+                      {t("mockup.userMsg")}
                     </motion.div>
 
                     <div
@@ -289,7 +294,7 @@ const HeroSection = () => {
                     style={{ transform: "translateZ(18px)" }}
                   >
                     <div className="flex-1 rounded-md border border-border/30 bg-background/60 px-3 py-2 text-[10px] text-muted-foreground/50">
-                      Nhập tin nhắn...
+                      {t("mockup.inputPlaceholder")}
                     </div>
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary">
                       <Send className="h-3 w-3 text-white" />
@@ -303,11 +308,7 @@ const HeroSection = () => {
 
         {/* AEO summary — de-emphasized, no card chrome, secondary to the main hero content */}
         <p className="mx-auto mt-20 max-w-3xl text-center text-xs leading-relaxed text-muted-foreground/70">
-          <strong className="font-medium text-muted-foreground">Vielora</strong> là nền tảng SaaS
-          ứng dụng kiến trúc RAG tiên tiến, giúp mọi người dễ dàng tự động hóa quy trình tương tác
-          và hỗ trợ. Tự động thu thập và chuyển hóa nội dung từ bất kỳ URL website hay tệp tài liệu
-          nào thành kho tri thức cho Trợ lý AI thông minh 24/7 chỉ trong vài phút với chi phí tối ưu
-          và linh hoạt tiếp cận khách hàng qua nhiều phương thức, không cần code.
+          <strong className="font-medium text-muted-foreground">Vielora</strong> {t("aeoSummary")}
         </p>
       </div>
     </section>

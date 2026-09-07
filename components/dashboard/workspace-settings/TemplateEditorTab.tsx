@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Loader2, ShieldAlert, LayoutTemplate, Plus, Upload } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import type {
   SectionType,
@@ -12,7 +13,7 @@ import type {
   ReportTemplateItem,
   TemplateEditorTabProps,
 } from "@/types";
-import { ELanguage } from "@/types";
+import { EReportLanguage } from "@/types";
 import type { WorkspaceBranding } from "@/lib/reports/branding-provider";
 import {
   DEFAULT_STARTER_SECTIONS,
@@ -32,6 +33,7 @@ import {
 export type { TemplateEditorTabProps, ReportTemplateItem, TemplateSectionConfig, SectionType };
 
 export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEditorTabProps) {
+  const t = useTranslations("dashboard.workspaceSettings.templates.editor");
   const [templates, setTemplates] = useState<ReportTemplateItem[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
@@ -86,7 +88,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
 
   // Current active template
   const currentTemplate =
-    templates.find((t) => t.id === selectedTemplateId) || templates[0] || null;
+    templates.find((tpl) => tpl.id === selectedTemplateId) || templates[0] || null;
 
   // Load templates from API
   const fetchTemplates = useCallback(
@@ -94,7 +96,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
       try {
         const res = await fetch(`/api/workspaces/${workspaceId}/templates`);
         if (!res.ok) {
-          throw new Error("Không thể tải danh sách mẫu báo cáo");
+          throw new Error(t("errors.fetchListFailed"));
         }
         const json = await res.json();
         const list: ReportTemplateItem[] = Array.isArray(json.data)
@@ -106,8 +108,8 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
 
         if (list.length > 0) {
           const target = preferTemplateId
-            ? list.find((t) => t.id === preferTemplateId) || list[0]
-            : list.find((t) => t.id === selectedTemplateId) || list[0];
+            ? list.find((tpl) => tpl.id === preferTemplateId) || list[0]
+            : list.find((tpl) => tpl.id === selectedTemplateId) || list[0];
 
           setSelectedTemplateId(target.id);
           setTemplateName(target.name);
@@ -139,12 +141,12 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
         }
       } catch (err) {
         console.error("Fetch templates error:", err);
-        toast.error("Lỗi khi tải mẫu báo cáo");
+        toast.error(t("errors.fetchError"));
       } finally {
         setIsLoading(false);
       }
     },
-    [workspaceId, selectedTemplateId]
+    [workspaceId, selectedTemplateId, t]
   );
 
   useEffect(() => {
@@ -153,7 +155,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
 
   // Handle switching between templates in the workspace
   const handleSelectTemplate = (templateId: string) => {
-    const target = templates.find((t) => t.id === templateId);
+    const target = templates.find((tpl) => tpl.id === templateId);
     if (!target) return;
 
     setSelectedTemplateId(target.id);
@@ -200,7 +202,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
   const handleRemoveSection = (sectionId: string) => {
     if (!isOwnerOrAdmin) return;
     if (sections.length <= 1) {
-      toast.error("Mẫu báo cáo phải có ít nhất 1 section");
+      toast.error(t("errors.needAtLeastOneSection"));
       return;
     }
     setSections((prev) => prev.filter((s) => s.id !== sectionId));
@@ -231,23 +233,23 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
 
     setSections((prev) => [...prev, newSec]);
     setExpandedSections((prev) => ({ ...prev, [newId]: true }));
-    toast.success(`Đã thêm section "${meta?.label || type}"`);
+    toast.success(t("toast.sectionAdded", { label: meta?.label || type }));
   };
 
   // Save current template schema (In-place update)
   const handleSaveTemplate = async () => {
     if (!isOwnerOrAdmin || !selectedTemplateId) {
-      toast.error("Bạn không có quyền cập nhật mẫu báo cáo này");
+      toast.error(t("errors.noPermission"));
       return;
     }
 
     if (!templateName.trim()) {
-      toast.error("Vui lòng nhập tên mẫu báo cáo");
+      toast.error(t("errors.enterTemplateName"));
       return;
     }
 
     if (sections.length === 0) {
-      toast.error("Mẫu báo cáo phải chứa ít nhất 1 section");
+      toast.error(t("errors.mustContainSection"));
       return;
     }
 
@@ -273,21 +275,21 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.message || "Lỗi khi lưu cấu hình mẫu báo cáo");
+        throw new Error(json.message || t("errors.saveConfigFailed"));
       }
 
-      toast.success("Đã cập nhật cấu hình mẫu báo cáo thành công!");
+      toast.success(t("toast.updateSuccess"));
       await fetchTemplates(selectedTemplateId);
     } catch (err) {
       console.error("Save template error:", err);
-      toast.error(err instanceof Error ? err.message : "Lỗi khi lưu mẫu báo cáo");
+      toast.error(err instanceof Error ? err.message : t("errors.saveFailed"));
     } finally {
       setIsSaving(false);
     }
   };
 
   // Language toggle for current template
-  const handleToggleTemplateLang = (lang: ELanguage, checked: boolean) => {
+  const handleToggleTemplateLang = (lang: EReportLanguage, checked: boolean) => {
     setTemplateLanguages((prev) => {
       if (checked) {
         return Array.from(new Set([...prev, lang]));
@@ -301,14 +303,12 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
   const handleCreateTemplate = async () => {
     if (!isOwnerOrAdmin) return;
     if (!newTemplateName.trim()) {
-      toast.error("Vui lòng nhập tên mẫu báo cáo mới");
+      toast.error(t("errors.enterNewTemplateName"));
       return;
     }
 
     if (templates.length >= MAX_WORKSPACE_REPORT_TEMPLATES) {
-      toast.error(
-        `Không gian làm việc đã đạt tối đa ${MAX_WORKSPACE_REPORT_TEMPLATES} mẫu báo cáo.`
-      );
+      toast.error(t("errors.maxTemplatesReached", { max: MAX_WORKSPACE_REPORT_TEMPLATES }));
       return;
     }
 
@@ -316,7 +316,9 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
     try {
       const sourceTemplate =
         createMode === "clone"
-          ? templates.find((t) => t.id === cloneFromTemplateId) || currentTemplate || templates[0]
+          ? templates.find((tpl) => tpl.id === cloneFromTemplateId) ||
+            currentTemplate ||
+            templates[0]
           : null;
 
       let starterSections: TemplateSectionConfig[];
@@ -339,7 +341,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
 
       const initialSchema = {
         title: newTemplateName.trim(),
-        description: "Mẫu báo cáo tùy chỉnh của workspace",
+        description: t("defaults.customDescription"),
         sections: starterSections,
       };
 
@@ -360,16 +362,16 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.message || "Lỗi khi tạo mẫu báo cáo");
+        throw new Error(json.message || t("errors.createFailed"));
       }
 
-      toast.success(`Đã tạo mẫu báo cáo "${newTemplateName.trim()}" thành công!`);
+      toast.success(t("toast.createSuccess", { name: newTemplateName.trim() }));
       setCreateDialogOpen(false);
       setNewTemplateName("");
       await fetchTemplates(json.data?.id);
     } catch (err) {
       console.error("Create template error:", err);
-      toast.error(err instanceof Error ? err.message : "Không thể tạo mẫu báo cáo");
+      toast.error(err instanceof Error ? err.message : t("errors.createError"));
     } finally {
       setIsCreating(false);
     }
@@ -410,7 +412,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
     downloadAnchor.click();
     downloadAnchor.remove();
 
-    toast.success(`Đã xuất file cấu hình mẫu "${templateName}" thành công!`);
+    toast.success(t("toast.exportSuccess", { name: templateName }));
   };
 
   // Import template from JSON
@@ -419,9 +421,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
     if (!file) return;
 
     if (templates.length >= MAX_WORKSPACE_REPORT_TEMPLATES) {
-      toast.error(
-        `Không gian làm việc đã đạt giới hạn ${MAX_WORKSPACE_REPORT_TEMPLATES} mẫu báo cáo. Vui lòng xoá bớt mẫu trước khi nhập thêm.`
-      );
+      toast.error(t("errors.importLimitReached", { max: MAX_WORKSPACE_REPORT_TEMPLATES }));
       return;
     }
 
@@ -430,17 +430,17 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
       const parsed = JSON.parse(text);
 
       if (!parsed || typeof parsed !== "object") {
-        throw new Error("File JSON không hợp lệ");
+        throw new Error(t("errors.invalidJson"));
       }
 
       if (!parsed.name || typeof parsed.name !== "string") {
-        throw new Error("File thiếu trường 'name' (Tên mẫu báo cáo)");
+        throw new Error(t("errors.missingNameField"));
       }
 
       const targetKey = parsed.key || DEFAULT_REPORT_TEMPLATE_KEY;
       const rawSections = parsed.schema?.sections;
       if (!Array.isArray(rawSections) || rawSections.length === 0) {
-        throw new Error("File JSON phải chứa ít nhất 1 section trong schema.sections");
+        throw new Error(t("errors.missingSections"));
       }
 
       setIsCreating(true);
@@ -456,7 +456,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
               : ["vi"],
           schema: {
             title: parsed.name.trim(),
-            description: parsed.schema?.description || "Mẫu báo cáo nhập từ file JSON",
+            description: parsed.schema?.description || t("defaults.importDescription"),
             sections: rawSections,
           },
           is_active: true,
@@ -465,14 +465,14 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.message || "Lỗi khi nhập mẫu báo cáo");
+        throw new Error(json.message || t("errors.importFailed"));
       }
 
-      toast.success(`Đã nhập mẫu báo cáo "${parsed.name}" thành công!`);
+      toast.success(t("toast.importSuccess", { name: parsed.name }));
       await fetchTemplates(json.data?.id);
     } catch (err) {
       console.error("Import template error:", err);
-      toast.error(err instanceof Error ? err.message : "Lỗi khi nhập file JSON");
+      toast.error(err instanceof Error ? err.message : t("errors.importFileError"));
     } finally {
       setIsCreating(false);
       if (fileInputRef.current) {
@@ -486,7 +486,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
     if (!isOwnerOrAdmin || !selectedTemplateId) return;
 
     if (templates.length <= 1) {
-      toast.error("Không thể xoá mẫu báo cáo cuối cùng của không gian làm việc.");
+      toast.error(t("errors.cannotDeleteLast"));
       return;
     }
 
@@ -498,15 +498,15 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.message || "Không thể xoá mẫu báo cáo");
+        throw new Error(json.message || t("errors.deleteFailed"));
       }
 
-      toast.success("Đã vô hiệu hoá mẫu báo cáo thành công");
+      toast.success(t("toast.deleteSuccess"));
       setDeleteDialogOpen(false);
       await fetchTemplates();
     } catch (err) {
       console.error("Delete template error:", err);
-      toast.error(err instanceof Error ? err.message : "Lỗi khi xoá mẫu báo cáo");
+      toast.error(err instanceof Error ? err.message : t("errors.deleteError"));
     } finally {
       setIsDeleting(false);
     }
@@ -517,9 +517,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
       <Card className="border border-border/50 bg-card/50 p-12 text-center shadow-md backdrop-blur-sm">
         <div className="flex flex-col items-center justify-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm font-medium text-muted-foreground">
-            Đang tải cấu hình mẫu báo cáo...
-          </p>
+          <p className="text-sm font-medium text-muted-foreground">{t("loading")}</p>
         </div>
       </Card>
     );
@@ -531,10 +529,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
       {!isOwnerOrAdmin && (
         <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-amber-600 dark:text-amber-400">
           <ShieldAlert className="h-5 w-5 shrink-0" />
-          <p className="text-xs font-medium">
-            Bạn đang xem cấu hình ở chế độ chỉ đọc. Chỉ Chủ sở hữu hoặc Quản trị viên workspace mới
-            có quyền tùy biến các section và lưu thay đổi mẫu báo cáo.
-          </p>
+          <p className="text-xs font-medium">{t("readOnlyNotice")}</p>
         </div>
       )}
 
@@ -546,10 +541,9 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
               <LayoutTemplate className="h-7 w-7" />
             </div>
             <div className="space-y-1.5">
-              <h3 className="text-base font-bold text-foreground">Chưa có mẫu báo cáo nào</h3>
+              <h3 className="text-base font-bold text-foreground">{t("emptyTitle")}</h3>
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Không gian làm việc này hiện chưa có mẫu báo cáo nào đang hoạt động. Hãy tạo mẫu báo
-                cáo mới từ mẫu mặc định hoặc nhập cấu hình từ file JSON.
+                {t("emptyDescription")}
               </p>
             </div>
             {isOwnerOrAdmin && (
@@ -570,7 +564,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
                   className="h-9 rounded-xl text-xs font-medium"
                 >
                   <Upload className="mr-1.5 h-3.5 w-3.5" />
-                  Nhập JSON
+                  {t("importJson")}
                 </Button>
                 <Button
                   type="button"
@@ -585,7 +579,7 @@ export function TemplateEditorTab({ workspaceId, isOwnerOrAdmin }: TemplateEdito
                   className="h-9 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90"
                 >
                   <Plus className="mr-1.5 h-4 w-4" />
-                  Tạo mẫu báo cáo mới
+                  {t("createNewTemplate")}
                 </Button>
               </div>
             )}

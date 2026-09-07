@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -37,6 +38,7 @@ export interface Step2CuratePagesProps {
 }
 
 export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
+  const t = useTranslations("onboarding.steps.step2Curate");
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -108,8 +110,11 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
     } else {
       if (next.size >= maxSelectablePagesByCredit) {
         toast({
-          title: "Không đủ credits",
-          description: `Bạn chỉ có thể chọn tối đa ${maxSelectablePagesByCredit} trang với ${totalCredits} credits hiện tại.`,
+          title: t("notEnoughCreditsTitle"),
+          description: t("notEnoughCreditsDesc", {
+            max: maxSelectablePagesByCredit,
+            credits: totalCredits,
+          }),
           variant: "destructive",
         });
         return;
@@ -137,10 +142,10 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
       await submitSelection(supabase, botId, Array.from(selectedPageIds));
       onNext();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Không thể gửi lựa chọn index.";
+      const message = error instanceof Error ? error.message : t("errorSubmitGeneric");
       setSubmitError(message);
       toast({
-        title: "Lỗi",
+        title: t("errorTitle"),
         description: message,
         variant: "destructive",
       });
@@ -159,9 +164,7 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
         currentAction={currentAction}
         crawledCount={crawledCount}
         progress={progress}
-        scopeLabel={
-          crawlScope === CrawlScope.FULL_WEBSITE ? "Toàn bộ website" : "Chỉ hostname hiện tại"
-        }
+        scopeLabel={crawlScope === CrawlScope.FULL_WEBSITE ? t("scopeFull") : t("scopeSubdomain")}
       />
     );
   }
@@ -184,34 +187,37 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
         <CardTitle className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            Chọn trang để index
+            {t("title")}
           </span>
           <Badge className={getPhaseBadgeClass(EBotStatus.Discovered)}>
             {getPhaseLabel(EBotStatus.Discovered)}
           </Badge>
         </CardTitle>
-        <CardDescription>Chọn những URL cần index trước khi bắt đầu xử lý AI.</CardDescription>
+        <CardDescription>{t("description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         {mergedError && (
           <Alert variant="destructive">
-            <AlertTitle>Lỗi pipeline</AlertTitle>
+            <AlertTitle>{t("pipelineErrorTitle")}</AlertTitle>
             <AlertDescription>{mergedError}</AlertDescription>
           </Alert>
         )}
 
         {pagesFailed > 0 && (
           <Alert>
-            <AlertTitle>Lưu ý</AlertTitle>
+            <AlertTitle>{t("failedPagesNoticeTitle")}</AlertTitle>
             <AlertDescription>
-              Có {pagesFailed} trang discover thất bại và sẽ không xuất hiện trong danh sách chọn.
+              {t("failedPagesNoticeDesc", { count: pagesFailed })}
             </AlertDescription>
           </Alert>
         )}
 
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm text-muted-foreground">
-            Đã chọn {selectedCount}/{curationRows.length} pages
+            {t("selectedPagesCount", {
+              selected: selectedCount,
+              total: curationRows.length,
+            })}
           </span>
           <div className="flex items-center gap-2">
             <Button
@@ -222,7 +228,7 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
               disabled={creditSummaryQuery.isLoading || maxSelectablePagesByCredit === 0}
               className="hover:border-primary hover:bg-white hover:text-primary"
             >
-              Chọn tất cả
+              {t("selectAll")}
             </Button>
             <Button
               type="button"
@@ -232,7 +238,7 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
               disabled={creditSummaryQuery.isLoading}
               className="hover:border-primary hover:bg-white hover:text-primary"
             >
-              Bỏ chọn tất cả
+              {t("deselectAll")}
             </Button>
           </div>
         </div>
@@ -243,16 +249,16 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
           <table className="w-full caption-bottom text-sm">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
-                <TableHead className="w-[56px]">Chọn</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>URL</TableHead>
+                <TableHead className="w-[56px]">{t("colSelect")}</TableHead>
+                <TableHead>{t("colTitle")}</TableHead>
+                <TableHead>{t("colUrl")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoadingPages && (
                 <TableRow>
                   <TableCell colSpan={3} className="text-sm text-muted-foreground">
-                    Đang tải danh sách trang...
+                    {t("loadingPages")}
                   </TableCell>
                 </TableRow>
               )}
@@ -260,7 +266,7 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
               {!isLoadingPages && curationRows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={3} className="text-sm text-muted-foreground">
-                    Không có trang phù hợp để chọn.
+                    {t("emptyPages")}
                   </TableCell>
                 </TableRow>
               )}
@@ -304,17 +310,15 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-2">
             <span className="block text-xs text-muted-foreground">
-              {allRowsSelected ? "Đã chọn tất cả trang" : ""}
+              {allRowsSelected ? t("allPagesSelected") : ""}
             </span>
             {selectedCount >= maxSelectablePagesByCredit && curationRows.length > 0 && (
-              <p className="text-xs font-medium text-amber-600">
-                Không thể chọn thêm trang vì đã đạt giới hạn credits hiện tại.
-              </p>
+              <p className="text-xs font-medium text-amber-600">{t("creditLimitReached")}</p>
             )}
             <div className="inline-flex min-w-[250px] items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
               <div>
                 <p className="text-[11px] tracking-wide text-muted-foreground">
-                  Credits cần dùng / Khả dụng
+                  {t("creditUsageLabel")}
                 </p>
                 <p className="text-xs font-medium text-foreground">
                   {selectedCreditsCost.toLocaleString()} / {totalCredits.toLocaleString()}
@@ -322,8 +326,10 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
               </div>
               <div className="h-8 w-px bg-border" />
               <p className="text-xs text-muted-foreground">
-                {CREDIT_PER_PAGE} credit/trang • tối đa {Math.max(0, maxSelectablePagesByCredit)}{" "}
-                trang
+                {t("creditCostPerItem", {
+                  credit: CREDIT_PER_PAGE,
+                  max: Math.max(0, maxSelectablePagesByCredit),
+                })}
               </p>
             </div>
           </div>
@@ -339,11 +345,11 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
             {isSubmittingSelection ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang xử lý...
+                {t("processing")}
               </>
             ) : (
               <>
-                Bắt đầu Index
+                {t("startIndex")}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </>
             )}
@@ -353,7 +359,7 @@ export function Step2CuratePages({ botId, onNext }: Step2CuratePagesProps) {
         {pagesFailed > 0 && (
           <div className="flex items-center gap-2 pt-2 text-sm text-destructive">
             <AlertCircle className="h-4 w-4" />
-            <span>Có {pagesFailed} trang gặp lỗi discover.</span>
+            <span>{t("failedPagesSummary", { count: pagesFailed })}</span>
           </div>
         )}
       </CardContent>

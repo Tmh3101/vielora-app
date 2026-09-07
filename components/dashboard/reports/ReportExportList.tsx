@@ -42,6 +42,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 function getVisiblePages(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
   if (totalPages <= 7) {
@@ -101,6 +102,8 @@ const LANGUAGE_MAP: Record<string, { label: string; flag: string }> = {
 };
 
 export function ReportExportList({ workspaceId }: ReportExportListProps) {
+  const t = useTranslations("dashboard.reports");
+  const tCommon = useTranslations("dashboard.common");
   // Data states
   const [reports, setReports] = useState<ReportExportItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -155,7 +158,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
 
         if (!res.ok) {
           const errJson = await res.json().catch(() => null);
-          throw new Error(errJson?.message || `Lỗi tải danh sách báo cáo (${res.status})`);
+          throw new Error(errJson?.message || `Failed to load report list (${res.status})`);
         }
 
         const json = await res.json();
@@ -170,7 +173,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
         }
       } catch (err: unknown) {
         console.error("[ReportExportList] fetchReports error:", err);
-        setError(err instanceof Error ? err.message : "Có lỗi xảy ra khi tải danh sách báo cáo");
+        setError(err instanceof Error ? err.message : "Failed to load report list");
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
@@ -224,7 +227,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
   // Copy shareable download URL to clipboard
   const handleCopyLink = async (reportItem: ReportExportItem) => {
     if (!reportItem.downloadUrl) {
-      toast.error("Báo cáo chưa có đường dẫn tải về");
+      toast.error(t("copyLinkError"));
       return;
     }
 
@@ -235,10 +238,10 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
 
       await navigator.clipboard.writeText(fullUrl);
       setCopiedId(reportItem.id);
-      toast.success("Đã sao chép link tải PDF (Có hiệu lực 7 ngày)");
+      toast.success(t("copyLinkSuccess"));
       setTimeout(() => setCopiedId(null), 3000);
     } catch {
-      toast.error("Không thể sao chép liên kết");
+      toast.error(t("copyLinkFailed"));
     }
   };
 
@@ -252,7 +255,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
             className="border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-600 dark:text-amber-400"
           >
             <Clock className="mr-1 h-3 w-3" />
-            Đang xếp hàng
+            {t("statusPending")}
           </Badge>
         );
       case "rendering":
@@ -262,7 +265,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
             className="border-blue-500/30 bg-blue-500/10 text-xs font-medium text-blue-600 dark:text-blue-400"
           >
             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            Đang render
+            {t("statusProcessing")}
           </Badge>
         );
       case "awaiting_review":
@@ -272,7 +275,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
             className="border-amber-500/40 bg-amber-500/15 text-xs font-semibold text-amber-700 dark:text-amber-300"
           >
             <Clock className="mr-1 h-3 w-3 text-amber-600 dark:text-amber-400" />
-            Chờ duyệt
+            {t("statusReview")}
           </Badge>
         );
       case "approved":
@@ -282,7 +285,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
             className="border-blue-500/30 bg-blue-500/10 text-xs font-medium text-blue-600 dark:text-blue-400"
           >
             <CheckCircle2 className="mr-1 h-3 w-3" />
-            Đã duyệt
+            {t("statusCompleted")}
           </Badge>
         );
       case "issued":
@@ -292,7 +295,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
             className="border-emerald-500/30 bg-emerald-500/10 text-xs font-medium text-emerald-600 dark:text-emerald-400"
           >
             <CheckCircle2 className="mr-1 h-3 w-3" />
-            Đã phát hành
+            {t("statusCompleted")}
           </Badge>
         );
       case "failed":
@@ -302,7 +305,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
             className="border-destructive/30 bg-destructive/10 text-xs font-medium text-destructive"
           >
             <XCircle className="mr-1 h-3 w-3" />
-            Thất bại
+            {t("statusFailed")}
           </Badge>
         );
       default:
@@ -330,16 +333,16 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
           >
             <TabsList className="grid h-10 w-full grid-cols-4 rounded-xl bg-muted/60 p-1 sm:flex sm:h-9 sm:w-auto">
               <TabsTrigger value="all" className="rounded-lg px-3 text-xs">
-                Tất cả
+                {tCommon("all")}
               </TabsTrigger>
               <TabsTrigger value="issued" className="rounded-lg px-3 text-xs">
-                Đã phát hành
+                {t("statusCompleted")}
               </TabsTrigger>
               <TabsTrigger value="pending" className="rounded-lg px-3 text-xs">
-                Đang xử lý
+                {t("statusProcessing")}
               </TabsTrigger>
               <TabsTrigger value="failed" className="rounded-lg px-3 text-xs">
-                Thất bại
+                {t("statusFailed")}
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -358,7 +361,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                   : "group-hover:rotate-180 group-hover:text-primary"
               }`}
             />
-            <span>Làm mới</span>
+            <span>{t("refresh")}</span>
           </Button>
         </div>
 
@@ -369,7 +372,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm kiếm theo tiêu đề, tên bot, mã báo cáo..."
+              placeholder={t("searchPlaceholder")}
               className="h-9 rounded-xl border-border/60 bg-muted/30 pl-9 text-xs focus-visible:ring-primary"
             />
           </div>
@@ -383,11 +386,11 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
               }}
             >
               <SelectTrigger className="h-9 w-full rounded-xl border-border/60 bg-muted/30 text-xs sm:w-[220px]">
-                <SelectValue placeholder="Lọc theo bot" />
+                <SelectValue placeholder={t("filterBotPlaceholder")} />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-border/60 shadow-lg">
                 <SelectItem value="all" className="text-xs">
-                  Tất cả Bot ({uniqueBots.length})
+                  {t("allBots")} ({uniqueBots.length})
                 </SelectItem>
                 {uniqueBots.map((b) => (
                   <SelectItem key={b.id} value={b.id} className="text-xs">
@@ -406,9 +409,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
           <CardContent className="p-12 text-center">
             <div className="flex flex-col items-center justify-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm font-medium text-muted-foreground">
-                Đang tải danh sách báo cáo...
-              </p>
+              <p className="text-sm font-medium text-muted-foreground">{t("loadingList")}</p>
             </div>
           </CardContent>
         </Card>
@@ -423,7 +424,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
               onClick={() => void fetchReports()}
               className="mt-2 text-xs"
             >
-              Thử lại
+              {t("retry")}
             </Button>
           </div>
         </Card>
@@ -434,11 +435,11 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
               <FileDown className="h-6 w-6 opacity-60" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-foreground">Không có báo cáo nào</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t("noReports")}</h3>
               <p className="text-xs text-muted-foreground">
                 {searchQuery || statusFilter !== "all" || botFilter !== "all"
-                  ? "Không tìm thấy báo cáo nào phù hợp với bộ lọc hiện tại."
-                  : "Chưa có báo cáo nào được xuất trong workspace này. Bạn có thể xuất báo cáo từ trang chi tiết bot."}
+                  ? t("noReportsFiltered")
+                  : t("noReportsEmpty")}
               </p>
             </div>
           </div>
@@ -450,17 +451,17 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-border/50 bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    <th className="px-6 py-4">Bot</th>
-                    <th className="px-6 py-4">Mẫu báo cáo</th>
-                    <th className="px-6 py-4">Ngôn ngữ</th>
-                    <th className="px-6 py-4">Trạng thái</th>
-                    <th className="px-6 py-4">Ngày yêu cầu</th>
-                    <th className="px-6 py-4 text-right">Thao tác</th>
+                    <th className="px-6 py-4">{t("colBot")}</th>
+                    <th className="px-6 py-4">{t("colTemplate")}</th>
+                    <th className="px-6 py-4">{t("colLanguage")}</th>
+                    <th className="px-6 py-4">{t("colStatus")}</th>
+                    <th className="px-6 py-4">{t("colRequestedAt")}</th>
+                    <th className="px-6 py-4 text-right">{t("colActions")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
                   {filteredReports.map((item) => {
-                    const templateName = item.report_templates?.name || "Báo cáo chuẩn";
+                    const templateName = item.report_templates?.name || t("defaultReportName");
                     const botName = item.bots?.name || `Bot (${item.bot_id.slice(0, 8)})`;
 
                     // Extract languages from scope.languages, scope.files, or item.language
@@ -562,11 +563,11 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                                         className="h-8 w-8 rounded-xl border border-border/60 bg-transparent text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary active:scale-95"
                                       >
                                         <Share2 className="h-4 w-4" />
-                                        <span className="sr-only">Chia sẻ</span>
+                                        <span className="sr-only">{t("shareTooltip")}</span>
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent side="top" className="text-xs">
-                                      Chia sẻ báo cáo (Link, Zalo, Email)
+                                      {t("shareTooltip")}
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
@@ -586,12 +587,12 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                                           download
                                         >
                                           <Download className="h-4 w-4" />
-                                          <span className="sr-only">Tải về PDF</span>
+                                          <span className="sr-only">{t("downloadTooltip")}</span>
                                         </a>
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent side="top" className="text-xs">
-                                      Tải về báo cáo PDF
+                                      {t("downloadTooltip")}
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
@@ -609,7 +610,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                                       </div>
                                     </TooltipTrigger>
                                     <TooltipContent side="top" className="text-xs">
-                                      Hệ thống đang xử lý và tạo PDF...
+                                      {t("processingTooltip")}
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
@@ -628,9 +629,9 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                                     side="left"
                                     className="max-w-xs rounded-xl bg-destructive p-2.5 text-xs text-destructive-foreground shadow-lg"
                                   >
-                                    <p className="font-semibold">Lỗi xuất báo cáo:</p>
+                                    <p className="font-semibold">{t("errorTitle")}</p>
                                     <p className="mt-0.5">
-                                      {item.error_message || "Báo cáo bị lỗi trong quá trình tạo."}
+                                      {item.error_message || t("statusFailed")}
                                     </p>
                                   </TooltipContent>
                                 </Tooltip>
@@ -648,8 +649,8 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                                   </TooltipTrigger>
                                   <TooltipContent side="top" className="text-xs">
                                     {item.status === "rendering"
-                                      ? "Đang render PDF..."
-                                      : "Đang xếp hàng xử lý..."}
+                                      ? t("renderingTooltip")
+                                      : t("queueTooltip")}
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
@@ -667,9 +668,10 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
             {totalPages > 1 && (
               <div className="flex flex-col items-center justify-between gap-3 border-t border-border/40 px-6 py-3.5 sm:flex-row">
                 <p className="text-xs text-muted-foreground">
-                  Hiển thị trang <span className="font-semibold text-foreground">{page}</span> /{" "}
-                  <span className="font-semibold text-foreground">{totalPages}</span> (Tổng cộng:{" "}
-                  <span className="font-semibold text-foreground">{totalCount}</span> báo cáo)
+                  {t("pageInfo")} <span className="font-semibold text-foreground">{page}</span> /{" "}
+                  <span className="font-semibold text-foreground">{totalPages}</span> ({t("of")}{" "}
+                  <span className="font-semibold text-foreground">{totalCount}</span>{" "}
+                  {t("totalReports")})
                 </p>
 
                 <div className="flex items-center gap-1">
@@ -683,7 +685,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                     className="shadow-xs group h-8 gap-1 rounded-lg border-border/60 bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground active:scale-95 disabled:pointer-events-none disabled:opacity-40"
                   >
                     <ChevronLeft className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" />
-                    <span>Trước</span>
+                    <span>{t("prevPage")}</span>
                   </Button>
 
                   {pageItems.map((p, index) =>
@@ -722,7 +724,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                     disabled={page >= totalPages || isLoading}
                     className="shadow-xs group h-8 gap-1 rounded-lg border-border/60 bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground active:scale-95 disabled:pointer-events-none disabled:opacity-40"
                   >
-                    <span>Sau</span>
+                    <span>{t("nextPage")}</span>
                     <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
                   </Button>
                 </div>
@@ -747,30 +749,30 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                   <Share2 className="h-4 w-4 text-primary" />
                 </div>
                 <DialogTitle className="text-base font-bold text-foreground">
-                  Chia Sẻ Báo Cáo PDF
+                  {t("shareTitle")}
                 </DialogTitle>
               </div>
               <DialogDescription className="text-xs text-muted-foreground">
-                Đường dẫn tải báo cáo đã được ký số an toàn và có hiệu lực trong vòng 7 ngày.
+                {t("shareDesc")}
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-2">
               <div className="space-y-1.5 rounded-xl border border-border/50 bg-muted/30 p-3 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Mẫu báo cáo:</span>
+                  <span className="text-muted-foreground">{t("shareReportTemplate")}</span>
                   <span className="font-semibold text-foreground">
-                    {shareModalItem.report_templates?.name || "Báo cáo"}
+                    {shareModalItem.report_templates?.name || t("defaultReportName")}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Bot:</span>
+                  <span className="text-muted-foreground">{t("shareBot")}</span>
                   <span className="font-semibold text-foreground">
                     {shareModalItem.bots?.name || `Bot (${shareModalItem.bot_id.slice(0, 8)})`}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Thời hạn liên kết:</span>
+                  <span className="text-muted-foreground">{t("shareLinkExpiry")}</span>
                   <Badge
                     variant="outline"
                     className="text-[10px] text-emerald-600 dark:text-emerald-400"
@@ -782,7 +784,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
 
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-foreground">
-                  Đường dẫn tải PDF trực tiếp:
+                  {t("shareDirectLink")}
                 </label>
                 <div className="flex flex-wrap items-center gap-2">
                   <input
@@ -840,7 +842,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                 onClick={() => setShareModalItem(null)}
                 className="h-9 rounded-xl border-border/60 bg-background px-4 text-xs font-medium transition-all hover:border-border hover:bg-muted hover:text-foreground active:scale-95"
               >
-                Đóng
+                {t("close")}
               </Button>
               {shareModalItem.downloadUrl && (
                 <Button
@@ -855,7 +857,7 @@ export function ReportExportList({ workspaceId }: ReportExportListProps) {
                     download
                   >
                     <Download className="h-3.5 w-3.5" />
-                    Tải về ngay
+                    {t("downloadNow")}
                   </a>
                 </Button>
               )}

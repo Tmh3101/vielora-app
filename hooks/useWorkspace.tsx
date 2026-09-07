@@ -1,6 +1,10 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import {
+  ACTIVE_WORKSPACE_COOKIE,
+  ACTIVE_WORKSPACE_COOKIE_MAX_AGE,
+} from "@/lib/constants/workspace";
 
 export interface WorkspaceItem {
   id: string;
@@ -23,9 +27,6 @@ interface WorkspaceContextType {
   refreshWorkspaces: () => Promise<void>;
 }
 
-const ACTIVE_WORKSPACE_COOKIE = "active_workspace_id";
-const ACTIVE_WORKSPACE_COOKIE_MAX_AGE = 2592000;
-
 export function persistActiveWorkspaceId(workspaceId: string) {
   document.cookie = `${ACTIVE_WORKSPACE_COOKIE}=${workspaceId}; path=/; max-age=${ACTIVE_WORKSPACE_COOKIE_MAX_AGE}; SameSite=Lax`;
 }
@@ -34,6 +35,10 @@ export function readActiveWorkspaceIdFromCookie(): string | null {
   const cookies = document.cookie.split("; ");
   const activeCookie = cookies.find((c) => c.startsWith(`${ACTIVE_WORKSPACE_COOKIE}=`));
   return activeCookie ? activeCookie.split("=")[1] : null;
+}
+
+export function clearActiveWorkspaceCookie() {
+  document.cookie = `${ACTIVE_WORKSPACE_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType>({

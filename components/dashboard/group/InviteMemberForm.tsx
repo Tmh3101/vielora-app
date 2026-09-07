@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { UserPlus, Loader2 } from "lucide-react";
@@ -15,6 +16,7 @@ interface InviteMemberFormProps {
 }
 
 export function InviteMemberForm({ botId, currentCount, onMemberInvited }: InviteMemberFormProps) {
+  const t = useTranslations("dashboard.group.inviteForm");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -30,25 +32,25 @@ export function InviteMemberForm({ botId, currentCount, onMemberInvited }: Invit
       const res = await inviteMemberApi(botId, email);
       if (res.success && res.data) {
         toast({
-          title: "Thành công",
+          title: t("successTitle"),
           description: res.isNewAccount
-            ? `Đã tạo tài khoản mới và gửi email mời tham gia tới ${email}`
-            : `Đã thêm ${email} vào nhóm chat.`,
+            ? t("inviteNewAccount", { email })
+            : t("inviteAdded", { email }),
         });
         setEmail("");
         onMemberInvited(res.data);
       } else {
         toast({
-          title: "Không thể thêm thành viên",
-          description: res.message || "Đã xảy ra lỗi khi thêm thành viên.",
+          title: t("inviteFailedTitle"),
+          description: res.message || t("inviteFailedDesc"),
           variant: "destructive",
         });
       }
     } catch (err) {
       console.error("Invite error:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể kết nối đến máy chủ.",
+        title: t("errorTitle"),
+        description: t("connectionFailed"),
         variant: "destructive",
       });
     } finally {
@@ -61,7 +63,7 @@ export function InviteMemberForm({ botId, currentCount, onMemberInvited }: Invit
       <div className="relative flex-1">
         <Input
           type="email"
-          placeholder="Nhập email người dùng muốn mời vào nhóm..."
+          placeholder={t("placeholder")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           disabled={isFull || loading}
@@ -75,7 +77,7 @@ export function InviteMemberForm({ botId, currentCount, onMemberInvited }: Invit
         className="shadow-xs shrink-0 rounded-xl font-semibold"
       >
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-        Thêm thành viên
+        {t("addMember")}
       </Button>
     </form>
   );

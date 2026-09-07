@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Bot, CheckCircle, ChevronDown, Link2, Sparkles } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -32,6 +33,7 @@ interface BotInfo {
 }
 
 export function Step4Success({ botId }: Step4SuccessProps) {
+  const t = useTranslations("onboarding.steps.step4Success");
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -160,14 +162,14 @@ export function Step4Success({ botId }: Step4SuccessProps) {
       );
 
       toast({
-        title: "Thành công",
-        description: "Đã lưu cài đặt trang chat độc lập.",
+        title: t("successTitle"),
+        description: t("savedStandaloneDesc"),
       });
     } catch (error) {
       console.error("Save standalone chat settings error:", error);
       toast({
-        title: "Lỗi",
-        description: error instanceof Error ? error.message : "Không thể lưu cài đặt.",
+        title: t("errorTitle"),
+        description: error instanceof Error ? error.message : t("errorSaveGeneric"),
         variant: "destructive",
       });
     } finally {
@@ -181,8 +183,8 @@ export function Step4Success({ botId }: Step4SuccessProps) {
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
           <CheckCircle className="h-8 w-8 text-green-600" />
         </div>
-        <CardTitle>Chatbot đã sẵn sàng!</CardTitle>
-        <CardDescription>Bot đã học xong {pagesIndexed} nguồn dữ liệu của bạn</CardDescription>
+        <CardTitle>{t("title")}</CardTitle>
+        <CardDescription>{t("description", { count: pagesIndexed })}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-xl border bg-card p-4 shadow-sm">
@@ -202,12 +204,12 @@ export function Step4Success({ botId }: Step4SuccessProps) {
                 <p className="font-semibold text-foreground">{botName}</p>
                 <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                   <span className="h-2 w-2 rounded-full bg-green-500" />
-                  Đang hoạt động
+                  {t("statusActive")}
                 </div>
               </div>
             </div>
             <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-              {pagesIndexed} nguồn
+              {t("sourcesBadge", { count: pagesIndexed })}
             </Badge>
           </div>
         </div>
@@ -221,7 +223,7 @@ export function Step4Success({ botId }: Step4SuccessProps) {
             }}
             className="hover:border-primary hover:bg-white hover:text-primary"
           >
-            Trở về Dashboard
+            {t("backToDashboard")}
           </Button>
           <Button
             onClick={() => {
@@ -229,7 +231,7 @@ export function Step4Success({ botId }: Step4SuccessProps) {
               window.location.assign(`/dashboard/bots/${botId}`);
             }}
           >
-            Cài đặt Widget
+            {t("configureWidget")}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
@@ -244,7 +246,7 @@ export function Step4Success({ botId }: Step4SuccessProps) {
           >
             <span className="flex items-center">
               <Sparkles className="mr-2 h-4 w-4" />
-              Tuỳ chỉnh tính cách và kỹ năng
+              {t("customizeAI")}
             </span>
             <ChevronDown
               className={`h-4 w-4 transition-transform ${isAIConfigOpen ? "rotate-180" : ""}`}
@@ -274,7 +276,7 @@ export function Step4Success({ botId }: Step4SuccessProps) {
           >
             <span className="flex items-center">
               <Link2 className="mr-2 h-4 w-4" />
-              Tạo trang chat độc lập
+              {t("createStandaloneChat")}
             </span>
             <ChevronDown
               className={`h-4 w-4 transition-transform ${
@@ -286,10 +288,8 @@ export function Step4Success({ botId }: Step4SuccessProps) {
           {isStandalonePanelOpen && (
             <div className="rounded-xl border bg-muted/20 p-4 shadow-sm">
               <div className="mb-4">
-                <p className="font-semibold text-foreground">Trang chat độc lập</p>
-                <p className="text-sm text-muted-foreground">
-                  Chia sẻ chatbot qua đường link công khai và mã QR.
-                </p>
+                <p className="font-semibold text-foreground">{t("standaloneTitle")}</p>
+                <p className="text-sm text-muted-foreground">{t("standaloneDesc")}</p>
               </div>
               <StandaloneChatSharePanel
                 botName={botName}

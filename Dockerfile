@@ -121,6 +121,12 @@ COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/config ./config
 COPY --from=builder /app/types ./types
 COPY --from=builder /app/workers ./workers
+COPY --from=builder /app/widget ./widget
+COPY --from=builder /app/messages ./messages
+# Only the legal markdown files are needed at runtime (lib/utils/markdown.ts
+# reads them to render /[locale]/terms and /[locale]/privacy). The rest of
+# docs/ (specs, plans, email-templates, setup guides) is builder-stage only.
+COPY --from=builder /app/docs/legal ./docs/legal
 
 RUN chown -R nextjs:nodejs /app
 

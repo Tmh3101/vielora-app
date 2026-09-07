@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { Loader2, RefreshCw, Building2 } from "lucide-react";
 import { EPageSourceType, EPageStatus, ESubscriptionPlan } from "@/types";
 import type { PageListItem } from "@/lib/services/page.service";
+import { useTranslations } from "next-intl";
 
 interface WorkspaceKnowledgeItem {
   id: string;
@@ -56,6 +57,8 @@ export interface WorkspaceKnowledgeClientProps {
 }
 
 export function WorkspaceKnowledgeClient({ initialWorkspaceId }: WorkspaceKnowledgeClientProps) {
+  const t = useTranslations("dashboard.workspaceKnowledge");
+  const tCommon = useTranslations("dashboard.common");
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const { signOut } = useAuth();
@@ -82,16 +85,16 @@ export function WorkspaceKnowledgeClient({ initialWorkspaceId }: WorkspaceKnowle
       const res = await fetch(`/api/workspaces/${workspaceId}/knowledge`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Không thể tải danh sách kiến thức dùng chung");
+        throw new Error(data.error || tCommon("error"));
       }
       const data = await res.json();
       setItems(data.knowledge || []);
     } catch (err: unknown) {
-      setError((err as Error).message || "Đã xảy ra lỗi khi tải dữ liệu");
+      setError((err as Error).message || tCommon("error"));
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId]);
+  }, [workspaceId, tCommon]);
 
   const refreshCredits = useCallback(async () => {
     if (!workspaceId) return;
@@ -289,10 +292,10 @@ export function WorkspaceKnowledgeClient({ initialWorkspaceId }: WorkspaceKnowle
         <div className="container mx-auto space-y-8 px-4 pb-24 pt-8 sm:px-6 lg:px-8">
           {/* Header Banner */}
           <PageHeader
-            title="Kiến thức chung"
+            title={t("title")}
             description={
               <>
-                Quản lý kiến thức dùng chung cho tất cả bot trong{" "}
+                {t("subtitle")}{" "}
                 <span className="font-semibold text-foreground">
                   {activeWorkspace?.name || "workspace"}
                 </span>
@@ -301,7 +304,7 @@ export function WorkspaceKnowledgeClient({ initialWorkspaceId }: WorkspaceKnowle
           >
             {!workspaceId && (
               <Button variant="outline" onClick={() => router.push("/dashboard")}>
-                Chọn workspace
+                {tCommon("cancel")}
               </Button>
             )}
           </PageHeader>

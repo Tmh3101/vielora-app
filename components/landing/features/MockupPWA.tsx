@@ -61,6 +61,8 @@ function SceneWrapper({
   );
 }
 
+import { useTranslations } from "next-intl";
+
 function WebsiteContent({
   dimmed,
   tapPhase,
@@ -68,6 +70,8 @@ function WebsiteContent({
   dimmed: boolean;
   tapPhase?: "idle" | "tap" | "hidden";
 }) {
+  const t = useTranslations("features.mockups.pwa");
+
   return (
     <motion.div
       className="relative flex h-full flex-col px-2 pt-5"
@@ -108,8 +112,8 @@ function WebsiteContent({
               <Bot className="h-3 w-3 text-white" />
             </div>
             <div>
-              <p className="text-[7px] font-medium text-gray-700">Trợ lý AI của bạn</p>
-              <p className="text-[6px] text-gray-400">Đang hoạt động</p>
+              <p className="text-[7px] font-medium text-gray-700">{t("botName")}</p>
+              <p className="text-[6px] text-gray-400">{t("online")}</p>
             </div>
           </div>
         </div>
@@ -142,14 +146,14 @@ function WebsiteContent({
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
           <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-gray-100 px-3 py-2 text-[7px] leading-relaxed text-gray-800">
-            Xin chào 👋 Tôi có thể giúp gì cho bạn?
+            {t("welcomeMsg")}
           </div>
         </motion.div>
       </div>
 
       <div className="mt-auto flex items-center gap-1.5 border-t border-gray-200 p-3">
         <div className="flex-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-[7px] text-gray-400">
-          Nhập tin nhắn...
+          {t("inputPlaceholder")}
         </div>
         <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-primary to-accent">
           <svg
@@ -168,6 +172,7 @@ function WebsiteContent({
 }
 
 function InstallContent() {
+  const t = useTranslations("features.mockups.pwa");
   const phase = usePhase(400, 600, 800);
 
   return (
@@ -183,21 +188,21 @@ function InstallContent() {
             <Bot className="h-3 w-3 text-white" />
           </div>
           <div>
-            <p className="text-[9px] font-semibold text-gray-900">Trợ lý AI của bạn</p>
-            <p className="text-[6.5px] text-gray-500">Cài đặt ứng dụng độc lập</p>
+            <p className="text-[9px] font-semibold text-gray-900">{t("installTitle")}</p>
+            <p className="text-[6.5px] text-gray-500">{t("installSub")}</p>
           </div>
         </div>
 
         <div className="flex gap-2">
           <div className="flex-1 rounded-lg border border-gray-200 py-1.5 text-center text-[8px] font-medium text-gray-500">
-            Hủy
+            {t("cancel")}
           </div>
           <motion.div
             className="flex-1 rounded-lg bg-gradient-to-r from-primary to-accent py-1.5 text-center text-[8px] font-semibold text-white shadow-md"
             animate={phase >= 2 ? { scale: [1, 0.92, 1] } : {}}
             transition={{ duration: 0.35, ease: "easeInOut" }}
           >
-            Cài đặt
+            {t("installBtn")}
           </motion.div>
         </div>
       </motion.div>
@@ -212,20 +217,21 @@ function InstallContent() {
 }
 
 function HomeContent() {
+  const t = useTranslations("features.mockups.pwa");
   const phase = usePhase(500, 700);
 
   const apps = [
-    { name: "Điện thoại", color: "bg-emerald-500", icon: "📞" },
-    { name: "SMS", color: "bg-yellow-500", icon: "💬" },
-    { name: "Mail", color: "bg-blue-500", icon: "✉️" },
-    { name: "Cài đặt", color: "bg-zinc-500", icon: "⚙️" },
-    { name: "Trợ lý AI", color: "bg-gradient-to-br from-primary to-accent", icon: "bot" },
+    { name: t("phoneApp"), color: "bg-emerald-500", icon: "📞" },
+    { name: t("smsApp"), color: "bg-yellow-500", icon: "💬" },
+    { name: t("mailApp"), color: "bg-blue-500", icon: "✉️" },
+    { name: t("settingsApp"), color: "bg-zinc-500", icon: "⚙️" },
+    { name: t("aiApp"), color: "bg-gradient-to-br from-primary to-accent", icon: "bot" },
   ];
 
   return (
     <div className="px-4 pt-6">
       <div className="mb-4 flex items-center justify-between">
-        <span className="text-[8px] font-semibold text-gray-700">Thứ Hai, 10</span>
+        <span className="text-[8px] font-semibold text-gray-700">{t("monday")}</span>
         <div className="flex gap-1">
           <div className="h-1 w-3 rounded-full bg-gray-300" />
           <div className="h-1 w-2 rounded-full bg-gray-200" />
@@ -235,7 +241,7 @@ function HomeContent() {
       <div className="grid grid-cols-3 gap-x-4 gap-y-5">
         {apps.map((app, i) => (
           <motion.div
-            key={app.name}
+            key={i}
             className="flex flex-col items-center gap-1"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -244,9 +250,9 @@ function HomeContent() {
             <motion.div
               className={`flex h-10 w-10 items-center justify-center rounded-2xl ${app.color} shadow-sm`}
               animate={
-                app.name === "Trợ lý AI" && phase >= 2
+                app.name === t("aiApp") && phase >= 2
                   ? { scale: [1, 1.18, 0.92, 1.06, 1] }
-                  : app.name === "Trợ lý AI"
+                  : app.name === t("aiApp")
                     ? { scale: [1, 1.05, 1] }
                     : {}
               }
@@ -273,6 +279,7 @@ function HomeContent() {
 }
 
 function LaunchContent() {
+  const t = useTranslations("features.mockups.pwa");
   const phase = usePhase(200);
 
   return (
@@ -280,7 +287,7 @@ function LaunchContent() {
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-md">
         <Bot className="h-5 w-5 text-white" />
       </div>
-      <p className="mb-4 text-[11px] font-bold text-white">Trợ lý AI của bạn</p>
+      <p className="mb-4 text-[11px] font-bold text-white">{t("botName")}</p>
 
       <div className="flex items-center gap-1">
         {[0, 1, 2].map((i) => (
@@ -304,22 +311,23 @@ function LaunchContent() {
   );
 }
 
-const CHAT_MESSAGES = [
-  { role: "ai", text: "Xin chào 👋 Tôi có thể giúp gì cho bạn?", delay: 200 },
-  { role: "user", text: "Tư vấn giúp tôi gói Standard", delay: 1000 },
-  { role: "typing", delay: 500 },
-  {
-    role: "ai",
-    text: "Gói Standard bao gồm: tích hợp website, không giới hạn tin nhắn, phân tích cơ bản. Phù hợp cho doanh nghiệp vừa và nhỏ.",
-    delay: 3000,
-  },
-] as const;
-
 function ChatContent() {
+  const t = useTranslations("features.mockups.pwa");
   const [visibleMessages, setVisibleMessages] = useState<number[]>([]);
 
+  const chatMessages = [
+    { role: "ai", text: t("welcomeMsg"), delay: 200 },
+    { role: "user", text: t("chatUserMsg"), delay: 1000 },
+    { role: "typing", text: "", delay: 500 },
+    {
+      role: "ai",
+      text: t("chatBotReply"),
+      delay: 3000,
+    },
+  ] as const;
+
   useEffect(() => {
-    const timers = CHAT_MESSAGES.map((msg, i) =>
+    const timers = chatMessages.map((msg, i) =>
       setTimeout(() => setVisibleMessages((prev) => [...prev, i]), msg.delay)
     );
     return () => timers.forEach(clearTimeout);
@@ -333,15 +341,15 @@ function ChatContent() {
           <Bot className="h-3 w-3 text-white" />
         </div>
         <div className="flex-1">
-          <p className="text-[8px] font-semibold text-gray-900">Trợ lý AI của bạn</p>
+          <p className="text-[8px] font-semibold text-gray-900">{t("botName")}</p>
           <div className="flex items-center gap-1">
-            <span className="text-[6px] text-gray-600/70">Đang hoạt động</span>
+            <span className="text-[6px] text-gray-600/70">{t("online")}</span>
           </div>
         </div>
       </div>
 
       <div className="flex-1 space-y-2 overflow-hidden px-3 py-3">
-        {CHAT_MESSAGES.map((msg, i) => {
+        {chatMessages.map((msg, i) => {
           if (msg.role === "typing") {
             return (
               <motion.div
@@ -397,7 +405,7 @@ function ChatContent() {
 
       <div className="mt-auto flex items-center gap-1.5 border-t border-gray-200 p-3">
         <div className="flex-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-[7px] text-gray-400">
-          Nhập tin nhắn...
+          {t("inputPlaceholder")}
         </div>
         <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-primary to-accent">
           <svg

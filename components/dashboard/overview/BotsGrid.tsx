@@ -19,6 +19,7 @@ import { BarChart3, Bot, Check, Copy, Globe, Trash2, ShieldAlert } from "lucide-
 import { toast } from "sonner";
 import type { Tables } from "@/lib/supabase/types";
 import { EBotStatus } from "@/types";
+import { useTranslations } from "next-intl";
 
 type BotType = Tables<"bots">;
 
@@ -26,7 +27,7 @@ export interface BotsGridProps {
   bots: BotType[];
   indexedPagesByBot: Record<string, number>;
   getStatusColor: (status: string, isStopped: boolean) => string;
-  getStatusText: (status: string, isStopped: boolean) => string;
+  getStatusText: (status: string, isStopped: boolean, t?: (key: string) => string) => string;
   onCreateNew: () => void;
   onOpenBot: (botId: string) => void;
   onDeleteBot: (botId: string, botName: string) => Promise<void>;
@@ -40,19 +41,21 @@ export function BotsGrid({
   onOpenBot,
   onDeleteBot,
 }: BotsGridProps) {
+  const t = useTranslations("dashboard.overview.botsSection");
+  const tCommon = useTranslations("dashboard.common");
   const [copiedBotId, setCopiedBotId] = useState<string | null>(null);
 
   const handleCopyBotId = async (botId: string) => {
     try {
       await navigator.clipboard.writeText(botId);
       setCopiedBotId(botId);
-      toast.success("Đã copy Bot ID");
+      toast.success(tCommon("copied"));
       window.setTimeout(() => {
         setCopiedBotId((current) => (current === botId ? null : current));
       }, 1600);
     } catch (error) {
       console.error("Copy bot id failed:", error);
-      toast.error("Không thể copy Bot ID. Vui lòng thử lại.");
+      toast.error(tCommon("error"));
     }
   };
 
@@ -87,13 +90,13 @@ export function BotsGrid({
                     className={`h-2 w-2 rounded-full ${getStatusColor(bot.status, bot.is_stopped)} ${bot.status === EBotStatus.Ready && !bot.is_stopped ? "animate-pulse" : ""}`}
                   />
                   <span className="text-xs text-muted-foreground">
-                    {getStatusText(bot.status, bot.is_stopped)}
+                    {getStatusText(bot.status, bot.is_stopped, t)}
                   </span>
                 </div>
                 {bot.is_banned && (
                   <div className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive ring-1 ring-inset ring-destructive/20">
                     <ShieldAlert className="h-3 w-3" />
-                    Bị chặn bởi Admin
+                    Banned
                   </div>
                 )}
               </div>
@@ -102,15 +105,15 @@ export function BotsGrid({
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4 rounded-xl bg-muted/30 p-3 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground">Trang đã index</p>
-                <p className="font-semibold text-foreground">{indexedPagesByBot[bot.id] || 0}</p>
+                <p className="text-xs text-muted-foreground">{t("tableColKnowledge")}</p>
+                <p className="font-semibold text-foreground">
+                  {indexedPagesByBot[bot.id] || 0} {t("pages")}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Crawl lần cuối</p>
+                <p className="text-xs text-muted-foreground">{t("tableColCreated")}</p>
                 <p className="font-semibold text-foreground">
-                  {bot.last_crawl_at
-                    ? new Date(bot.last_crawl_at).toLocaleDateString("vi-VN")
-                    : "Chưa crawl"}
+                  {bot.last_crawl_at ? new Date(bot.last_crawl_at).toLocaleDateString() : "-"}
                 </p>
               </div>
             </div>
@@ -122,7 +125,7 @@ export function BotsGrid({
                 onClick={() => onOpenBot(bot.id)}
               >
                 <BarChart3 className="mr-1 h-4 w-4" />
-                Chi tiết
+                {t("openDetail")}
               </Button>
               <Button
                 variant="outline"
@@ -149,21 +152,20 @@ export function BotsGrid({
                 </AlertDialogTrigger>
                 <AlertDialogContent className="glass-lg">
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Xóa chatbot?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Bạn có chắc muốn xóa chatbot &quot;{bot.name}&quot;? Tất cả dữ liệu liên quan
-                      sẽ bị xóa vĩnh viễn.
-                    </AlertDialogDescription>
+                    <AlertDialogTitle>
+                      {t("deleteConfirmTitle", { name: bot.name })}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>{t("deleteConfirmDesc")}</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel className="hover:bg-white hover:text-black">
-                      Hủy
+                      {tCommon("cancel")}
                     </AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() => void onDeleteBot(bot.id, bot.name)}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                      Xóa
+                      {tCommon("delete")}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

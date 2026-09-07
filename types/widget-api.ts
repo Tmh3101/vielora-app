@@ -1,5 +1,5 @@
 import { ApiResponse } from "./utils";
-import { EWidgetBackgroundType, EMessageRole, EWidgetIconType } from "./enums";
+import { EWidgetBackgroundType, EMessageRole, EWidgetIconType, ESystemLanguage } from "./enums";
 
 /**
  * A pre-approved destination page that the chatbot can navigate visitors to.
@@ -38,6 +38,7 @@ export type WidgetSettings = {
   // Smart Homepage — auto-populated navigation entries (FR-9). Built from
   // discovered pages + in-page anchors. Unbounded (no MAX_ALLOWED_PAGES cap).
   auto_pages?: KeyActionPage[];
+  ui_language?: ESystemLanguage;
 };
 
 export type InitRequest = {
@@ -73,6 +74,7 @@ export type InitData = {
   conversationId: string | null;
   messages: Message[];
   errorCode?: string;
+  ui_language?: ESystemLanguage;
 };
 
 export type InitResponse = ApiResponse<InitData>;

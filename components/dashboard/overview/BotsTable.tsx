@@ -27,6 +27,7 @@ import { BarChart3, Bot, Check, Copy, Globe, Trash2, ShieldAlert } from "lucide-
 import { toast } from "sonner";
 import type { Tables } from "@/lib/supabase/types";
 import { EBotStatus } from "@/types";
+import { useTranslations } from "next-intl";
 
 type BotType = Tables<"bots">;
 
@@ -34,7 +35,7 @@ export interface BotsTableProps {
   bots: BotType[];
   indexedPagesByBot: Record<string, number>;
   getStatusColor: (status: string, isStopped: boolean) => string;
-  getStatusText: (status: string, isStopped: boolean) => string;
+  getStatusText: (status: string, isStopped: boolean, t?: (key: string) => string) => string;
   onOpenBot: (botId: string) => void;
   onDeleteBot: (botId: string, botName: string) => Promise<void>;
 }
@@ -47,19 +48,21 @@ export function BotsTable({
   onOpenBot,
   onDeleteBot,
 }: BotsTableProps) {
+  const t = useTranslations("dashboard.overview.botsSection");
+  const tCommon = useTranslations("dashboard.common");
   const [copiedBotId, setCopiedBotId] = useState<string | null>(null);
 
   const handleCopyBotId = async (botId: string) => {
     try {
       await navigator.clipboard.writeText(botId);
       setCopiedBotId(botId);
-      toast.success("Đã copy Bot ID");
+      toast.success(tCommon("copied"));
       window.setTimeout(() => {
         setCopiedBotId((current) => (current === botId ? null : current));
       }, 1600);
     } catch (error) {
       console.error("Copy bot id failed:", error);
-      toast.error("Không thể copy Bot ID. Vui lòng thử lại.");
+      toast.error(tCommon("error"));
     }
   };
 
@@ -68,12 +71,12 @@ export function BotsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Chatbot</TableHead>
+            <TableHead>{t("tableColName")}</TableHead>
             <TableHead>Domain</TableHead>
-            <TableHead>Trạng thái</TableHead>
-            <TableHead className="text-center">Trang đã index</TableHead>
-            <TableHead>Crawl lần cuối</TableHead>
-            <TableHead className="text-right">Thao tác</TableHead>
+            <TableHead>{t("tableColStatus")}</TableHead>
+            <TableHead className="text-center">{t("tableColKnowledge")}</TableHead>
+            <TableHead>{t("tableColCreated")}</TableHead>
+            <TableHead className="text-right">{t("tableColActions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -100,7 +103,7 @@ export function BotsTable({
                     {bot.is_banned && (
                       <span className="flex items-center gap-1 text-[10px] font-medium text-destructive">
                         <ShieldAlert className="h-3 w-3" />
-                        Bị chặn
+                        Banned
                       </span>
                     )}
                   </div>
@@ -117,16 +120,14 @@ export function BotsTable({
                   <span
                     className={`h-2 w-2 rounded-full ${getStatusColor(bot.status, bot.is_stopped)} ${bot.status === EBotStatus.Ready && !bot.is_stopped ? "animate-pulse" : ""}`}
                   />
-                  {getStatusText(bot.status, bot.is_stopped)}
+                  {getStatusText(bot.status, bot.is_stopped, t)}
                 </Badge>
               </TableCell>
               <TableCell className="text-center text-sm font-medium">
                 {indexedPagesByBot[bot.id] || 0}
               </TableCell>
               <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                {bot.last_crawl_at
-                  ? new Date(bot.last_crawl_at).toLocaleDateString("vi-VN")
-                  : "Chưa crawl"}
+                {bot.last_crawl_at ? new Date(bot.last_crawl_at).toLocaleDateString() : "-"}
               </TableCell>
               <TableCell className="text-right">
                 <div
@@ -166,21 +167,20 @@ export function BotsTable({
                     </AlertDialogTrigger>
                     <AlertDialogContent className="glass-lg">
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Xóa chatbot?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Bạn có chắc muốn xóa chatbot &quot;{bot.name}&quot;? Tất cả dữ liệu liên
-                          quan sẽ bị xóa vĩnh viễn.
-                        </AlertDialogDescription>
+                        <AlertDialogTitle>
+                          {t("deleteConfirmTitle", { name: bot.name })}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>{t("deleteConfirmDesc")}</AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel className="hover:bg-white hover:text-black">
-                          Hủy
+                          {tCommon("cancel")}
                         </AlertDialogCancel>
                         <AlertDialogAction
                           onClick={() => void onDeleteBot(bot.id, bot.name)}
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
-                          Xóa
+                          {tCommon("delete")}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>

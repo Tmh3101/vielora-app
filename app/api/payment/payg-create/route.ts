@@ -24,6 +24,7 @@ import {
   generateOrderCode,
 } from "@/lib/helpers/payos-helpers";
 import { validateInvoiceFields } from "@/lib/utils/invoice-validation";
+import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/constants/workspace";
 
 export interface PaygCreateRequestBody {
   packageId: string;
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     const workspaceId: string | null =
       bodyWorkspaceId ||
       request.headers.get("x-workspace-id") ||
-      request.cookies.get("active_workspace_id")?.value ||
+      request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value ||
       null;
 
     if (!packageId) {

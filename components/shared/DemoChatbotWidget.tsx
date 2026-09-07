@@ -21,6 +21,7 @@ import { WIDGET_CONFIG, WIDGET_FALLBACK, WIDGET_MESSAGES, MAX_CHAT_INPUT } from 
 import { INSUFFICIENT_CREDITS_MESSAGE } from "@/lib/constants/chat";
 import { type BotInfo, type APIMessage, EMessageRole, EWidgetIconType } from "@/types";
 import { callChatAPI, initDemoBot } from "@/lib/services/widget.service";
+import { useTranslations } from "next-intl";
 
 interface Message {
   id: number;
@@ -33,6 +34,7 @@ interface DemoChatbotWidgetProps {
 }
 
 export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, position }) => {
+  const t = useTranslations("dashboard.botDetail.demoWidget");
   const activeBotId = botId || WIDGET_CONFIG.DEMO_BOT_ID || "";
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -422,7 +424,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
               border: "none",
               cursor: "pointer",
             }}
-            title="Click để mở chat"
+            title={t("openChat")}
           >
             {showDemoChat ? (
               <X
@@ -523,7 +525,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                     <div>
                       <h4 className="text-sm font-semibold text-white">{botInfo.botName}</h4>
                       <p className="text-xs text-white/80">
-                        {insufficientCredits ? "Tạm dừng do hết credits" : "Trực tuyến"}
+                        {insufficientCredits ? t("pausedCredits") : t("online")}
                       </p>
                     </div>
                   </div>
@@ -724,7 +726,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                         value={input}
                         onChange={handleInputChange}
                         placeholder={
-                          insufficientCredits ? "Bot đã hết credits" : "Nhập tin nhắn..."
+                          insufficientCredits ? t("placeholderNoCredits") : t("placeholder")
                         }
                         disabled={isTyping || isChatBlocked}
                         maxLength={MAX_CHAT_INPUT}
@@ -737,7 +739,7 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
                             type="button"
                             disabled
                             size="sm"
-                            title="Trò chuyện bằng giọng nói"
+                            title={t("voiceChat")}
                             className="h-8 w-8 rounded-full bg-slate-100 p-0 text-slate-500 shadow-none"
                           >
                             <Mic className="h-3.5 w-3.5 text-slate-600" />
@@ -765,8 +767,8 @@ export const DemoChatbotWidget: React.FC<DemoChatbotWidgetProps> = ({ botId, pos
         <div className="space-y-2 text-center text-sm text-muted-foreground">
           <p className="text-xs opacity-75">
             {botId
-              ? `Hỏi về bất cứ điều gì liên quan đến ${botInfo.botName}!`
-              : `Hỏi về bất cứ điều gì liên quan đến ${WIDGET_FALLBACK.BOT_NAME}!`}
+              ? t("askAnything", { botName: botInfo.botName })
+              : t("askAnything", { botName: WIDGET_FALLBACK.BOT_NAME })}
           </p>
         </div>
       </div>

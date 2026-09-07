@@ -17,6 +17,7 @@ import { CREDIT_PER_PAGE, MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH } f
 import { Loader2, Pencil } from "lucide-react";
 import { VoiceInputButton } from "@/components/dashboard/shared/VoiceInputButton";
 import type { Tables } from "@/lib/supabase/types";
+import { useTranslations } from "next-intl";
 
 type PageType = Tables<"pages">;
 
@@ -45,6 +46,7 @@ export function EditKnowledgeModal({
   onConfirm,
   onResetPage,
 }: EditKnowledgeModalProps) {
+  const t = useTranslations();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [prevOpen, setPrevOpen] = useState(open);
@@ -74,21 +76,22 @@ export function EditKnowledgeModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Pencil className="h-5 w-5 text-primary" />
-            Chỉnh sửa nội dung
+            {t("dashboard.botDetail.modals.editKnowledge.title")}
           </DialogTitle>
           <DialogDescription>
-            Cập nhật tiêu đề và nội dung. Nội dung sẽ được re-index sau khi lưu.
+            {t("dashboard.botDetail.modals.editKnowledge.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 space-y-4 overflow-hidden px-1">
           <div className="space-y-2">
             <Label htmlFor="edit-title">
-              Tiêu đề <span className="font-normal text-destructive">*</span>
+              {t("dashboard.botDetail.modals.editKnowledge.fieldTitle")}{" "}
+              <span className="font-normal text-destructive">*</span>
             </Label>
             <Input
               id="edit-title"
-              placeholder="Nhập tiêu đề..."
+              placeholder={t("dashboard.botDetail.modals.editKnowledge.fieldTitlePlaceholder")}
               value={title}
               onChange={(e) => {
                 if (e.target.value.length <= MAX_MANUAL_TITLE_LENGTH) {
@@ -110,7 +113,8 @@ export function EditKnowledgeModal({
           <div className="-mx-1 flex-1 space-y-2 overflow-hidden px-1">
             <div className="flex items-center justify-between">
               <Label htmlFor="edit-content">
-                Nội dung <span className="font-normal text-destructive">*</span>
+                {t("dashboard.botDetail.modals.editKnowledge.fieldContent")}{" "}
+                <span className="font-normal text-destructive">*</span>
               </Label>
 
               {botId && (
@@ -132,14 +136,18 @@ export function EditKnowledgeModal({
               <div className="flex h-[300px] items-center justify-center rounded-lg border bg-muted/30">
                 <div className="flex flex-col items-center gap-2 text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin" />
-                  <p className="text-sm">Đang tải nội dung...</p>
+                  <p className="text-sm">
+                    {t("dashboard.botDetail.modals.editKnowledge.loadingContent")}
+                  </p>
                 </div>
               </div>
             ) : (
               <>
                 <Textarea
                   id="edit-content"
-                  placeholder="Nhập nội dung văn bản hoặc markdown..."
+                  placeholder={t(
+                    "dashboard.botDetail.modals.editKnowledge.fieldContentPlaceholder"
+                  )}
                   value={content}
                   onChange={(e) => {
                     if (e.target.value.length <= MAX_MANUAL_CONTENT_LENGTH) {
@@ -152,7 +160,9 @@ export function EditKnowledgeModal({
                   className="resize-none text-sm"
                 />
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Hỗ trợ định dạng Markdown.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("dashboard.botDetail.modals.editKnowledge.markdownHint")}
+                  </p>
                   <p
                     className={`text-xs ${content.length >= MAX_MANUAL_CONTENT_LENGTH ? "text-destructive" : "text-muted-foreground"}`}
                   >
@@ -168,19 +178,23 @@ export function EditKnowledgeModal({
           <div className="space-y-2">
             {totalCredits < CREDIT_PER_PAGE && (
               <p className="text-xs font-medium text-amber-600">
-                Không đủ credits để cập nhật dữ liệu.
+                {t("dashboard.botDetail.modals.editKnowledge.notEnoughCredits")}
               </p>
             )}
             <div className="inline-flex min-w-[250px] items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
               <div>
-                <p className="text-[11px] tracking-wide text-muted-foreground">Credits hiện có</p>
+                <p className="text-[11px] tracking-wide text-muted-foreground">
+                  {t("dashboard.botDetail.modals.editKnowledge.creditsAvailable")}
+                </p>
                 <p className="text-xs font-medium text-foreground">
                   {totalCredits.toLocaleString()} credits
                 </p>
               </div>
               <div className="h-8 w-px bg-border" />
               <p className="text-xs text-muted-foreground">
-                Cần {CREDIT_PER_PAGE} credit để cập nhật
+                {t("dashboard.botDetail.modals.editKnowledge.creditsNeeded", {
+                  count: CREDIT_PER_PAGE,
+                })}
               </p>
             </div>
           </div>
@@ -191,7 +205,7 @@ export function EditKnowledgeModal({
               disabled={isSaving}
               className="hover:border-red-600 hover:bg-white hover:text-red-600"
             >
-              Hủy
+              {t("dashboard.botDetail.modals.editKnowledge.cancel")}
             </Button>
             <Button
               onClick={() => void onConfirm(title, content)}
@@ -206,10 +220,10 @@ export function EditKnowledgeModal({
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang lưu...
+                  {t("dashboard.botDetail.modals.editKnowledge.saving")}
                 </>
               ) : (
-                "Lưu thay đổi"
+                t("dashboard.botDetail.modals.editKnowledge.save")
               )}
             </Button>
           </div>

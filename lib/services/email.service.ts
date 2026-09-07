@@ -18,10 +18,6 @@ function getResend(): Resend | null {
   return _resend;
 }
 
-// function getResendClient(): Resend | null {
-//   return getResend();
-// }
-
 const FROM = () => {
   const fromEnv = process.env.RESEND_FROM_EMAIL;
   if (!fromEnv) return "Vielora <noreply@vielora.vn>";
@@ -65,10 +61,10 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
 // Shared template parts
 // ============================================================
 
-function emailLayout(badge: string, heading: string, body: string) {
+export function emailLayout(badge: string, heading: string, body: string) {
   const appUrl = APP_URL();
   return `<!doctype html>
-<html lang="vi">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -125,7 +121,7 @@ function emailLayout(badge: string, heading: string, body: string) {
 </html>`;
 }
 
-function ctaButton(text: string, href: string) {
+export function ctaButton(text: string, href: string) {
   return `<tr>
   <td align="center" style="padding-bottom: 32px">
     <table role="presentation" border="0" cellpadding="0" cellspacing="0">
@@ -139,7 +135,7 @@ function ctaButton(text: string, href: string) {
 </tr>`;
 }
 
-function paragraph(text: string) {
+export function paragraph(text: string) {
   return `<tr>
   <td align="center" style="padding-bottom: 24px">
     <p style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; font-size: 16px; line-height: 26px; color: #64748b; max-width: 90%;">${text}</p>
@@ -147,7 +143,7 @@ function paragraph(text: string) {
 </tr>`;
 }
 
-function infoRow(label: string, value: string) {
+export function infoRow(label: string, value: string) {
   return `<tr>
   <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
@@ -160,7 +156,7 @@ function infoRow(label: string, value: string) {
 </tr>`;
 }
 
-function infoTable(rows: string) {
+export function infoTable(rows: string) {
   return `<tr>
   <td style="padding-bottom: 32px">
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border-radius: 12px; padding: 16px;">
@@ -178,22 +174,27 @@ function infoTable(rows: string) {
 // UC1 — Welcome email
 // ============================================================
 
-export async function sendWelcomeEmail(to: string, fullName: string): Promise<boolean> {
+export function buildWelcomeEmailHtml(fullName: string): { subject: string; html: string } {
   const appUrl = APP_URL();
   const body =
     paragraph(
-      `Chào mừng <strong>${fullName}</strong> đã gia nhập <strong>Vielora</strong>! Tài khoản của bạn đã được kích hoạt thành công.`
+      `Welcome <strong>${fullName}</strong> to <strong>Vielora</strong>! Your account has been successfully activated.`
     ) +
     infoTable(
-      infoRow("Gói hiện tại", "Free") +
-        infoRow("Chatbot tối đa", "1") +
-        infoRow("Credits/tháng", "100")
+      infoRow("Current Plan", "Free") +
+        infoRow("Max Chatbots", "1") +
+        infoRow("Monthly Credits", "100")
     ) +
-    paragraph("Bắt đầu tạo chatbot AI đầu tiên cho website của bạn ngay hôm nay!") +
-    ctaButton("Bắt đầu tạo chatbot →", `${appUrl}/dashboard`);
+    paragraph("Start creating your first AI chatbot for your website today!") +
+    ctaButton("Start creating chatbot →", `${appUrl}/dashboard`);
 
-  const html = emailLayout("🎉 Chào mừng bạn", "Chào mừng đến với Vielora!", body);
-  return sendEmail(to, "Chào mừng bạn đến với Vielora! 🎉", html);
+  const html = emailLayout("🎉 Welcome", "Welcome to Vielora!", body);
+  return { subject: "Welcome to Vielora! 🎉", html };
+}
+
+export async function sendWelcomeEmail(to: string, fullName: string): Promise<boolean> {
+  const { subject, html } = buildWelcomeEmailHtml(fullName);
+  return sendEmail(to, subject, html);
 }
 
 // ============================================================
@@ -212,13 +213,12 @@ export interface PaymentEmailData {
   periodEnd: string;
 }
 
-export async function sendPaymentConfirmationEmail(
-  to: string,
+export function buildPaymentConfirmationEmailHtml(
   fullName: string,
   data: PaymentEmailData
-): Promise<boolean> {
+): { subject: string; html: string } {
   const appUrl = APP_URL();
-  const cycleLabel = data.billingCycle === ESubscriptionCycle.Yearly ? "Hàng năm" : "Hàng tháng";
+  const cycleLabel = data.billingCycle === ESubscriptionCycle.Yearly ? "Yearly" : "Monthly";
   const formattedAmount =
     data.currency === EPaymentCurrency.VND
       ? new Intl.NumberFormat("vi-VN").format(data.amount) + " ₫"
@@ -227,26 +227,31 @@ export async function sendPaymentConfirmationEmail(
           currency: EPaymentCurrency.USD,
         }).format(data.amount);
 
-  const body =
-    paragraph(
-      `Xin chào <strong>${fullName}</strong>, thanh toán của bạn đã được xử lý thành công!`
-    ) +
-    infoTable(
-      infoRow("Gói", `${data.planName} (${cycleLabel})`) +
-        infoRow("Số tiền", formattedAmount) +
-        infoRow("Mã giao dịch", data.txnId) +
-        infoRow("Bot tối đa", `${data.botsLimit}`) +
-        infoRow("Credits/tháng", `${new Intl.NumberFormat("vi-VN").format(data.monthlyCredits)}`) +
-        infoRow("Chu kỳ", `${data.periodStart} → ${data.periodEnd}`)
-    ) +
-    ctaButton("Truy cập Dashboard →", `${appUrl}/dashboard`);
+  const formattedCredits = new Intl.NumberFormat("en-US").format(data.monthlyCredits);
 
-  const html = emailLayout(
-    "✅ Thanh toán thành công",
-    `Gói ${data.planName} đã được kích hoạt`,
-    body
-  );
-  return sendEmail(to, `Thanh toán thành công gói ${data.planName}`, html);
+  const body =
+    paragraph(`Hi <strong>${fullName}</strong>, your payment has been processed successfully!`) +
+    infoTable(
+      infoRow("Plan", `${data.planName} (${cycleLabel})`) +
+        infoRow("Amount", formattedAmount) +
+        infoRow("Transaction ID", data.txnId) +
+        infoRow("Max Chatbots", `${data.botsLimit}`) +
+        infoRow("Monthly Credits", formattedCredits) +
+        infoRow("Billing Period", `${data.periodStart} → ${data.periodEnd}`)
+    ) +
+    ctaButton("Go to Dashboard →", `${appUrl}/dashboard`);
+
+  const html = emailLayout("✅ Payment Successful", `${data.planName} Plan Activated`, body);
+  return { subject: `Payment Confirmed: ${data.planName} Plan Active`, html };
+}
+
+export async function sendPaymentConfirmationEmail(
+  to: string,
+  fullName: string,
+  data: PaymentEmailData
+): Promise<boolean> {
+  const { subject, html } = buildPaymentConfirmationEmailHtml(fullName, data);
+  return sendEmail(to, subject, html);
 }
 
 // ============================================================
@@ -258,29 +263,40 @@ export interface DowngradeEmailData {
   expiryDate: string;
 }
 
+export function buildSubscriptionDowngradeEmailHtml(
+  fullName: string,
+  data: DowngradeEmailData
+): { subject: string; html: string } {
+  const appUrl = APP_URL();
+  const body =
+    paragraph(
+      `Hi <strong>${fullName}</strong>, your <strong>${data.oldPlanName}</strong> subscription expired on <strong>${data.expiryDate}</strong> and your account has been moved to the Free plan.`
+    ) +
+    infoTable(
+      infoRow("Previous Plan", data.oldPlanName) +
+        infoRow("Current Plan", "Free") +
+        infoRow("Monthly Credits", "100") +
+        infoRow("Max Chatbots", "1")
+    ) +
+    paragraph(
+      "⚠️ Active bots exceeding your Free limit have been paused. Please visit your Dashboard to manage active bots or renew your subscription."
+    ) +
+    ctaButton("Renew Subscription →", `${appUrl}/dashboard/upgrade`);
+
+  const html = emailLayout("⚠️ Subscription Expired", `${data.oldPlanName} Plan Expired`, body);
+  return {
+    subject: `⚠️ Your ${data.oldPlanName} plan has expired — Account moved to Free`,
+    html,
+  };
+}
+
 export async function sendSubscriptionDowngradeEmail(
   to: string,
   fullName: string,
   data: DowngradeEmailData
 ): Promise<boolean> {
-  const appUrl = APP_URL();
-  const body =
-    paragraph(
-      `Xin chào <strong>${fullName}</strong>, gói <strong>${data.oldPlanName}</strong> của bạn đã hết hạn vào <strong>${data.expiryDate}</strong> và tài khoản đã được chuyển về gói Free.`
-    ) +
-    infoTable(
-      infoRow("Gói cũ", data.oldPlanName) +
-        infoRow("Gói hiện tại", "Free") +
-        infoRow("Credits mới", "100/tháng") +
-        infoRow("Chatbot tối đa", "1")
-    ) +
-    paragraph(
-      "⚠️ Tất cả các bot đang hoạt động đã bị tạm dừng. Vui lòng truy cập Dashboard để chọn bot muốn tiếp tục sử dụng hoặc gia hạn gói."
-    ) +
-    ctaButton("Gia hạn ngay →", `${appUrl}/dashboard/upgrade`);
-
-  const html = emailLayout("⚠️ Subscription hết hạn", `Gói ${data.oldPlanName} đã hết hạn`, body);
-  return sendEmail(to, `⚠️ Gói ${data.oldPlanName} đã hết hạn — Tài khoản đã chuyển về Free`, html);
+  const { subject, html } = buildSubscriptionDowngradeEmailHtml(fullName, data);
+  return sendEmail(to, subject, html);
 }
 
 // ============================================================
@@ -293,35 +309,42 @@ export interface CreditResetEmailData {
   nextResetDate: string;
 }
 
+export function buildCreditResetEmailHtml(
+  fullName: string,
+  data: CreditResetEmailData
+): { subject: string; html: string } {
+  const appUrl = APP_URL();
+  const formattedCredits = new Intl.NumberFormat("en-US").format(data.monthlyCredits);
+
+  const body =
+    paragraph(
+      `Hi <strong>${fullName}</strong>, your monthly credits have been successfully refreshed!`
+    ) +
+    infoTable(
+      infoRow("Plan", data.planName) +
+        infoRow("New Credits", formattedCredits) +
+        infoRow("Next Reset Date", data.nextResetDate)
+    ) +
+    ctaButton("View Dashboard →", `${appUrl}/dashboard`);
+
+  const html = emailLayout(
+    "🔄 Credits Refreshed",
+    `${formattedCredits} credits for your new cycle`,
+    body
+  );
+  return {
+    subject: `🔄 Monthly Credits Refreshed — ${formattedCredits} credits available`,
+    html,
+  };
+}
+
 export async function sendCreditResetEmail(
   to: string,
   fullName: string,
   data: CreditResetEmailData
 ): Promise<boolean> {
-  const appUrl = APP_URL();
-  const formattedCredits = new Intl.NumberFormat("vi-VN").format(data.monthlyCredits);
-
-  const body =
-    paragraph(
-      `Xin chào <strong>${fullName}</strong>, credits hàng tháng của bạn đã được nạp lại thành công!`
-    ) +
-    infoTable(
-      infoRow("Gói", data.planName) +
-        infoRow("Credits mới", formattedCredits) +
-        infoRow("Kỳ reset tiếp theo", data.nextResetDate)
-    ) +
-    ctaButton("Xem Dashboard →", `${appUrl}/dashboard`);
-
-  const html = emailLayout(
-    "🔄 Credits đã nạp lại",
-    `${formattedCredits} credits cho tháng mới`,
-    body
-  );
-  return sendEmail(
-    to,
-    `🔄 Credits đã được nạp lại — ${formattedCredits} credits cho tháng mới`,
-    html
-  );
+  const { subject, html } = buildCreditResetEmailHtml(fullName, data);
+  return sendEmail(to, subject, html);
 }
 
 // ============================================================
@@ -335,27 +358,44 @@ export interface LowCreditsEmailData {
   nextResetDate: string;
 }
 
+export function buildLowCreditsWarningEmailHtml(
+  fullName: string,
+  data: LowCreditsEmailData
+): { subject: string; html: string } {
+  const appUrl = APP_URL();
+  const remainingFormatted = new Intl.NumberFormat("en-US").format(data.remainingCredits);
+  const totalFormatted = new Intl.NumberFormat("en-US").format(data.totalMonthlyCredits);
+
+  const body =
+    paragraph(`Hi <strong>${fullName}</strong>, your account credits are running low!`) +
+    infoTable(
+      infoRow("Remaining Credits", `${remainingFormatted} / ${totalFormatted}`) +
+        infoRow("Usage", `${data.usagePercent}%`) +
+        infoRow("Next Reset Date", data.nextResetDate)
+    ) +
+    paragraph(
+      "💡 Upgrade your plan or enable Pay-As-You-Go to keep your chatbots responding without interruptions."
+    ) +
+    ctaButton("Upgrade Plan →", `${appUrl}/dashboard/upgrade`);
+
+  const html = emailLayout(
+    "🔔 Low Credits Warning",
+    `Only ${remainingFormatted} credits left`,
+    body
+  );
+  return {
+    subject: `🔔 Low Credits Alert — Only ${remainingFormatted} credits remaining`,
+    html,
+  };
+}
+
 export async function sendLowCreditsWarningEmail(
   to: string,
   fullName: string,
   data: LowCreditsEmailData
 ): Promise<boolean> {
-  const appUrl = APP_URL();
-
-  const body =
-    paragraph(`Xin chào <strong>${fullName}</strong>, credits của bạn đang ở mức thấp!`) +
-    infoTable(
-      infoRow("Credits còn lại", `${data.remainingCredits} / ${data.totalMonthlyCredits}`) +
-        infoRow("Đã sử dụng", `${data.usagePercent}%`) +
-        infoRow("Kỳ reset tiếp theo", data.nextResetDate)
-    ) +
-    paragraph(
-      "💡 Nâng cấp gói để có thêm credits hoặc bật Pay-as-you-go để tiếp tục sử dụng khi hết credits."
-    ) +
-    ctaButton("Nâng cấp gói →", `${appUrl}/dashboard/upgrade`);
-
-  const html = emailLayout("🔔 Credits sắp hết", `Chỉ còn ${data.remainingCredits} credits`, body);
-  return sendEmail(to, `🔔 Credits sắp hết — Chỉ còn ${data.remainingCredits} credits`, html);
+  const { subject, html } = buildLowCreditsWarningEmailHtml(fullName, data);
+  return sendEmail(to, subject, html);
 }
 
 // ============================================================
@@ -368,33 +408,40 @@ export interface ExpiryReminderEmailData {
   daysRemaining: number;
 }
 
+export function buildSubscriptionExpiryReminderEmailHtml(
+  fullName: string,
+  data: ExpiryReminderEmailData
+): { subject: string; html: string } {
+  const appUrl = APP_URL();
+
+  const body =
+    paragraph(
+      `Hi <strong>${fullName}</strong>, your <strong>${data.planName}</strong> plan will expire on <strong>${data.expiryDate}</strong>.`
+    ) +
+    infoTable(
+      infoRow("Current Plan", data.planName) +
+        infoRow("Expiration Date", data.expiryDate) +
+        infoRow("Time Remaining", `${data.daysRemaining} days`)
+    ) +
+    paragraph(
+      "⚠️ If not renewed, your account will be downgraded to Free (100 credits/month) and extra active bots will be paused."
+    ) +
+    ctaButton("Renew Subscription →", `${appUrl}/dashboard/upgrade`);
+
+  const html = emailLayout("📅 Expiring Soon", `${data.planName} Plan Expiring Soon`, body);
+  return {
+    subject: `📅 Notice: Your ${data.planName} plan expires in ${data.daysRemaining} days`,
+    html,
+  };
+}
+
 export async function sendSubscriptionExpiryReminderEmail(
   to: string,
   fullName: string,
   data: ExpiryReminderEmailData
 ): Promise<boolean> {
-  const appUrl = APP_URL();
-
-  const body =
-    paragraph(
-      `Xin chào <strong>${fullName}</strong>, gói <strong>${data.planName}</strong> của bạn sẽ hết hạn vào <strong>${data.expiryDate}</strong>.`
-    ) +
-    infoTable(
-      infoRow("Gói hiện tại", data.planName) +
-        infoRow("Ngày hết hạn", data.expiryDate) +
-        infoRow("Thời gian còn lại", `${data.daysRemaining} ngày`)
-    ) +
-    paragraph(
-      "⚠️ Nếu không gia hạn, tài khoản sẽ chuyển về gói Free, credits sẽ bị reset về 100/tháng và các bot vượt giới hạn sẽ bị tạm dừng."
-    ) +
-    ctaButton("Gia hạn ngay →", `${appUrl}/dashboard/upgrade`);
-
-  const html = emailLayout("📅 Sắp hết hạn", `Gói ${data.planName} sắp hết hạn`, body);
-  return sendEmail(
-    to,
-    `📅 Gói ${data.planName} sắp hết hạn trong ${data.daysRemaining} ngày`,
-    html
-  );
+  const { subject, html } = buildSubscriptionExpiryReminderEmailHtml(fullName, data);
+  return sendEmail(to, subject, html);
 }
 
 // ============================================================
@@ -410,11 +457,10 @@ export interface PAYGPurchaseEmailData {
   newTotalCredits: number;
 }
 
-export async function sendPAYGPurchaseEmail(
-  to: string,
+export function buildPAYGPurchaseEmailHtml(
   fullName: string,
   data: PAYGPurchaseEmailData
-): Promise<boolean> {
+): { subject: string; html: string } {
   const appUrl = APP_URL();
   const formattedAmount =
     data.currency === EPaymentCurrency.VND
@@ -424,28 +470,36 @@ export async function sendPAYGPurchaseEmail(
           currency: EPaymentCurrency.USD,
         }).format(data.amount);
 
-  const formattedCreditsAdded = new Intl.NumberFormat("vi-VN").format(data.creditsAdded);
-  const formattedTotalCredits = new Intl.NumberFormat("vi-VN").format(data.newTotalCredits);
+  const formattedCreditsAdded = new Intl.NumberFormat("en-US").format(data.creditsAdded);
+  const formattedTotalCredits = new Intl.NumberFormat("en-US").format(data.newTotalCredits);
 
   const body =
     paragraph(
-      `Xin chào <strong>${fullName}</strong>, bạn đã nạp thành công <strong>${formattedCreditsAdded} credits</strong> vào tài khoản!`
+      `Hi <strong>${fullName}</strong>, you have successfully added <strong>${formattedCreditsAdded} credits</strong> to your account!`
     ) +
     infoTable(
-      infoRow("Gói nạp", data.packageName) +
-        infoRow("Số tiền", formattedAmount) +
-        infoRow("Mã giao dịch", data.txnId) +
-        infoRow("Số credits nạp", `+${formattedCreditsAdded}`) +
-        infoRow("Tổng credits hiện tại", formattedTotalCredits)
+      infoRow("Package", data.packageName) +
+        infoRow("Amount", formattedAmount) +
+        infoRow("Transaction ID", data.txnId) +
+        infoRow("Credits Added", `+${formattedCreditsAdded}`) +
+        infoRow("Total Balance", formattedTotalCredits)
     ) +
-    ctaButton("Truy cập Dashboard →", `${appUrl}/dashboard`);
+    ctaButton("Go to Dashboard →", `${appUrl}/dashboard`);
 
-  const html = emailLayout(
-    "✅ Nạp Credit thành công",
-    `Bạn vừa nạp ${formattedCreditsAdded} credits`,
-    body
-  );
-  return sendEmail(to, `Nạp thành công ${formattedCreditsAdded} credits`, html);
+  const html = emailLayout("✅ Credits Added", `+${formattedCreditsAdded} credits added`, body);
+  return {
+    subject: `Payment Confirmed: +${formattedCreditsAdded} Credits Added`,
+    html,
+  };
+}
+
+export async function sendPAYGPurchaseEmail(
+  to: string,
+  fullName: string,
+  data: PAYGPurchaseEmailData
+): Promise<boolean> {
+  const { subject, html } = buildPAYGPurchaseEmailHtml(fullName, data);
+  return sendEmail(to, subject, html);
 }
 
 // ============================================================
@@ -459,10 +513,10 @@ export interface InvoiceIssuedEmailData {
   amount: number;
 }
 
-export async function sendInvoiceIssuedEmail(
-  to: string,
-  data: InvoiceIssuedEmailData
-): Promise<boolean> {
+export function buildInvoiceIssuedEmailHtml(data: InvoiceIssuedEmailData): {
+  subject: string;
+  html: string;
+} {
   const appUrl = APP_URL();
   const formattedAmount = new Intl.NumberFormat("vi-VN", {
     style: "currency",
@@ -474,22 +528,30 @@ export async function sendInvoiceIssuedEmail(
   const invoicePdfUrl = `${appUrl}/api/invoices/${data.invoiceId}/pdf?token=${invoiceToken}&exp=${invoiceTokenExp}`;
 
   const body =
-    paragraph(`Xin chào,`) +
+    paragraph(`Hello,`) +
     paragraph(
-      `Hóa đơn điện tử cho <strong>${data.companyName}</strong> đã được phát hành thành công.`
+      `The electronic invoice for <strong>${data.companyName}</strong> has been successfully issued.`
     ) +
     infoTable(
-      infoRow("Số hóa đơn", data.invoiceNo) +
-        infoRow("Tổng tiền", formattedAmount) +
-        infoRow("Trạng thái", "Đã phát hành")
+      infoRow("Invoice No.", data.invoiceNo) +
+        infoRow("Total Amount", formattedAmount) +
+        infoRow("Status", "Issued / Đã phát hành")
     ) +
-    ctaButton("Xem & Tải hóa đơn", invoicePdfUrl) +
+    ctaButton("View & Download Invoice →", invoicePdfUrl) +
     paragraph(
-      `🔗 <em>Link này sẽ hết hạn sau <strong>7 ngày</strong>. Sau khi hết hạn, bạn có thể xem lại hóa đơn trong mục <strong>Lịch sử thanh toán</strong> trong trang quản lý của Vielora.</em>`
+      `🔗 <em>This link will expire in <strong>7 days</strong>. You can also access all your past invoices anytime in the <strong>Billing History</strong> section of your Vielora Dashboard.</em>`
     );
 
-  const html = emailLayout("Hóa đơn điện tử", "Hóa đơn đã phát hành", body);
-  return sendEmail(to, "Xuất hóa đơn điện tử", html);
+  const html = emailLayout("Electronic Invoice", "E-Invoice Issued", body);
+  return { subject: `E-Invoice Issued - ${data.invoiceNo}`, html };
+}
+
+export async function sendInvoiceIssuedEmail(
+  to: string,
+  data: InvoiceIssuedEmailData
+): Promise<boolean> {
+  const { subject, html } = buildInvoiceIssuedEmailHtml(data);
+  return sendEmail(to, subject, html);
 }
 
 // ============================================================
@@ -522,7 +584,7 @@ export async function getUserEmailById(
 }
 
 /**
- * Lấy danh sách email và tên của tất cả thành viên (và owner) trong workspace.
+ * Get email and full name of all members (and workspace owner).
  */
 export async function getWorkspaceMemberEmails(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -582,37 +644,44 @@ export interface InvitationEmailData {
   acceptUrl: string;
 }
 
+export function buildWorkspaceInvitationEmailHtml(data: InvitationEmailData): {
+  subject: string;
+  html: string;
+} {
+  const body =
+    paragraph(
+      `<strong>${data.invitedByName}</strong> has invited you to join the workspace <strong>${data.workspaceName}</strong> on Vielora.`
+    ) +
+    infoTable(
+      infoRow("Workspace", data.workspaceName) +
+        infoRow("Invited By", data.invitedByName) +
+        infoRow("Invitation Validity", "7 days")
+    ) +
+    paragraph("Click the button below to accept the invitation and join the workspace:") +
+    ctaButton("Accept Invitation →", data.acceptUrl) +
+    paragraph(
+      `<span style="font-size: 13px; color: #94a3b8;">If you were not expecting this invitation or do not wish to join, you can safely ignore this email.</span>`
+    );
+
+  const html = emailLayout("✉️ Workspace Invitation", `Join ${data.workspaceName}`, body);
+
+  return {
+    subject: `${data.invitedByName} invited you to join "${data.workspaceName}" on Vielora`,
+    html,
+  };
+}
+
 export async function sendWorkspaceInvitationEmail(
   to: string,
   data: InvitationEmailData
 ): Promise<boolean> {
-  const body =
-    paragraph(
-      `<strong>${data.invitedByName}</strong> đã mời bạn tham gia không gian làm việc (workspace) <strong>${data.workspaceName}</strong> trên Vielora.`
-    ) +
-    infoTable(
-      infoRow("Workspace", data.workspaceName) +
-        infoRow("Người mời", data.invitedByName) +
-        infoRow("Thời hạn lời mời", "7 ngày")
-    ) +
-    paragraph("Nhấn vào nút bên dưới để chấp nhận lời mời và gia nhập workspace ngay:") +
-    ctaButton("Chấp nhận lời mời →", data.acceptUrl) +
-    paragraph(
-      `<span style="font-size: 13px; color: #94a3b8;">Nếu bạn không muốn tham gia hoặc nhận email này do nhầm lẫn, bạn có thể an tâm bỏ qua.</span>`
-    );
-
-  const html = emailLayout(
-    "✉️ Lời mời tham gia Workspace",
-    `Mời tham gia ${data.workspaceName}`,
-    body
-  );
-
-  return sendEmail(
-    to,
-    `${data.invitedByName} mời bạn tham gia "${data.workspaceName}" trên Vielora`,
-    html
-  );
+  const { subject, html } = buildWorkspaceInvitationEmailHtml(data);
+  return sendEmail(to, subject, html);
 }
+
+// ============================================================
+// Group Chat Invitation Email
+// ============================================================
 
 export interface GroupInviteEmailData {
   botName: string;
@@ -622,26 +691,37 @@ export interface GroupInviteEmailData {
   isNewAccount: boolean;
 }
 
+export function buildGroupInviteEmailHtml(data: GroupInviteEmailData): {
+  subject: string;
+  html: string;
+} {
+  const targetUrl = data.actionUrl || data.groupUrl;
+  const accountNote = data.isNewAccount
+    ? paragraph(
+        "Your account has been automatically created on Vielora. Click below to verify and access your group chat immediately:"
+      )
+    : paragraph("Click below to access the group conversation:");
+
+  const body =
+    paragraph(
+      `<strong>${data.invitedByName}</strong> has added you to the group chat for bot <strong>${data.botName}</strong> on Vielora.`
+    ) +
+    infoTable(infoRow("Chatbot", data.botName) + infoRow("Invited By", data.invitedByName)) +
+    accountNote +
+    (targetUrl ? ctaButton("Join Group Chat Now →", targetUrl) : "");
+
+  const html = emailLayout("💬 Added to Group Chat", `${data.botName} Group Chat`, body);
+
+  return {
+    subject: `[Vielora] Invitation to join "${data.botName}" group chat`,
+    html,
+  };
+}
+
 export async function sendGroupInviteEmail(
   to: string,
   data: GroupInviteEmailData
 ): Promise<boolean> {
-  const targetUrl = data.actionUrl || data.groupUrl;
-  const accountNote = data.isNewAccount
-    ? paragraph(
-        "Tài khoản của bạn đã được tự động khởi tạo trên hệ thống Vielora. Nhấn vào nút bên dưới để xác thực và truy cập ngay:"
-      )
-    : paragraph("Nhấn vào nút bên dưới để truy cập cuộc trò chuyện nhóm:");
-
-  const body =
-    paragraph(
-      `<strong>${data.invitedByName}</strong> đã thêm bạn vào nhóm chat của bot <strong>${data.botName}</strong> trên Vielora.`
-    ) +
-    infoTable(infoRow("Chatbot", data.botName) + infoRow("Người mời", data.invitedByName)) +
-    accountNote +
-    (targetUrl ? ctaButton("Vào nhóm chat ngay →", targetUrl) : "");
-
-  const html = emailLayout("💬 Bạn đã được thêm vào nhóm chat", `Nhóm chat ${data.botName}`, body);
-
-  return sendEmail(to, `[Vielora] Lời mời tham gia nhóm chat bot "${data.botName}"`, html);
+  const { subject, html } = buildGroupInviteEmailHtml(data);
+  return sendEmail(to, subject, html);
 }

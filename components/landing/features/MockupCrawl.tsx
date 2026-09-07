@@ -2,20 +2,21 @@
 
 import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { Mockup3DWrapper } from "./Mockup3DWrapper";
 
 export function MockupCrawl() {
+  const t = useTranslations("features.mockups.crawl");
+
   return (
     <Mockup3DWrapper innerClassName="px-4 py-6 lg:min-w-[380px]">
       <div className="mb-3 flex items-center gap-2" style={{ transform: "translateZ(8px)" }}>
         <span className="flex h-2 w-2 rounded-full bg-green-500" />
-        <span className="text-xs font-extrabold uppercase text-foreground">
-          Tự động thu thập dữ liệu
-        </span>
+        <span className="text-xs font-extrabold uppercase text-foreground">{t("title")}</span>
       </div>
 
       <div className="mb-4" style={{ transform: "translateZ(20px)" }}>
-        <p className="mb-2 text-[11px] text-muted-foreground">URL website</p>
+        <p className="mb-2 text-[11px] text-muted-foreground">{t("urlLabel")}</p>
         <div className="flex items-center gap-2">
           <div className="flex flex-1 items-center gap-2 rounded-lg border border-border/50 bg-background/50 px-3 py-2 pr-8 text-[11px] text-muted-foreground/70">
             <svg
@@ -45,11 +46,11 @@ export function MockupCrawl() {
       </div>
 
       <div className="mb-4" style={{ transform: "translateZ(26px)" }}>
-        <p className="mb-2 text-[11px] text-muted-foreground">Tệp dữ liệu</p>
+        <p className="mb-2 text-[11px] text-muted-foreground">{t("fileLabel")}</p>
         <div className="space-y-1.5">
           {[
             { name: "data.pdf", done: true },
-            { name: "bao-cao.docx", done: true },
+            { name: t("reportDoc"), done: true },
             { name: null, done: false },
           ].map((file, i) => (
             <motion.div
@@ -110,7 +111,7 @@ export function MockupCrawl() {
                   </span>
                 </>
               ) : (
-                <span className="w-full text-center text-[10px]">+ Tải lên tệp</span>
+                <span className="w-full text-center text-[10px]">{t("uploadBtn")}</span>
               )}
             </motion.div>
           ))}
@@ -129,7 +130,7 @@ export function MockupCrawl() {
         style={{ transform: "translateZ(36px)" }}
       >
         <div className="mb-2 flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">Đang quét: 5/12 trang</span>
+          <span className="text-muted-foreground">{t("scanningStatus")}</span>
           <span className="font-medium text-primary">42%</span>
         </div>
         <div

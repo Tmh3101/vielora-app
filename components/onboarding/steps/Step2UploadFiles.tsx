@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowRight, Loader2, Upload } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -35,6 +36,7 @@ interface FileUploadState {
 }
 
 export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
+  const t = useTranslations("onboarding.steps.step2Upload");
   const router = useRouter();
   const { user } = useAuth();
   const { activeWorkspace } = useWorkspace();
@@ -96,8 +98,11 @@ export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
     if (selectedFiles.length === 0) return;
     if (selectedCreditsCost > totalCredits) {
       toast({
-        title: "Không đủ credits",
-        description: `Bạn chỉ có thể tải tối đa ${maxSelectableFilesByCredit} tệp với ${totalCredits} credits hiện tại.`,
+        title: t("notEnoughCreditsTitle"),
+        description: t("notEnoughCreditsToastDesc", {
+          max: maxSelectableFilesByCredit,
+          credits: totalCredits,
+        }),
         variant: "destructive",
       });
       return;
@@ -127,7 +132,7 @@ export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
             [fileKey]: { status: "done" },
           }));
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Không thể tải tệp dữ liệu.";
+          const message = error instanceof Error ? error.message : t("uploadErrorGeneric");
           setFileStates((current) => ({
             ...current,
             [fileKey]: { status: "failed", error: message },
@@ -137,19 +142,19 @@ export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
       }
 
       if (hasFailed) {
-        throw new Error("Một số tệp không thể tải lên. Vui lòng kiểm tra lại.");
+        throw new Error(t("someFilesFailed"));
       }
 
       toast({
-        title: "Thành công",
-        description: `Đã tải ${selectedFiles.length} tệp lên và đưa vào hàng chờ index.`,
+        title: t("successTitle"),
+        description: t("successDesc", { count: selectedFiles.length }),
       });
       onNext();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Không thể tải tệp dữ liệu.";
+      const message = error instanceof Error ? error.message : t("uploadErrorGeneric");
       setSubmitError(message);
       toast({
-        title: "Lỗi",
+        title: t("uploadErrorTitle"),
         description: message,
         variant: "destructive",
       });
@@ -164,18 +169,16 @@ export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
         <CardTitle className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <Upload className="h-5 w-5 text-primary" />
-            Tải tệp dữ liệu
+            {t("title")}
           </span>
-          <Badge variant="secondary">Tệp</Badge>
+          <Badge variant="secondary">{t("badge")}</Badge>
         </CardTitle>
-        <CardDescription>
-          Chọn một hoặc nhiều tệp để bot học trước khi bắt đầu index.
-        </CardDescription>
+        <CardDescription>{t("description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {submitError && (
           <Alert variant="destructive">
-            <AlertTitle>Lỗi tải tệp</AlertTitle>
+            <AlertTitle>{t("uploadErrorTitle")}</AlertTitle>
             <AlertDescription>{submitError}</AlertDescription>
           </Alert>
         )}
@@ -183,9 +186,9 @@ export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
         {maxSelectableFilesByCredit === 0 && !creditSummaryQuery.isLoading && (
           <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Không đủ credits</AlertTitle>
+            <AlertTitle>{t("notEnoughCreditsTitle")}</AlertTitle>
             <AlertDescription>
-              Bạn cần ít nhất {CREDIT_PER_PAGE} credits để tải một tệp dữ liệu.
+              {t("notEnoughCreditsDesc", { credit: CREDIT_PER_PAGE })}
             </AlertDescription>
           </Alert>
         )}
@@ -204,7 +207,7 @@ export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
           <div className="inline-flex min-w-[250px] items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
             <div>
               <p className="text-[11px] tracking-wide text-muted-foreground">
-                Credits cần dùng / Khả dụng
+                {t("creditUsageLabel")}
               </p>
               <p className="text-xs font-medium text-foreground">
                 {selectedCreditsCost.toLocaleString()} / {totalCredits.toLocaleString()}
@@ -212,7 +215,10 @@ export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
             </div>
             <div className="h-8 w-px bg-border" />
             <p className="text-xs text-muted-foreground">
-              {CREDIT_PER_PAGE} credit/tệp • tối đa {Math.max(0, maxSelectableFilesByCredit)} tệp
+              {t("creditCostPerItem", {
+                credit: CREDIT_PER_PAGE,
+                max: Math.max(0, maxSelectableFilesByCredit),
+              })}
             </p>
           </div>
 
@@ -224,7 +230,7 @@ export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
               disabled={isSubmitting}
               className="hover:border-primary hover:bg-white hover:text-primary"
             >
-              Về Dashboard
+              {t("backToDashboard")}
             </Button>
             <Button
               onClick={handleSubmitFiles}
@@ -238,11 +244,11 @@ export function Step2UploadFiles({ botId, onNext }: Step2UploadFilesProps) {
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang xử lý...
+                  {t("processing")}
                 </>
               ) : (
                 <>
-                  Bắt đầu Index
+                  {t("startIndex")}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}

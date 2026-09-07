@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { Download, Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,7 +35,7 @@ interface PaymentHistoryClientProps {
 }
 
 function formatCreditsAdded(credits: number): string {
-  return credits > 0 ? `+${credits.toLocaleString("vi-VN")} credits` : "—";
+  return credits > 0 ? `+${credits.toLocaleString()} credits` : "—";
 }
 
 function getVisiblePages(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
@@ -54,7 +57,13 @@ function getVisiblePages(currentPage: number, totalPages: number): Array<number 
   }, []);
 }
 
-function InvoiceStatusCell({ payment }: { payment: PaymentHistoryItem }) {
+function InvoiceStatusCell({
+  payment,
+  t,
+}: {
+  payment: PaymentHistoryItem;
+  t: (key: string) => string;
+}) {
   if (!payment.invoice) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
@@ -74,7 +83,7 @@ function InvoiceStatusCell({ payment }: { payment: PaymentHistoryItem }) {
           <a
             href={`/api/invoices/${payment.invoice.id}/download`}
             className="inline-flex h-6 w-6 items-center justify-center rounded-md text-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-            title="Tải hóa đơn"
+            title={t("downloadInvoice")}
           >
             <Download className="h-3.5 w-3.5" />
           </a>
@@ -95,6 +104,7 @@ export function PaymentHistoryClient({
   pageSize,
   totalItems,
 }: PaymentHistoryClientProps) {
+  const t = useTranslations("dashboard.upgrade");
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const pageItems = getVisiblePages(currentPage, totalPages);
   const firstItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
@@ -103,10 +113,8 @@ export function PaymentHistoryClient({
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-6 text-center">
-        <h2 className="text-2xl font-bold text-foreground">Lịch sử thanh toán</h2>
-        <p className="mt-2 text-muted-foreground">
-          Theo dõi các giao dịch và trạng thái xử lý gần đây.
-        </p>
+        <h2 className="text-2xl font-bold text-foreground">{t("paymentHistoryTitle")}</h2>
+        <p className="mt-2 text-muted-foreground">{t("paymentHistoryDesc")}</p>
       </div>
 
       <Card className="border-border/60 bg-card/60 shadow-sm">
@@ -116,9 +124,9 @@ export function PaymentHistoryClient({
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                 <Receipt className="h-6 w-6 text-muted-foreground" />
               </div>
-              <h3 className="text-base font-semibold text-foreground">Chưa có giao dịch</h3>
+              <h3 className="text-base font-semibold text-foreground">{t("noTransactions")}</h3>
               <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                Các giao dịch nâng cấp gói hoặc nạp credit sẽ xuất hiện tại đây.
+                {t("noTransactionsDesc")}
               </p>
             </div>
           ) : (
@@ -127,13 +135,21 @@ export function PaymentHistoryClient({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-xs font-semibold">Ngày</TableHead>
-                      <TableHead className="text-xs font-semibold">Người thanh toán</TableHead>
-                      <TableHead className="text-xs font-semibold">Loại</TableHead>
-                      <TableHead className="text-right text-xs font-semibold">Số tiền</TableHead>
-                      <TableHead className="text-right text-xs font-semibold">Credits</TableHead>
-                      <TableHead className="text-right text-xs font-semibold">Trạng thái</TableHead>
-                      <TableHead className="text-right text-xs font-semibold">Hóa đơn</TableHead>
+                      <TableHead className="text-xs font-semibold">{t("colDate")}</TableHead>
+                      <TableHead className="text-xs font-semibold">{t("colPayer")}</TableHead>
+                      <TableHead className="text-xs font-semibold">{t("colType")}</TableHead>
+                      <TableHead className="text-right text-xs font-semibold">
+                        {t("colAmount")}
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold">
+                        {t("colCredits")}
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold">
+                        {t("colStatus")}
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold">
+                        {t("colInvoice")}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -177,7 +193,7 @@ export function PaymentHistoryClient({
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <InvoiceStatusCell payment={payment} />
+                            <InvoiceStatusCell payment={payment} t={t} />
                           </TableCell>
                         </TableRow>
                       );
@@ -212,13 +228,13 @@ export function PaymentHistoryClient({
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Người thanh toán</span>
+                        <span className="text-muted-foreground">{t("mobilePayer")}</span>
                         <span className="font-medium text-foreground">
                           {payment.payerName || payment.payerEmail || "—"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Số tiền</span>
+                        <span className="text-muted-foreground">{t("mobileAmount")}</span>
                         <span className="font-semibold text-foreground">
                           {formatVND(payment.amount)}
                         </span>
@@ -232,7 +248,9 @@ export function PaymentHistoryClient({
                       {payment.invoice && (
                         <div className="space-y-2 rounded-lg border border-border/60 p-3">
                           <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm text-muted-foreground">Hóa đơn</span>
+                            <span className="text-sm text-muted-foreground">
+                              {t("mobileInvoice")}
+                            </span>
                             <div className="flex items-center gap-2">
                               <Badge
                                 variant="outline"
@@ -270,8 +288,11 @@ export function PaymentHistoryClient({
       {totalItems > 0 && (
         <div className="mt-6 flex flex-col items-center justify-between gap-4 sm:flex-row">
           <p className="text-sm text-muted-foreground">
-            Hiển thị {firstItem.toLocaleString("vi-VN")}-{lastItem.toLocaleString("vi-VN")} trong{" "}
-            {totalItems.toLocaleString("vi-VN")} giao dịch
+            {t("paginationInfo", {
+              first: firstItem.toLocaleString(),
+              last: lastItem.toLocaleString(),
+              total: totalItems.toLocaleString(),
+            })}
           </p>
 
           {totalPages > 1 && (

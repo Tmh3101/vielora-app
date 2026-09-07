@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getActivePlans } from "@/lib/services/plan.service";
@@ -43,7 +44,7 @@ import { CREDIT_UNIT_PRICE_PRORATION } from "@/config/credit-pricing";
 
 function formatVND(amount: number): string {
   if (amount === 0) return "0";
-  return amount.toLocaleString("vi-VN");
+  return amount.toLocaleString();
 }
 
 function getPriceFromPlan(plan: Tables<"plans">, cycle: ESubscriptionCycle): number {
@@ -71,9 +72,10 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
   const { user, isLoading: authLoading } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const t = useTranslations("dashboard.checkout");
 
   // Workspace display fallback
-  const workspaceName = activeWorkspace?.name || "Workspace hiện tại";
+  const workspaceName = activeWorkspace?.name || t("currentWorkspace");
 
   // Subscription state
   const queryPlan = searchParams.get("plan") || ESubscriptionPlan.Standard;
@@ -204,12 +206,13 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
         }
       } catch (error) {
         console.error("Error fetching credit packages:", error);
-        toast.error("Không thể tải danh sách gói Credit");
+        toast.error(t("errorLoadPackages"));
       } finally {
         setIsLoadingPackages(false);
       }
     };
     fetchPackages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, mode, initialPackageId]);
 
   // Redirect if unauthenticated
@@ -375,11 +378,11 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
     const dbEnterprisePlan = plans.find((p) => p.code === ESubscriptionPlan.Enterprise) || null;
 
     if (selectedPlanCode === ESubscriptionPlan.Enterprise) {
-      let desc = dbEnterprisePlan?.description || "Gói Enterprise tự cấu hình theo yêu cầu";
+      let desc = dbEnterprisePlan?.description || t("errorSelectPlan");
       if (isIncrementalUpgrade) {
-        desc = `Nâng cấp bổ sung (+${deltaBotsVal} bots, +${deltaCreditsVal.toLocaleString("vi-VN")} credits)`;
+        desc = `Nâng cấp bổ sung (+${deltaBotsVal} bots, +${deltaCreditsVal.toLocaleString()} credits)`;
       } else if (action === PaymentAction.Renew) {
-        desc = "Gia hạn gói Enterprise hiện tại";
+        desc = t("renewPlan");
       }
 
       const planObj = {
@@ -398,6 +401,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
       return planObj;
     }
     return plans.find((p) => p.code === selectedPlanCode) || null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     mode,
     selectedPlanCode,
@@ -526,16 +530,16 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
   // Payment Submit Handler
   const handlePayment = async () => {
     if (mode === "subscription" && (!selectedPlan || finalTotalPrice < 0)) {
-      toast.error("Vui lòng chọn gói trả phí hợp lệ");
+      toast.error(t("errorSelectPlan"));
       return;
     }
     if (mode === "credits" && (!selectedPackage || finalTotalPrice <= 0)) {
-      toast.error("Vui lòng chọn một gói nạp hợp lệ");
+      toast.error(t("errorSelectPackage"));
       return;
     }
 
     if (!invoiceFormRef.current?.validate()) {
-      toast.error("Vui lòng kiểm tra lại thông tin xuất hóa đơn");
+      toast.error(t("errorInvoiceInfo"));
       return;
     }
 
@@ -546,7 +550,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        toast.error(t("errorSessionExpired"));
         router.push("/auth");
         return;
       }
@@ -592,7 +596,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
         if (data.fieldErrors) {
           invoiceFormRef.current.setServerErrors(data.fieldErrors);
         }
-        toast.error(data.error || "Có lỗi xảy ra khi tạo thanh toán");
+        toast.error(data.error || t("errorPaymentFailed"));
         setIsProcessing(false);
         return;
       }
@@ -605,7 +609,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
       setIsProcessing(false);
     } catch (error) {
       console.error("Payment error:", error);
-      toast.error("Có lỗi xảy ra. Vui lòng thử lại.");
+      toast.error(t("errorGeneric"));
       setIsProcessing(false);
     }
   };
@@ -635,7 +639,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
               className="border-none hover:bg-white hover:text-primary"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Quay lại
+              {t("back")}
             </Button>
             <Link href="/" className="flex items-center gap-2">
               <Image
@@ -653,7 +657,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
 
       <main className="container mx-auto max-w-4xl space-y-6 px-4 py-10 sm:px-6">
         <h1 className="text-center text-2xl font-bold text-foreground sm:text-3xl">
-          {mode === "subscription" ? "Xác nhận thanh toán" : "Mua Credit Pay-as-you-go"}
+          {mode === "subscription" ? t("confirmPayment") : t("buyCreditsPayg")}
         </h1>
 
         {/* Read-Only Workspace Banner (Requirement 1) */}
@@ -665,7 +669,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-muted-foreground">
-                  Workspace hiện tại:
+                  {t("currentWorkspace")}
                 </span>
                 <span className="text-sm font-bold text-foreground">{workspaceName}</span>
               </div>
@@ -680,7 +684,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
             {mode === "subscription" ? (
               <Card>
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-lg">Gói dịch vụ</CardTitle>
+                  <CardTitle className="text-lg">{t("subscriptionPlan")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between rounded-xl border border-primary/50 bg-primary/5 p-4">
@@ -690,7 +694,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                       </div>
                       <div>
                         <p className="font-semibold text-foreground">
-                          {selectedPlan?.name || "Chọn gói"}
+                          {selectedPlan?.name || t("selectPlan")}
                         </p>
                         <p className="text-sm text-muted-foreground">{selectedPlan?.description}</p>
                       </div>
@@ -736,12 +740,12 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                     {billingCycle === ESubscriptionCycle.Monthly ? (
                       <div className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-primary bg-primary/5 p-3 text-sm font-medium text-primary">
                         <Package className="h-4 w-4" />
-                        Gói tháng
+                        {t("monthlyPlan")}
                       </div>
                     ) : (
                       <div className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-primary bg-primary/5 p-3 text-sm font-medium text-primary">
                         <CalendarDays className="h-4 w-4" />
-                        Gói năm
+                        {t("yearlyPlan")}
                         <Badge
                           variant="secondary"
                           className="bg-green-500/20 text-xs text-green-600"
@@ -756,7 +760,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
             ) : (
               <Card>
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-lg">Gói nạp Credit</CardTitle>
+                  <CardTitle className="text-lg">{t("creditPackage")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div
@@ -769,7 +773,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                       </div>
                       <div>
                         <p className="font-semibold text-foreground">
-                          {selectedPackage?.name || "Chọn gói nạp"}
+                          {selectedPackage?.name || t("selectCreditPackage")}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {selectedPackage?.credits_amount.toLocaleString()} credits
@@ -777,7 +781,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Thay đổi</span>
+                      <span className="text-sm text-muted-foreground">{t("change")}</span>
                       <ChevronDown
                         className={`h-4 w-4 text-muted-foreground transition-transform ${
                           showPackagePicker ? "rotate-180" : ""
@@ -823,7 +827,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
 
                   {selectedPackage && (
                     <div className="flex items-center justify-between rounded-xl border border-border/60 p-4">
-                      <span className="text-sm font-medium text-foreground">Số lượng</span>
+                      <span className="text-sm font-medium text-foreground">{t("quantity")}</span>
                       <div className="flex items-center gap-3">
                         <Button
                           variant="outline"
@@ -903,10 +907,12 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
               <Card>
                 <CardHeader className="pb-4">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">Chi tiết gói {selectedPlan.name}</CardTitle>
+                    <CardTitle className="text-lg">
+                      {t("planDetails", { name: selectedPlan.name })}
+                    </CardTitle>
                     {selectedPlanCode === ESubscriptionPlan.Enterprise && isIncrementalUpgrade && (
                       <Badge className="bg-primary font-semibold text-primary-foreground">
-                        Nâng cấp bổ sung
+                        {t("incrementalUpgrade")}
                       </Badge>
                     )}
                     {selectedPlanCode === ESubscriptionPlan.Enterprise &&
@@ -915,7 +921,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                           variant="outline"
                           className="border-emerald-500/40 font-semibold text-emerald-600 dark:text-emerald-400"
                         >
-                          Gia hạn gói
+                          {t("renewPlan")}
                         </Badge>
                       )}
                   </div>
@@ -925,50 +931,50 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="rounded-lg bg-muted/50 p-3">
-                          <p className="text-xs text-muted-foreground">Bot cộng thêm</p>
+                          <p className="text-xs text-muted-foreground">{t("additionalBots")}</p>
                           <p className="text-base font-bold text-primary">+{deltaBotsVal} bots</p>
                           <p className="mt-0.5 text-[11px] text-muted-foreground">
                             (Tổng mới: {resolvedBots} bots)
                           </p>
                         </div>
                         <div className="rounded-lg bg-muted/50 p-3">
-                          <p className="text-xs text-muted-foreground">Credits cộng thêm</p>
+                          <p className="text-xs text-muted-foreground">{t("additionalCredits")}</p>
                           <p className="text-base font-bold text-primary">
-                            +{deltaCreditsVal.toLocaleString("vi-VN")} credits
+                            +{deltaCreditsVal.toLocaleString()} credits
                           </p>
                           <p className="mt-0.5 text-[11px] text-muted-foreground">
-                            (Tổng mới: {resolvedCredits.toLocaleString("vi-VN")} cr/tháng)
+                            (Tổng mới: {resolvedCredits.toLocaleString()} cr/tháng)
                           </p>
                         </div>
                       </div>
                       <div className="flex justify-between rounded-lg bg-muted/40 p-3 text-xs">
-                        <span className="text-muted-foreground">Số tháng tính phí còn lại:</span>
+                        <span className="text-muted-foreground">{t("remainingBillingMonths")}</span>
                         <span className="font-semibold text-foreground">
                           {remainingMonthsVal} tháng
                         </span>
                       </div>
                       <div className="flex justify-between rounded-lg bg-muted/40 p-3 text-xs">
-                        <span className="text-muted-foreground">Ngày hết hạn gói:</span>
-                        <span className="font-semibold text-primary">Giữ nguyên không đổi</span>
+                        <span className="text-muted-foreground">{t("planExpiryDate")}</span>
+                        <span className="font-semibold text-primary">{t("keepCurrent")}</span>
                       </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="rounded-lg bg-muted/50 p-3">
-                        <p className="text-sm text-muted-foreground">Credits/tháng</p>
+                        <p className="text-sm text-muted-foreground">{t("creditsPerMonth")}</p>
                         <p className="text-lg font-semibold">
-                          {selectedPlan.monthly_credits.toLocaleString("vi-VN")}
+                          {selectedPlan.monthly_credits.toLocaleString()}
                         </p>
                       </div>
                       <div className="rounded-lg bg-muted/50 p-3">
-                        <p className="text-sm text-muted-foreground">Số bot tối đa</p>
+                        <p className="text-sm text-muted-foreground">{t("maxBots")}</p>
                         <p className="text-lg font-semibold">{selectedPlan.bots_limit}</p>
                       </div>
                     </div>
                   )}
 
                   <div className="flex items-center justify-between space-x-10 rounded-lg bg-muted/50 p-3">
-                    <p className="text-sm text-muted-foreground">Thanh toán qua</p>
+                    <p className="text-sm text-muted-foreground">{t("payVia")}</p>
                     <Image
                       src="/images/partners/payos-logo.png"
                       alt="PayOS Logo"
@@ -984,18 +990,18 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
             {mode === "credits" && selectedPackage && (
               <Card>
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-lg">Thông tin gói nạp</CardTitle>
+                  <CardTitle className="text-lg">{t("creditPackageInfo")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-sm text-muted-foreground">Số Credits nhận được</p>
+                      <p className="text-sm text-muted-foreground">{t("creditsReceived")}</p>
                       <p className="text-lg font-semibold text-green-600">
                         +{(selectedPackage.credits_amount * quantity).toLocaleString()}
                       </p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-sm text-muted-foreground">Đơn giá</p>
+                      <p className="text-sm text-muted-foreground">{t("unitPrice")}</p>
                       <p className="text-lg font-semibold">
                         {formatVND(
                           Math.round(
@@ -1009,7 +1015,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                   </div>
 
                   <div className="flex items-center justify-between space-x-10 rounded-lg bg-muted/50 p-3">
-                    <p className="text-sm text-muted-foreground">Thanh toán qua</p>
+                    <p className="text-sm text-muted-foreground">{t("payVia")}</p>
                     <Image
                       src="/images/partners/payos-logo.png"
                       alt="PayOS Logo"
@@ -1033,7 +1039,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
             <div className="sticky top-24 space-y-6">
               {!checkoutUrl ? (
                 <OrderSummaryCard
-                  title="Tóm tắt đơn hàng"
+                  title={t("orderSummary")}
                   subtitle={
                     mode === "subscription"
                       ? selectedPlan
@@ -1048,23 +1054,26 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                       ? selectedPlanCode === ESubscriptionPlan.Enterprise && isIncrementalUpgrade
                         ? [
                             {
-                              label: "Cấu hình hiện tại:",
-                              value: `${activeBots} bots · ${activeCredits.toLocaleString("vi-VN")} credits`,
+                              label: t("currentConfig"),
+                              value: `${activeBots} bots · ${activeCredits.toLocaleString()} credits`,
                             },
-                            { label: "Bot cộng thêm:", value: `+${deltaBotsVal} bots` },
+                            { label: t("additionalBotsLabel"), value: `+${deltaBotsVal} bots` },
                             {
-                              label: "Credits cộng thêm:",
-                              value: `+${deltaCreditsVal.toLocaleString("vi-VN")} credits`,
+                              label: t("additionalCreditsLabel"),
+                              value: `+${deltaCreditsVal.toLocaleString()} credits`,
                             },
                             {
-                              label: "Cấu hình mới:",
-                              value: `${resolvedBots} bots · ${resolvedCredits.toLocaleString("vi-VN")} credits`,
+                              label: t("newConfig"),
+                              value: `${resolvedBots} bots · ${resolvedCredits.toLocaleString()} credits`,
                               isHighlighted: true,
                             },
-                            { label: "Số tháng còn lại:", value: `${remainingMonthsVal} tháng` },
                             {
-                              label: "Ngày hết hạn gói:",
-                              value: "Giữ nguyên không đổi",
+                              label: t("remainingMonths"),
+                              value: `${remainingMonthsVal} ${t("months")}`,
+                            },
+                            {
+                              label: t("planExpiryLabel"),
+                              value: t("keepCurrent"),
                               isHighlighted: true,
                             },
                           ]
@@ -1072,25 +1081,29 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                             ...(selectedPlan
                               ? [
                                   {
-                                    label: `Gói ${selectedPlan.name} (${
-                                      billingCycle === ESubscriptionCycle.Monthly ? "tháng" : "năm"
-                                    }):`,
+                                    label: t("planNameLabel", {
+                                      name: selectedPlan.name,
+                                      cycle:
+                                        billingCycle === ESubscriptionCycle.Monthly
+                                          ? t("monthlyPlan")
+                                          : t("yearlyPlan"),
+                                    }),
                                     value: `${formatVND(calculatedBasePrice)}đ`,
                                   },
                                   {
-                                    label: "Số lượng chatbot:",
+                                    label: t("chatbotCountLabel"),
                                     value: `${selectedPlan.bots_limit} bots`,
                                   },
                                   {
-                                    label: "Credits hàng tháng:",
-                                    value: `${selectedPlan.monthly_credits.toLocaleString("vi-VN")} credits`,
+                                    label: t("monthlyCreditsLabel"),
+                                    value: `${selectedPlan.monthly_credits.toLocaleString()} credits`,
                                   },
                                 ]
                               : []),
                             ...(prorationDiscount > 0
                               ? [
                                   {
-                                    label: "Trừ bù gói cũ (còn dư):",
+                                    label: t("prorationDiscount"),
                                     value: `- ${formatVND(prorationDiscount)}đ`,
                                     isHighlighted: true,
                                   },
@@ -1099,7 +1112,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                             ...(billingCycle === ESubscriptionCycle.Yearly
                               ? [
                                   {
-                                    label: "Ưu đãi thanh toán năm:",
+                                    label: t("yearlyDiscount"),
                                     value: "-17%",
                                     isHighlighted: true,
                                   },
@@ -1114,10 +1127,10 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                                   value: `${formatVND(calculatedBasePrice)}đ`,
                                 },
                                 {
-                                  label: "Credits nhận được:",
+                                  label: t("creditsReceivedLabel"),
                                   value: `+${(
                                     selectedPackage.credits_amount * quantity
-                                  ).toLocaleString("vi-VN")} credits`,
+                                  ).toLocaleString()} credits`,
                                   isHighlighted: true,
                                 },
                               ]
@@ -1125,7 +1138,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                         ]
                   }
                   totalPrice={`${formatVND(finalTotalPrice)}đ`}
-                  totalLabel="Tổng cộng:"
+                  totalLabel={t("totalLabel")}
                   monthlyEquivalentPrice={
                     mode === "subscription" &&
                     billingCycle === ESubscriptionCycle.Yearly &&
@@ -1133,7 +1146,7 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                       ? `~ ${formatVND(Math.round(finalTotalPrice / 12))}đ/tháng`
                       : undefined
                   }
-                  ctaText="Thanh toán ngay"
+                  ctaText={t("payNow")}
                   isProcessing={isProcessing}
                   disabled={
                     mode === "subscription"
@@ -1160,10 +1173,10 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                     <Clock className="h-4 w-4 text-red-500" />
                     <span className="text-sm font-medium text-red-500">
                       {isExpired ? (
-                        "Mã thanh toán đã hết hạn"
+                        t("paymentExpired")
                       ) : (
                         <>
-                          Mã thanh toán hết hạn sau:{" "}
+                          {t("paymentExpiresIn")}{" "}
                           <span className="font-mono text-base font-bold text-red-500">
                             {formatCountdown(countdown)}
                           </span>
@@ -1181,18 +1194,16 @@ export function UnifiedCheckoutClient({ mode }: UnifiedCheckoutClientProps) {
                         <div className="flex flex-col items-center gap-2 text-center">
                           <Clock className="h-10 w-10 text-red-500" />
                           <p className="text-lg font-semibold text-red-600">
-                            Mã thanh toán đã hết hạn
+                            {t("paymentExpired")}
                           </p>
-                          <p className="text-sm text-muted-foreground">
-                            Vui lòng tạo mã thanh toán mới
-                          </p>
+                          <p className="text-sm text-muted-foreground">{t("createNewPayment")}</p>
                         </div>
                         <Button
                           onClick={handleCancelPayment}
                           className="bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800"
                         >
                           <CreditCard className="mr-2 h-4 w-4" />
-                          Tạo mã thanh toán mới
+                          {t("createNewPayment")}
                         </Button>
                       </div>
                     )}

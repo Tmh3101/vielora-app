@@ -1,7 +1,13 @@
 import { ApiResponse } from "./utils";
 import type { PageStatusType, RenderModeType } from "./scrape";
 import type { KnowledgeRequestMode } from "@/lib/constants/knowledge";
-import { EBotStatus, EWidgetBackgroundType, EWidgetIconType, EPageSourceType } from "./enums";
+import {
+  EBotStatus,
+  EWidgetBackgroundType,
+  EWidgetIconType,
+  EPageSourceType,
+  ELanguage,
+} from "./enums";
 import { getBotAnalytics } from "@/lib/services/analytics.service";
 
 /**
@@ -174,6 +180,7 @@ export interface AppearanceUpdateRequest {
     chatIconBgColor?: string;
     isVoiceEnabled?: boolean;
     navigation_enabled?: boolean;
+    ui_language?: string;
   };
 }
 

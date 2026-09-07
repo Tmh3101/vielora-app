@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { UserPlus, Mail, Loader2, AlertCircle } from "lucide-react";
 import { EWorkspaceRole } from "@/types/enums";
+import { useTranslations } from "next-intl";
 
 interface InviteMemberModalProps {
   isOpen: boolean;
@@ -28,6 +29,8 @@ export function InviteMemberModal({
   workspaceId,
   onSuccess,
 }: InviteMemberModalProps) {
+  const t = useTranslations("dashboard.workspaceSettings");
+  const tCommon = useTranslations("dashboard.common");
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,9 +99,9 @@ export function InviteMemberModal({
             </div>
             <div>
               <DialogTitle className="text-lg font-bold text-foreground">
-                Mời thành viên
+                {t("inviteMember")}
               </DialogTitle>
-              <p className="text-xs text-muted-foreground">Gửi email mời thành viên workspace</p>
+              <p className="text-xs text-muted-foreground">{t("subtitle")}</p>
             </div>
           </div>
         </DialogHeader>
@@ -113,7 +116,7 @@ export function InviteMemberModal({
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label htmlFor="invite-email" className="text-xs font-semibold text-foreground">
-              Địa chỉ Email <span className="text-destructive">*</span>
+              {t("memberEmail")} <span className="text-destructive">*</span>
             </Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -140,7 +143,7 @@ export function InviteMemberModal({
               onClick={onClose}
               className="cursor-pointer rounded-xl border-border/60 bg-transparent text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive active:scale-95"
             >
-              Hủy
+              {tCommon("cancel")}
             </Button>
             <Button
               type="submit"
@@ -151,12 +154,12 @@ export function InviteMemberModal({
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang gửi...
+                  {tCommon("loading")}
                 </>
               ) : (
                 <>
                   <UserPlus className="mr-2 h-4 w-4" />
-                  Gửi lời mời
+                  {t("inviteMember")}
                 </>
               )}
             </Button>

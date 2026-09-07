@@ -3,29 +3,29 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { ExternalLink, Layers, Server, Cpu, CheckCircle2 } from "lucide-react";
-
-const expertise = [
-  {
-    title: "Phát triển Sản phẩm & Dự án",
-    description:
-      "Từ phân tích yêu cầu đến triển khai thực tế. Chúng tôi quản lý toàn bộ vòng đời sản phẩm với chuyên môn PM & BA chuyên sâu.",
-    icon: Layers,
-  },
-  {
-    title: "Phát triển Hệ thống & Nền tảng",
-    description:
-      "Xây dựng các nền tảng SaaS có khả năng mở rộng, hệ thống quản lý nội bộ và cổng quản trị dành cho vận hành thực tế.",
-    icon: Server,
-  },
-  {
-    title: "Web3, Blockchain & AI",
-    description:
-      "Kinh nghiệm thực chiến trong SocialFi, hợp đồng thông minh, cổng thanh toán và tích hợp trí tuệ nhân tạo.",
-    icon: Cpu,
-  },
-];
+import { useTranslations } from "next-intl";
 
 const AboutTeam = () => {
+  const t = useTranslations("aboutUs");
+
+  const expertise = [
+    {
+      title: t("expProduct"),
+      description: t("expProductDesc"),
+      icon: Layers,
+    },
+    {
+      title: t("expSystem"),
+      description: t("expSystemDesc"),
+      icon: Server,
+    },
+    {
+      title: t("expWeb3"),
+      description: t("expWeb3Desc"),
+      icon: Cpu,
+    },
+  ];
+
   return (
     <section className="relative overflow-hidden py-20 lg:py-32">
       {/* Background decorations */}
@@ -41,13 +41,9 @@ const AboutTeam = () => {
             transition={{ duration: 0.5 }}
           >
             <h2 className="heading-premium mb-6 text-3xl font-bold text-foreground sm:text-4xl">
-              Đội ngũ <span className="text-gradient-animated">Titops DX4U</span>
+              {t("teamHeading")}
             </h2>
-            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-              Titops DX4U là một đội ngũ chuyển đổi số chuyên nghiệp, phát triển phần mềm và ứng
-              dụng AI. Chúng tôi tập trung xây dựng các hệ thống vận hành, nền tảng số và sản phẩm
-              công nghệ đột phá cho các doanh nghiệp và startup.
-            </p>
+            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">{t("teamDesc")}</p>
           </motion.div>
         </div>
 
@@ -55,7 +51,7 @@ const AboutTeam = () => {
         <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {expertise.map((item, index) => (
             <motion.li
-              key={item.title}
+              key={index}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -71,7 +67,7 @@ const AboutTeam = () => {
               {/* Subtle list indicator */}
               <div className="mt-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary/60">
                 <CheckCircle2 className="h-3 w-3" />
-                <span>Core Expertise</span>
+                <span>{t("coreExpertise")}</span>
               </div>
             </motion.li>
           ))}
@@ -102,7 +98,7 @@ const AboutTeam = () => {
             </div>
             <div className="text-center md:text-left">
               <p className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
-                Phát triển bởi
+                {t("developedBy")}
               </p>
               <p className="text-2xl font-bold text-foreground">Titops DX4U</p>
               <div className="mt-1 flex items-center justify-center gap-2 text-primary md:justify-start">

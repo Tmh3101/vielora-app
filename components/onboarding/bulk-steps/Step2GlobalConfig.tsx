@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,7 @@ interface Step2GlobalConfigProps {
 }
 
 export function Step2GlobalConfig({ workspaceId }: Step2GlobalConfigProps) {
+  const t = useTranslations("onboarding.bulkSteps.step2");
   const [isLoadingDryRun, setIsLoadingDryRun] = useState(false);
 
   const bulkValidatedRows = useOnboardingStore((state) => state.bulkValidatedRows);
@@ -80,11 +82,9 @@ export function Step2GlobalConfig({ workspaceId }: Step2GlobalConfigProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          Bước 2: Cấu hình chung
+          {t("title")}
         </CardTitle>
-        <CardDescription>
-          Áp dụng thuộc tính dùng chung cho {validRows.length} bot hợp lệ.
-        </CardDescription>
+        <CardDescription>{t("description", { count: validRows.length })}</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
@@ -95,7 +95,7 @@ export function Step2GlobalConfig({ workspaceId }: Step2GlobalConfigProps) {
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5 text-xs font-medium">
                 <Palette className="h-3.5 w-3.5 text-primary" />
-                Màu chủ đạo
+                {t("primaryColor")}
               </Label>
               <div className="flex items-center gap-3">
                 <Input
@@ -114,11 +114,11 @@ export function Step2GlobalConfig({ workspaceId }: Step2GlobalConfigProps) {
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5 text-xs font-medium">
                 <Shield className="h-3.5 w-3.5 text-primary" />
-                Quyền truy cập
+                {t("accessControl")}
               </Label>
               <div className="flex items-center justify-between rounded-xl border p-3">
                 <span className="text-xs font-medium">
-                  {bulkConfig.isPublic ? "Công khai" : "Riêng tư"}
+                  {bulkConfig.isPublic ? t("public") : t("private")}
                 </span>
                 <Switch
                   checked={bulkConfig.isPublic ?? false}
@@ -155,7 +155,9 @@ export function Step2GlobalConfig({ workspaceId }: Step2GlobalConfigProps) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="inline-flex min-w-[250px] items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
             <div>
-              <p className="text-[11px] tracking-wide text-muted-foreground">Credits cần dùng</p>
+              <p className="text-[11px] tracking-wide text-muted-foreground">
+                {t("creditsNeeded")}
+              </p>
               <p className="text-xs font-medium text-foreground">
                 {bulkDryRunResult ? bulkDryRunResult.credits.needed.toLocaleString() : 0} credits
               </p>
@@ -163,8 +165,11 @@ export function Step2GlobalConfig({ workspaceId }: Step2GlobalConfigProps) {
             <div className="h-8 w-px bg-border" />
             <p className="text-xs text-muted-foreground">
               {bulkDryRunResult
-                ? `Khả dụng: ${bulkDryRunResult.quota.remaining}/${bulkDryRunResult.quota.botsLimit} bot`
-                : "Đang kiểm tra..."}
+                ? t("quotaAvailable", {
+                    remaining: bulkDryRunResult.quota.remaining,
+                    limit: bulkDryRunResult.quota.botsLimit,
+                  })
+                : t("checking")}
             </p>
           </div>
 
@@ -176,7 +181,7 @@ export function Step2GlobalConfig({ workspaceId }: Step2GlobalConfigProps) {
               className="hover:border-primary hover:bg-white hover:text-primary sm:min-w-[140px]"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Quay lại
+              {t("back")}
             </Button>
             <Button
               onClick={() => setBulkStep(3)}
@@ -188,11 +193,11 @@ export function Step2GlobalConfig({ workspaceId }: Step2GlobalConfigProps) {
               {isLoadingDryRun ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang kiểm tra...
+                  {t("checking")}
                 </>
               ) : (
                 <>
-                  Tạo {validRows.length} bot
+                  {t("createBots", { count: validRows.length })}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}

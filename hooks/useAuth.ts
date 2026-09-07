@@ -9,8 +9,9 @@
 
 import { useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserSupabaseClient, resetBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/store/useAuthStore";
+import { clearActiveWorkspaceCookie } from "@/hooks/useWorkspace";
 
 export const useAuth = () => {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
@@ -41,6 +42,8 @@ export const useAuth = () => {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     storeSignOut();
+    clearActiveWorkspaceCookie();
+    resetBrowserSupabaseClient();
     router.push("/");
   }, [supabase, storeSignOut, router]);
 

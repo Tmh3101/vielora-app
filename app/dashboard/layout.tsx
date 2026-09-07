@@ -3,6 +3,9 @@ import { createServerClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { WorkspaceProvider } from "@/hooks/useWorkspace";
+import { NextIntlClientProvider } from "next-intl";
+import { getMessages } from "next-intl/server";
+import { getDashboardLocale } from "@/lib/i18n/dashboard-locale";
 
 export const metadata: Metadata = {
   title: {
@@ -15,6 +18,9 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getDashboardLocale();
+  const messages = await getMessages({ locale });
+
   const supabase = await createServerClient();
   const {
     data: { user },
@@ -59,5 +65,9 @@ export default async function DashboardLayout({
     );
   }
 
-  return <WorkspaceProvider>{children}</WorkspaceProvider>;
+  return (
+    <NextIntlClientProvider locale={locale} messages={messages}>
+      <WorkspaceProvider>{children}</WorkspaceProvider>
+    </NextIntlClientProvider>
+  );
 }

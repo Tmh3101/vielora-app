@@ -15,6 +15,7 @@ import { RecentQuestionsCard } from "@/components/dashboard/bot-detail/analytics
 import { OverviewLoadingState } from "@/components/dashboard/bot-detail/tabs/OverviewLoadingState";
 import { OverviewErrorState } from "@/components/dashboard/bot-detail/tabs/OverviewErrorState";
 import { getBotStatusLabel } from "@/lib/helpers";
+import { useTranslations } from "next-intl";
 
 export interface OverviewTabProps {
   bot: Tables<"bots">;
@@ -29,6 +30,8 @@ export interface OverviewTabProps {
  * @returns A React element containing the bot analytics overview UI
  */
 export function OverviewTab({ bot, pagesCount }: OverviewTabProps) {
+  const t = useTranslations("dashboard.botDetail.overviewTab");
+  const tBots = useTranslations("dashboard.overview.botsSection");
   const defaultRange = useMemo(
     () => ({
       from: startOfDay(subDays(new Date(), 6)),
@@ -37,7 +40,7 @@ export function OverviewTab({ bot, pagesCount }: OverviewTabProps) {
     []
   );
   const [range, setRange] = useState(defaultRange);
-  const statusMeta = getBotStatusLabel(bot);
+  const statusMeta = getBotStatusLabel(bot, tBots);
   const analyticsQuery = useBotAnalytics({
     botId: bot.id,
     from: range.from,
@@ -50,9 +53,7 @@ export function OverviewTab({ bot, pagesCount }: OverviewTabProps) {
 
   if (analyticsQuery.isError || !analyticsQuery.data) {
     const message =
-      analyticsQuery.error instanceof Error
-        ? analyticsQuery.error.message
-        : "Đã xảy ra lỗi không xác định.";
+      analyticsQuery.error instanceof Error ? analyticsQuery.error.message : "An error occurred.";
 
     return <OverviewErrorState message={message} />;
   }
@@ -64,20 +65,16 @@ export function OverviewTab({ bot, pagesCount }: OverviewTabProps) {
       <Card className="glass">
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
-            <CardDescription>
-              Theo dõi tương tác người dùng, fallback và mức sử dụng credits theo từng giai đoạn.
-            </CardDescription>
+            <CardDescription>{t("testDescription")}</CardDescription>
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <Badge className={statusMeta.className}>{statusMeta.label}</Badge>
               <Badge variant="outline" className="gap-1 text-xs">
                 <Bot className="h-3 w-3" />
-                {pagesCount} trang đã index
+                {pagesCount} {tBots("pages")}
               </Badge>
               <Badge variant="outline" className="gap-1 text-xs">
                 <TimerReset className="h-3 w-3" />
-                {bot.last_crawl_at
-                  ? new Date(bot.last_crawl_at).toLocaleString("vi-VN")
-                  : "Chưa crawl"}
+                {bot.last_crawl_at ? new Date(bot.last_crawl_at).toLocaleDateString() : "-"}
               </Badge>
             </div>
           </div>
@@ -88,30 +85,30 @@ export function OverviewTab({ bot, pagesCount }: OverviewTabProps) {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <AnalyticsCard
-          title="Cuộc hội thoại"
-          value={kpis.totalConversations.toLocaleString("vi-VN")}
-          description="Số cuộc hội thoại mới"
+          title={t("totalConversations")}
+          value={kpis.totalConversations.toLocaleString()}
+          // description={t("totalConversations")}
           icon={MessagesSquare}
           deltaPercent={comparison.conversations.deltaPercent}
         />
         <AnalyticsCard
-          title="Tin nhắn người dùng"
-          value={kpis.totalMessages.toLocaleString("vi-VN")}
-          description="Tổng số tin nhắn"
+          title={t("totalMessages")}
+          value={kpis.totalMessages.toLocaleString()}
+          // description={t("totalMessages")}
           icon={MessageCircle}
           deltaPercent={comparison.messages.deltaPercent}
         />
         <AnalyticsCard
-          title="Liên hệ"
-          value={kpis.leadCount.toLocaleString("vi-VN")}
-          description="lượt khách hàng gửi feedback"
+          title={t("totalLeads")}
+          value={kpis.leadCount.toLocaleString()}
+          // description={t("totalLeads")}
           icon={UserPlus}
           deltaPercent={comparison.leads.deltaPercent}
         />
         <AnalyticsCard
-          title="Credits đã dùng"
-          value={kpis.creditsUsed.toLocaleString("vi-VN")}
-          description="Credits tiêu thụ bởi chat"
+          title={tBots("tableColKnowledge")}
+          value={kpis.creditsUsed.toLocaleString()}
+          // description={tBots("tableColKnowledge")}
           icon={Coins}
           deltaPercent={comparison.creditsUsed.deltaPercent}
         />

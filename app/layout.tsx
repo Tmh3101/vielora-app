@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { PublicChatWidget } from "@/components/shared/PublicChatWidget";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -90,6 +91,7 @@ export default function RootLayout({
     <html lang="vi" suppressHydrationWarning>
       <body className={`${inter.className} bg-background text-foreground antialiased`}>
         <Providers>{children}</Providers>
+        <PublicChatWidget />
       </body>
     </html>
   );

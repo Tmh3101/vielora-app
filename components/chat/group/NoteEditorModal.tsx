@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { GROUP_CHAT_CONFIG } from "@/config/group-chat";
 import type { GroupNoteRow } from "@/types/group-chat";
 import { VoiceInputButton } from "@/components/dashboard/shared/VoiceInputButton";
+import { ELanguage } from "@/types/enums";
+import { getWidgetTranslations } from "@/lib/i18n/widget-translations";
 
 export interface NoteEditorModalProps {
   botId?: string;
@@ -42,6 +44,7 @@ export interface NoteEditorModalProps {
   }) => Promise<void> | void;
   initialNote?: GroupNoteRow | null;
   isSaving?: boolean;
+  locale?: ELanguage | string;
 }
 
 function NoteEditorModalInner({
@@ -59,7 +62,9 @@ function NoteEditorModalInner({
   onSave,
   initialNote,
   isSaving: legacyIsSaving,
+  locale = ELanguage.Vi,
 }: NoteEditorModalProps) {
+  const t = getWidgetTranslations(locale);
   const note = existingNote || initialNote;
   const isEditing = mode ? mode === "edit" : Boolean(note);
   const isPending = isSubmitting || legacyIsSaving || false;
@@ -253,7 +258,7 @@ function NoteEditorModalInner({
       } else {
         setContentHtml(`${currentHtml}<p><br></p>${safeHtml}`);
       }
-      toast.success("Đã nhận diện giọng nói thành công.");
+      toast.success(t.voiceRecognitionSuccess);
     } finally {
       setIsFormatting(false);
       updateContentLength();
@@ -274,22 +279,26 @@ function NoteEditorModalInner({
     const rawText = editor ? editor.innerText || editor.textContent || "" : "";
 
     if (!title.trim()) {
-      setError("Vui lòng nhập tiêu đề ghi chú.");
+      setError(t.noteTitleRequired);
       return;
     }
 
     if (!rawText.trim()) {
-      setError("Vui lòng nhập nội dung ghi chú.");
+      setError(t.noteContentRequired);
       return;
     }
 
     if (title.length > GROUP_CHAT_CONFIG.MAX_NOTE_TITLE_LENGTH) {
-      setError(`Tiêu đề không được vượt quá ${GROUP_CHAT_CONFIG.MAX_NOTE_TITLE_LENGTH} ký tự.`);
+      setError(
+        t.noteTitleTooLong.replace("{max}", String(GROUP_CHAT_CONFIG.MAX_NOTE_TITLE_LENGTH))
+      );
       return;
     }
 
     if (rawText.length > GROUP_CHAT_CONFIG.MAX_NOTE_CONTENT_LENGTH) {
-      setError(`Nội dung không được vượt quá ${GROUP_CHAT_CONFIG.MAX_NOTE_CONTENT_LENGTH} ký tự.`);
+      setError(
+        t.noteContentTooLong.replace("{max}", String(GROUP_CHAT_CONFIG.MAX_NOTE_CONTENT_LENGTH))
+      );
       return;
     }
 
@@ -321,7 +330,7 @@ function NoteEditorModalInner({
             >
               <Sparkles className="h-3.5 w-3.5" />
             </span>
-            <span>{isEditing ? "Chỉnh sửa ghi chú" : "Tạo ghi chú nhóm mới"}</span>
+            <span>{isEditing ? t.editNoteTitle : t.createNoteTitle}</span>
           </DialogTitle>
         </DialogHeader>
 
@@ -336,7 +345,7 @@ function NoteEditorModalInner({
           <div className="space-y-1">
             <div className="flex items-center justify-between text-xs">
               <label className="font-medium text-foreground">
-                Tiêu đề ghi chú <span className="font-normal text-destructive">*</span>
+                {t.noteTitle} <span className="font-normal text-destructive">*</span>
               </label>
               <span
                 className={cn(
@@ -356,7 +365,7 @@ function NoteEditorModalInner({
                   setTitle(e.target.value);
                 }
               }}
-              placeholder="Nhập tiêu đề ngắn gọn..."
+              placeholder={t.noteTitlePlaceholder}
               maxLength={GROUP_CHAT_CONFIG.MAX_NOTE_TITLE_LENGTH}
               required
               className="text-xs"
@@ -367,7 +376,7 @@ function NoteEditorModalInner({
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-foreground">
-                Nội dung ghi chú <span className="font-normal text-destructive">*</span>
+                {t.noteContent} <span className="font-normal text-destructive">*</span>
               </label>
               {botId && (
                 <VoiceInputButton
@@ -476,7 +485,7 @@ function NoteEditorModalInner({
                 onSelect={updateActiveFormats}
                 onClick={updateActiveFormats}
                 className="prose-xs prose max-h-[260px] min-h-[140px] overflow-y-auto p-3 text-xs leading-relaxed outline-none dark:prose-invert [&_h1]:my-1.5 [&_h1]:text-sm [&_h1]:font-bold [&_h2]:my-1 [&_h2]:text-xs [&_h2]:font-bold [&_h3]:my-1 [&_h3]:text-xs [&_h3]:font-semibold [&_ol]:my-1 [&_p]:my-1 [&_ul]:my-1"
-                data-placeholder="Soạn thảo nội dung ghi chú..."
+                data-placeholder={t.noteContentPlaceholder}
               />
             </div>
 
@@ -486,10 +495,10 @@ function NoteEditorModalInner({
                 {isFormatting ? (
                   <span className="flex items-center gap-1 font-medium text-primary">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    Đang định dạng ghi chú bằng AI...
+                    {t.noteAiFormatting}
                   </span>
                 ) : (
-                  "Hỗ trợ định dạng văn bản & danh sách."
+                  t.noteFormatHelp
                 )}
               </p>
               <p
@@ -514,7 +523,7 @@ function NoteEditorModalInner({
               disabled={isPending}
               className="text-xs transition-colors duration-200 hover:border-red-600 hover:bg-white hover:text-red-600 dark:hover:border-red-500 dark:hover:bg-background dark:hover:text-red-400"
             >
-              Hủy
+              {t.cancel}
             </Button>
             <Button
               type="submit"
@@ -524,7 +533,7 @@ function NoteEditorModalInner({
               style={{ backgroundColor: primaryColor }}
             >
               {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-              <span>{isEditing ? "Lưu thay đổi" : "Tạo & Ghim"}</span>
+              <span>{isEditing ? t.saveChanges : t.createAndPin}</span>
             </Button>
           </DialogFooter>
         </form>

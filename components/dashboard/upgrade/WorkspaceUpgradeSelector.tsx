@@ -5,6 +5,7 @@ import { Check, ChevronDown, PlusCircle, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { persistActiveWorkspaceId } from "@/hooks/useWorkspace";
 
 export interface WorkspaceSelectorItem {
   id: string;
@@ -31,7 +33,7 @@ interface WorkspaceUpgradeSelectorProps {
 
 function setWorkspaceCookie(wsId: string) {
   if (typeof document !== "undefined") {
-    document.cookie = `active_workspace_id=${wsId}; path=/; max-age=2592000; SameSite=Lax`;
+    persistActiveWorkspaceId(wsId);
   }
 }
 
@@ -39,8 +41,10 @@ export function WorkspaceUpgradeSelector({
   workspaces = [],
   selectedSlug,
   onSelectWorkspace,
-  title = "Workspace hiện tại",
+  title,
 }: WorkspaceUpgradeSelectorProps) {
+  const t = useTranslations("dashboard.upgrade");
+  const displayTitle = title || t("currentPlanLabel");
   const currentWorkspace =
     workspaces.find((w) => w.slug === selectedSlug || w.id === selectedSlug) ||
     workspaces[0] ||
@@ -58,17 +62,14 @@ export function WorkspaceUpgradeSelector({
           <div className="flex items-center gap-3">
             <AlertCircle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
             <div>
-              <p className="text-sm font-semibold">Tài khoản chưa có Workspace</p>
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                Gói dịch vụ được gắn trực tiếp theo Workspace. Vui lòng tạo Workspace trước khi đăng
-                ký gói.
-              </p>
+              <p className="text-sm font-semibold">{t("noWorkspace")}</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">{t("noWorkspaceDesc")}</p>
             </div>
           </div>
           <Button asChild size="sm" className="shrink-0 bg-amber-600 text-white hover:bg-amber-700">
             <Link href="/onboarding">
               <PlusCircle className="mr-1.5 h-4 w-4" />
-              Tạo Workspace ngay
+              {t("createWorkspace")}
             </Link>
           </Button>
         </CardContent>
@@ -85,13 +86,13 @@ export function WorkspaceUpgradeSelector({
           </div> */}
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">{title}</span>
+              <span className="text-xs font-medium text-muted-foreground">{displayTitle}</span>
             </div>
             <p className="text-sm font-bold text-foreground">
-              {currentWorkspace ? currentWorkspace.name : "Chưa chọn Workspace"}
+              {currentWorkspace ? currentWorkspace.name : t("notSelected")}
               {currentWorkspace?.planName && (
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  (Đang dùng:{" "}
+                  ({t("currentPlanDisplay")}{" "}
                   <span className="font-semibold text-foreground">{currentWorkspace.planName}</span>
                   )
                 </span>
@@ -108,7 +109,7 @@ export function WorkspaceUpgradeSelector({
                 size="sm"
                 className="shadow-2xs group h-9 shrink-0 gap-2 border-primary/30 bg-background text-xs font-semibold transition-all duration-200 hover:border-primary hover:bg-primary/5 hover:text-primary data-[state=open]:border-primary data-[state=open]:bg-primary/10 data-[state=open]:text-primary"
               >
-                <span>Đổi Workspace</span>
+                <span>{t("switchWorkspace")}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-hover:text-primary group-data-[state=open]:rotate-180" />
               </Button>
             </DropdownMenuTrigger>
@@ -117,7 +118,7 @@ export function WorkspaceUpgradeSelector({
               className="w-64 rounded-xl border border-border/80 bg-card p-1.5 shadow-xl transition-all"
             >
               <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                Thay đổi workspace:
+                {t("changeWorkspaceLabel")}
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="my-1 bg-border/40" />
               <div className="max-h-56 space-y-1 overflow-y-auto p-0.5">
@@ -171,7 +172,7 @@ export function WorkspaceUpgradeSelector({
               >
                 <Link href="/onboarding" className="flex items-center gap-2">
                   <PlusCircle className="h-4 w-4 text-primary transition-transform duration-150 group-hover/create:scale-110 group-data-[highlighted]/create:scale-110" />
-                  <span>Tạo Workspace mới</span>
+                  <span>{t("createNewWorkspace")}</span>
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -185,7 +186,7 @@ export function WorkspaceUpgradeSelector({
           >
             <Link href="/onboarding" className="flex items-center gap-1.5">
               <PlusCircle className="h-3.5 w-3.5" />
-              Tạo thêm Workspace
+              {t("createMoreWorkspace")}
             </Link>
           </Button>
         )}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { corsHeaders } from "@/lib/constants";
+import { corsHeaders, ACTIVE_WORKSPACE_COOKIE } from "@/lib/constants";
 import { BOTS_PAGE_SIZE } from "@/lib/constants/pagination";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import { getBotsPaginated } from "@/lib/services/bot.service";
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     const workspaceId =
       searchParams.get("workspaceId") ||
       req.headers.get("x-workspace-id") ||
-      req.cookies.get("active_workspace_id")?.value ||
+      req.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value ||
       undefined;
 
     const sortByParam = searchParams.get("sortBy");

@@ -13,6 +13,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bot, Crown, Loader2 } from "lucide-react";
 import type { Tables } from "@/lib/supabase/types";
+import { useTranslations } from "next-intl";
 
 type BotType = Tables<"bots">;
 
@@ -41,6 +42,8 @@ export function BotSelectorDialog({
   onUpgrade,
   onConfirm,
 }: BotSelectorDialogProps) {
+  const t = useTranslations("dashboard.shared.botSelectorDialog");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -48,11 +51,12 @@ export function BotSelectorDialog({
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
             <Bot className="h-8 w-8 text-primary" />
           </div>
-          <DialogTitle className="text-xl">Chọn chatbot hoạt động</DialogTitle>
+          <DialogTitle className="text-xl">{t("title")}</DialogTitle>
           <DialogDescription className="pt-2 text-base">
-            Gói <span className="font-semibold capitalize text-foreground">{planName}</span> cho
-            phép tối đa <span className="font-semibold text-foreground">{botsLimit}</span> chatbot.
-            Chọn chatbot bạn muốn kích hoạt.
+            {t("description", {
+              plan: planName,
+              limit: botsLimit,
+            })}
           </DialogDescription>
         </DialogHeader>
 
@@ -100,7 +104,7 @@ export function BotSelectorDialog({
                     isSelected ? "text-green-600" : "text-muted-foreground"
                   }`}
                 >
-                  {isSelected ? "Hoạt động" : "Đã dừng"}
+                  {isSelected ? t("active") : t("inactive")}
                 </span>
               </div>
             );
@@ -108,9 +112,8 @@ export function BotSelectorDialog({
         </div>
 
         <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-2 text-sm">
-          <span className="text-muted-foreground">Đã chọn</span>
-          <span className="font-medium">
-            {selectedBotIds.size}/{botsLimit}
+          <span className="text-muted-foreground">
+            {t("selected", { count: selectedBotIds.size, limit: botsLimit })}
           </span>
         </div>
 
@@ -121,7 +124,7 @@ export function BotSelectorDialog({
             className="w-full hover:bg-white hover:text-foreground sm:w-auto"
           >
             <Crown className="mr-2 h-4 w-4" />
-            Nâng cấp gói
+            {t("upgradeBtn")}
           </Button>
           <Button
             onClick={() => void onConfirm()}
@@ -131,10 +134,10 @@ export function BotSelectorDialog({
             {isSavingBotSelection ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang lưu...
+                {t("saving")}
               </>
             ) : (
-              "Xác nhận"
+              t("confirmBtn")
             )}
           </Button>
         </DialogFooter>

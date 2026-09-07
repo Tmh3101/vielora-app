@@ -8,24 +8,26 @@
  * - Added auth-based navigation: show Dashboard button when logged in
  */
 
-import { useState, useEffect, useMemo } from "react";
-import Link from "next/link";
+import { useState } from "react";
+import { Link } from "@/i18n/navigation";
+import NextLink from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Menu, X, LayoutDashboard } from "lucide-react";
 import { motion, useScroll, useMotionValueEvent } from "framer-motion";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import LanguageSwitcher from "@/components/landing/LanguageSwitcher";
+import { useTranslations } from "next-intl";
+import { useAuth } from "@/hooks/useAuth";
 
 interface HeaderProps {
   isLegalLayout?: boolean;
 }
 
 const Header = ({ isLegalLayout }: HeaderProps) => {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const t = useTranslations("navigation");
+  const { isAuthenticated, isLoading } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [isScrolled, setIsScrolled] = useState(false);
 
   const { scrollY } = useScroll();
@@ -34,24 +36,8 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
     setIsScrolled(latest > window.innerHeight / 4);
   });
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setIsLoggedIn(!!session);
-      setIsLoading(false);
-    };
-    checkAuth();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setIsLoggedIn(!!session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [supabase]);
+  // isLoggedIn/isLoading giờ lấy từ useAuth singleton để tránh tạo client riêng gây refresh loop 429
+  const isLoggedIn = isAuthenticated;
 
   return (
     <motion.header
@@ -82,41 +68,42 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
 
         {!isLegalLayout && (
           <nav className="hidden items-center gap-6 md:flex">
-            <a
+            <Link
               href="/#features"
               className="link-underline py-1 text-sm text-muted-foreground transition-colors hover:text-primary"
             >
-              Tính năng
-            </a>
-            <a
+              {t("features")}
+            </Link>
+            <Link
               href="/#pricing"
               className="link-underline py-1 text-sm text-muted-foreground transition-colors hover:text-primary"
             >
-              Bảng giá
-            </a>
-            <a
+              {t("pricing")}
+            </Link>
+            <Link
               href="/#demo"
               className="link-underline py-1 text-sm text-muted-foreground transition-colors hover:text-primary"
             >
-              Demo
-            </a>
+              {t("demo")}
+            </Link>
             <Link
               href="/about-us"
               className="link-underline py-1 text-sm text-muted-foreground transition-colors hover:text-primary"
             >
-              Về chúng tôi
+              {t("aboutUs")}
             </Link>
             <Link
               href="/posts"
               className="link-underline py-1 text-sm text-muted-foreground transition-colors hover:text-primary"
             >
-              Blog
+              {t("blog")}
             </Link>
           </nav>
         )}
 
         {/* Desktop */}
         <div className="hidden items-center gap-3 md:flex">
+          <LanguageSwitcher />
           {!isLoading &&
             (isLoggedIn ? (
               <Button
@@ -124,10 +111,10 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
                 size="sm"
                 className="btn-glow bg-gradient-primary h-8 text-xs hover:opacity-90"
               >
-                <Link href="/dashboard">
-                  <LayoutDashboard className="mr-1 h-3 w-3" />
-                  Dashboard
-                </Link>
+                <NextLink href="/dashboard">
+                  <LayoutDashboard className="h-3 w-3" />
+                  {t("dashboard")}
+                </NextLink>
               </Button>
             ) : (
               <>
@@ -138,7 +125,7 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
                     asChild
                     className="h-8 border border-primary/30 text-xs text-primary/80 transition-all hover:border-primary hover:bg-white hover:text-primary"
                   >
-                    <Link href="/auth">Đăng nhập</Link>
+                    <NextLink href="/auth">{t("login")}</NextLink>
                   </Button>
                 )}
                 <Button
@@ -146,7 +133,7 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
                   size="sm"
                   className="btn-glow bg-gradient-primary h-8 text-xs hover:opacity-90"
                 >
-                  <Link href="/auth?mode=signup">Bắt đầu miễn phí</Link>
+                  <NextLink href="/auth?mode=signup">{t("getStarted")}</NextLink>
                 </Button>
               </>
             ))}
@@ -156,67 +143,73 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
         <button
           className="rounded-lg p-2 transition-colors hover:bg-muted/50 md:hidden"
           onClick={() => setIsMenuOpen(!isMenuOpen)}
-          aria-label="Toggle menu"
+          aria-label={t("menu")}
         >
           {isMenuOpen ? (
-            <X className="h-5 w-5 text-foreground" />
+            <X className="h-6 w-6 text-foreground" />
           ) : (
-            <Menu className="h-5 w-5 text-foreground" />
+            <Menu className="h-6 w-6 text-foreground" />
           )}
         </button>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile menu */}
       {isMenuOpen && (
-        <div className="animate-fade-in-up fixed left-0 right-0 top-14 z-40 border-t border-border/40 bg-background/100 shadow-lg backdrop-blur-lg md:hidden">
-          <nav className="flex flex-col gap-1 p-4">
+        <div className="glass-lg absolute inset-x-4 top-16 rounded-3xl border border-border/50 bg-background/95 p-6 shadow-2xl backdrop-blur-xl md:hidden">
+          <nav className="flex flex-col gap-3">
             {!isLegalLayout && (
               <>
-                <a
+                <Link
                   href="/#features"
-                  className="rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Tính năng
-                </a>
-                <a
+                  {t("features")}
+                </Link>
+                <Link
                   href="/#pricing"
-                  className="rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Bảng giá
-                </a>
-                <a
+                  {t("pricing")}
+                </Link>
+                <Link
                   href="/#demo"
-                  className="rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Demo
-                </a>
+                  {t("demo")}
+                </Link>
                 <Link
                   href="/about-us"
-                  className="rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Về chúng tôi
+                  {t("aboutUs")}
                 </Link>
                 <Link
                   href="/posts"
-                  className="rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Blog
+                  {t("blog")}
                 </Link>
               </>
             )}
             <div className="mt-2 flex flex-col gap-2 border-t border-border/40 pt-4">
+              <div className="flex items-center justify-between py-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Ngôn ngữ / Language:
+                </span>
+                <LanguageSwitcher />
+              </div>
               {!isLoading &&
                 (isLoggedIn ? (
                   <Button asChild size="sm" className="bg-gradient-primary h-8 w-full text-xs">
-                    <Link href="/dashboard" onClick={() => setIsMenuOpen(false)}>
+                    <NextLink href="/dashboard" onClick={() => setIsMenuOpen(false)}>
                       <LayoutDashboard className="mr-1.5 h-3.5 w-3.5" />
-                      Dashboard
-                    </Link>
+                      {t("dashboard")}
+                    </NextLink>
                   </Button>
                 ) : (
                   <>
@@ -226,14 +219,14 @@ const Header = ({ isLegalLayout }: HeaderProps) => {
                       asChild
                       className="h-8 w-full border border-primary/30 text-xs text-primary/80 transition-all hover:border-primary hover:bg-white hover:text-primary"
                     >
-                      <Link href="/auth" onClick={() => setIsMenuOpen(false)}>
-                        Đăng nhập
-                      </Link>
+                      <NextLink href="/auth" onClick={() => setIsMenuOpen(false)}>
+                        {t("login")}
+                      </NextLink>
                     </Button>
                     <Button asChild size="sm" className="bg-gradient-primary h-8 w-full text-xs">
-                      <Link href="/auth?mode=signup" onClick={() => setIsMenuOpen(false)}>
-                        Bắt đầu miễn phí
-                      </Link>
+                      <NextLink href="/auth?mode=signup" onClick={() => setIsMenuOpen(false)}>
+                        {t("getStarted")}
+                      </NextLink>
                     </Button>
                   </>
                 ))}

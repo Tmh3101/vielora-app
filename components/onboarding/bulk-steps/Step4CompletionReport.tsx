@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -9,6 +10,7 @@ import { CheckCircle, AlertCircle, RefreshCw, Bot, ArrowRight } from "lucide-rea
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 
 export function Step4CompletionReport() {
+  const t = useTranslations("onboarding.bulkSteps.step4");
   const router = useRouter();
 
   const bulkResults = useOnboardingStore((state) => state.bulkResults);
@@ -41,10 +43,8 @@ export function Step4CompletionReport() {
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
           <CheckCircle className="h-8 w-8 text-green-600" />
         </div>
-        <CardTitle>Danh sách Chatbot đã sẵn sàng!</CardTitle>
-        <CardDescription>
-          Đã khởi tạo thành công {successCount}/{totalCount} chatbot từ file CSV của bạn.
-        </CardDescription>
+        <CardTitle>{t("title")}</CardTitle>
+        <CardDescription>{t("description", { successCount, totalCount })}</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -58,15 +58,17 @@ export function Step4CompletionReport() {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-semibold text-foreground">{successCount} Chatbot hoàn tất</p>
+                <p className="font-semibold text-foreground">
+                  {t("botsCompleted", { count: successCount })}
+                </p>
                 <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                   <span className="h-2 w-2 rounded-full bg-green-500" />
-                  Đã nạp kiến thức ban đầu
+                  {t("knowledgeIngested")}
                 </div>
               </div>
             </div>
             <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-              {successCount} bots
+              {t("botsBadge", { count: successCount })}
             </Badge>
           </div>
         </div>
@@ -76,16 +78,16 @@ export function Step4CompletionReport() {
           <div className="space-y-3 rounded-xl border border-destructive/20 p-4">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-destructive">
               <AlertCircle className="h-4 w-4" />
-              Danh sách dòng bị lỗi ({failedCount}):
+              {t("failedRowsTitle", { count: failedCount })}
             </h3>
             <div className="max-h-52 overflow-y-auto rounded-lg border text-xs">
               <table className="w-full text-left">
                 <thead className="bg-muted p-2 font-medium">
                   <tr>
-                    <th className="p-2">#</th>
-                    <th className="p-2">Tên Bot</th>
-                    <th className="p-2">Slug</th>
-                    <th className="p-2">Lý do lỗi</th>
+                    <th className="p-2">{t("colIndex")}</th>
+                    <th className="p-2">{t("colBotName")}</th>
+                    <th className="p-2">{t("colSlug")}</th>
+                    <th className="p-2">{t("colReason")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -94,7 +96,9 @@ export function Step4CompletionReport() {
                       <td className="p-2 font-mono">{idx + 1}</td>
                       <td className="p-2 font-medium">{r.name}</td>
                       <td className="p-2 font-mono text-muted-foreground">{r.slug}</td>
-                      <td className="p-2 text-destructive">{r.errorReason || "Lỗi khởi tạo"}</td>
+                      <td className="p-2 text-destructive">
+                        {r.errorReason || t("defaultInitError")}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -112,7 +116,7 @@ export function Step4CompletionReport() {
               className="hover:border-primary hover:bg-white hover:text-primary"
             >
               <RefreshCw className="mr-2 h-4 w-4" />
-              Nhập lại dòng lỗi ({failedCount})
+              {t("retryFailed", { count: failedCount })}
             </Button>
           ) : (
             <Button
@@ -120,11 +124,11 @@ export function Step4CompletionReport() {
               onClick={handleFinish}
               className="hover:border-primary hover:bg-white hover:text-primary"
             >
-              Trở về Dashboard
+              {t("backToDashboard")}
             </Button>
           )}
           <Button onClick={handleFinish}>
-            Hoàn tất & Cài đặt Widget
+            {t("finishAndConfigure")}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>

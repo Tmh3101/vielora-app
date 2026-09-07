@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { GroupChatRow, GroupMemberRow } from "@/lib/services/group-chat.service";
 import { fetchGroup, createGroup, updateGroupStatusApi } from "@/lib/api/group-chat";
 import { GROUP_CHAT_REQUIRES_PRO_CODE } from "@/lib/constants";
@@ -41,6 +42,7 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
   const botId = bot.id;
   const botSlug = bot.slug;
   const { toast } = useToast();
+  const t = useTranslations("dashboard.group.management");
 
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -68,22 +70,22 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
         setProRequired(true);
       } else {
         toast({
-          title: "Lỗi",
-          description: res.message || "Không thể tải dữ liệu nhóm chat.",
+          title: t("errorTitle"),
+          description: res.message || t("loadFailed"),
           variant: "destructive",
         });
       }
     } catch (err) {
       console.error("Error loading group:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể kết nối đến máy chủ.",
+        title: t("errorTitle"),
+        description: t("connectionFailed"),
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  }, [botId, isStandaloneChatEnabled, toast]);
+  }, [botId, isStandaloneChatEnabled, toast, t]);
 
   useEffect(() => {
     loadGroupData();
@@ -96,29 +98,29 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
       if (res.success && res.data) {
         setGroup(res.data);
         toast({
-          title: "Thành công",
-          description: "Đã khởi tạo nhóm chat cho bot.",
+          title: t("successTitle"),
+          description: t("groupCreated"),
         });
         loadGroupData();
       } else if (res.code === GROUP_CHAT_REQUIRES_PRO_CODE) {
         setProRequired(true);
         toast({
-          title: "Gói không đủ quyền",
-          description: res.message || "Vui lòng nâng cấp gói Pro hoặc Enterprise.",
+          title: t("insufficientPlanTitle"),
+          description: res.message || t("upgradeRequired"),
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Không thể tạo nhóm",
-          description: res.message || "Đã xảy ra lỗi khi khởi tạo nhóm chat.",
+          title: t("createFailedTitle"),
+          description: res.message || t("createFailedDesc"),
           variant: "destructive",
         });
       }
     } catch (err) {
       console.error("Error creating group:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể kết nối đến máy chủ.",
+        title: t("errorTitle"),
+        description: t("connectionFailed"),
         variant: "destructive",
       });
     } finally {
@@ -135,21 +137,21 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
       if (res.success && res.data) {
         setGroup(res.data);
         toast({
-          title: "Cập nhật trạng thái",
-          description: checked ? "Nhóm chat đã được kích hoạt." : "Nhóm chat đã bị tạm dừng.",
+          title: t("updateStatusTitle"),
+          description: checked ? t("groupActivated") : t("groupPaused"),
         });
       } else {
         toast({
-          title: "Lỗi",
-          description: res.message || "Không thể cập nhật trạng thái nhóm.",
+          title: t("errorTitle"),
+          description: res.message || t("updateFailed"),
           variant: "destructive",
         });
       }
     } catch (err) {
       console.error("Error toggling status:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể kết nối đến máy chủ.",
+        title: t("errorTitle"),
+        description: t("connectionFailed"),
         variant: "destructive",
       });
     } finally {
@@ -176,11 +178,10 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
             </div>
             <div>
               <CardTitle className="text-base font-semibold text-foreground">
-                Yêu cầu kích hoạt Trang Chat Độc Lập
+                {t("standaloneTitle")}
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Tính năng Nhóm chat hoạt động trên nền tảng Trang chat độc lập. Bạn cần bật tính
-                năng này và thiết lập đường dẫn (slug) trước khi cấu hình Nhóm chat.
+                {t("standaloneDesc")}
               </CardDescription>
             </div>
           </div>
@@ -189,19 +190,12 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
           <div className="space-y-2.5 rounded-xl border border-border/40 bg-muted/30 p-4 text-xs leading-relaxed text-muted-foreground">
             <p className="flex items-center gap-2 font-semibold text-foreground">
               <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
-              Các bước cần thực hiện:
+              {t("stepsTitle")}
             </p>
             <ol className="list-decimal space-y-1.5 pl-5">
-              <li>
-                Mở tab <strong>Cài đặt</strong> của Bot (hoặc bấm nút bên dưới).
-              </li>
-              <li>
-                Tại mục <strong>Trang chat độc lập</strong>, bật công tắc{" "}
-                <strong>Công khai trang chat</strong>.
-              </li>
-              <li>
-                Nhập và lưu <strong>Đường dẫn tùy chỉnh (Slug)</strong> cho Bot.
-              </li>
+              <li>{t("step1")}</li>
+              <li>{t("step2")}</li>
+              <li>{t("step3")}</li>
             </ol>
           </div>
 
@@ -211,7 +205,7 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
               className="shadow-xs flex items-center gap-2 rounded-xl font-semibold"
             >
               <Settings className="h-4 w-4" />
-              Đi tới Cài đặt
+              {t("goToSettings")}
               <ArrowRight className="h-4 w-4" />
             </Button>
           )}
@@ -231,11 +225,10 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
             </div>
             <div>
               <CardTitle className="text-base font-semibold text-foreground">
-                Yêu cầu Nâng cấp Gói Dịch vụ
+                {t("upgradeTitle")}
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Tính năng Nhóm chat riêng tư (Group Chat) chỉ dành cho khách hàng sử dụng gói{" "}
-                <strong>Pro</strong> hoặc <strong>Enterprise</strong>.
+                {t("upgradeDesc")}
               </CardDescription>
             </div>
           </div>
@@ -245,7 +238,7 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
             asChild
             className="shadow-xs rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 font-semibold text-white hover:from-amber-600 hover:to-orange-600"
           >
-            <Link href="/dashboard/upgrade">Nâng cấp gói ngay →</Link>
+            <Link href="/dashboard/upgrade">{t("upgradeNow")}</Link>
           </Button>
         </CardContent>
       </Card>
@@ -260,12 +253,9 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
             <Users className="h-6 w-6" />
           </div>
-          <CardTitle className="text-xl font-bold text-foreground">
-            Chưa có Nhóm Chat cho Bot này
-          </CardTitle>
+          <CardTitle className="text-xl font-bold text-foreground">{t("emptyTitle")}</CardTitle>
           <CardDescription className="mx-auto mt-1.5 max-w-md text-xs text-muted-foreground">
-            Tạo nhóm chat riêng tư để tối đa 5 thành viên có thể cùng trao đổi trực tiếp với Bot
-            trong cùng một cuộc trò chuyện.
+            {t("emptyDesc")}
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-6 p-0">
@@ -280,7 +270,7 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
             ) : (
               <PlusCircle className="h-5 w-5" />
             )}
-            Tạo Nhóm Chat Mới
+            {t("createNewGroup")}
           </Button>
         </CardContent>
       </Card>
@@ -301,7 +291,7 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
               </div>
               <div>
                 <div className="flex items-center gap-2.5">
-                  <CardTitle className="text-base font-semibold">Nhóm Chat Trực tuyến</CardTitle>
+                  <CardTitle className="text-base font-semibold">{t("onlineTitle")}</CardTitle>
                   <Badge
                     variant="outline"
                     className={`rounded-lg px-2.5 py-0.5 text-xs font-semibold ${
@@ -310,11 +300,11 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
                         : "border-muted-foreground/20 bg-muted text-muted-foreground"
                     }`}
                   >
-                    {group.status === "active" ? "Đang hoạt động" : "Đã tạm dừng"}
+                    {group.status === "active" ? t("statusActive") : t("statusPaused")}
                   </Badge>
                 </div>
                 <CardDescription className="mt-0.5 text-xs text-muted-foreground">
-                  Quản lý nhóm chat 5 thành viên, bật/tắt nhóm và xem liên kết cuộc trò chuyện.
+                  {t("onlineDesc")}
                 </CardDescription>
               </div>
             </div>
@@ -328,7 +318,7 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
                   disabled={togglingStatus}
                 />
                 <Label htmlFor="group-status" className="cursor-pointer text-xs font-medium">
-                  Kích hoạt nhóm
+                  {t("enableGroup")}
                 </Label>
               </div>
 
@@ -340,7 +330,7 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
                   className="rounded-xl border-border/60 bg-background/50 text-xs font-medium transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
                 >
                   <Link href={pwaGroupUrl} target="_blank" rel="noopener noreferrer">
-                    Mở nhóm chat <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                    {t("openGroupChat")} <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
                   </Link>
                 </Button>
               )}
@@ -358,14 +348,14 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
                 <Users className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-base font-semibold">Thành viên nhóm</CardTitle>
+                <CardTitle className="text-base font-semibold">{t("membersTitle")}</CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  Mời tối đa 5 người dùng tham gia vào cuộc trò chuyện riêng tư của bot
+                  {t("membersDesc")}
                 </CardDescription>
               </div>
             </div>
             <span className="rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-              {members.length}/5 Thành viên
+              {t("membersCount", { count: members.length })}
             </span>
           </div>
         </CardHeader>
@@ -397,9 +387,9 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
                   <FileText className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <CardTitle className="text-base font-semibold">Ghi chú & Tri thức nhóm</CardTitle>
+                  <CardTitle className="text-base font-semibold">{t("notesTitle")}</CardTitle>
                   <CardDescription className="truncate text-xs text-muted-foreground">
-                    Ghi chú tạo thủ công và tin nhắn được ghim vào tri thức bot
+                    {t("notesDesc")}
                   </CardDescription>
                 </div>
               </div>
@@ -419,9 +409,9 @@ export function GroupManagement({ bot, onNavigateToSettings }: GroupManagementPr
                   <Sparkles className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <CardTitle className="text-base font-semibold">Tổng hợp hàng ngày</CardTitle>
+                  <CardTitle className="text-base font-semibold">{t("insightsTitle")}</CardTitle>
                   <CardDescription className="truncate text-xs text-muted-foreground">
-                    Bản tóm tắt tự động 24h qua định kỳ 02:00 AM
+                    {t("insightsDesc")}
                   </CardDescription>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { StandaloneChatSharePanel } from "@/components/dashboard/StandaloneChatSharePanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,11 +20,13 @@ import {
   Key,
   Mic,
   FileDown,
+  Languages,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MAX_ALLOWED_DOMAINS } from "@/lib/security/allowed-domains";
 import type { Tables } from "@/lib/supabase/types";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { useAppearanceStore } from "@/store/useAppearanceStore";
 import { useBotDetailUIStore } from "@/store/useBotDetailUIStore";
 import { parseRateLimitInput } from "@/lib/bot-rate-limit";
@@ -32,6 +34,8 @@ import { validateAllowedDomains } from "@/lib/security/allowed-domains";
 import { ExportReportButton } from "@/components/dashboard/bot-detail/ExportReportButton";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ESubscriptionPlan } from "@/types/enums";
+import { BOT_WIDGET_LANGUAGES } from "@/lib/constants";
+import { useTranslations } from "next-intl";
 
 type BotType = Tables<"bots">;
 
@@ -44,6 +48,7 @@ export interface SettingsTabProps {
   onSaveAppearance?: (overrides?: {
     isVoiceEnabled?: boolean;
     navigation_enabled?: boolean;
+    ui_language?: string;
   }) => Promise<void>;
 }
 
@@ -55,6 +60,8 @@ export function SettingsTab({
   onSaveSlugSettings,
   onSaveAppearance,
 }: SettingsTabProps) {
+  const t = useTranslations("dashboard.botDetail.settingsTab");
+  const tCommon = useTranslations("dashboard.common");
   const { toast } = useToast();
   const { activeWorkspace } = useWorkspace();
 
@@ -89,16 +96,17 @@ export function SettingsTab({
   const navigationEnabled = useAppearanceStore((s) => s.navigationEnabled);
   const setNavigationEnabled = useAppearanceStore((s) => s.setNavigationEnabled);
 
+  const [uiLanguage, setUiLanguage] = useState<string>(
+    (bot.widget_settings as { ui_language?: string })?.ui_language ?? "vi"
+  );
+
   const setStopModalOpen = useBotDetailUIStore((s) => s.setStopModalOpen);
 
   const rateLimitPerDayError = parseRateLimitInput(
     rateLimitPerDay,
-    "Giới hạn tin nhắn / ngày"
+    t("rateLimitPerDayLabel")
   ).error;
-  const rateLimitPerIpError = parseRateLimitInput(
-    rateLimitPerIp,
-    "Giới hạn tin nhắn / IP / ngày"
-  ).error;
+  const rateLimitPerIpError = parseRateLimitInput(rateLimitPerIp, t("rateLimitPerIpLabel")).error;
   const allowedDomainsValidation = validateAllowedDomains(
     allowedDomains.map((d) => d.trim()).filter(Boolean)
   );
@@ -152,18 +160,18 @@ export function SettingsTab({
         <Button
           variant="outline"
           size="icon"
-          aria-label="Sao chép Bot ID"
+          aria-label={t("copyBotIdAriaLabel")}
           className="h-10 w-10 shrink-0 rounded-xl border-border/40 bg-card/60 transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
           onClick={() => {
             navigator.clipboard.writeText(bot.id);
-            toast({ title: "Đã sao chép Bot ID!" });
+            toast({ title: t("botIdCopied") });
           }}
         >
           <Copy className="h-4 w-4" />
         </Button>
       </div>
 
-      {/* Điều khiển Bot */}
+      {/* Bot Controls */}
       <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
         <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-center gap-3">
@@ -171,9 +179,9 @@ export function SettingsTab({
               <Power className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-base font-semibold">Trạng thái Bot</CardTitle>
+              <CardTitle className="text-base font-semibold">{t("generalSettings")}</CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Khởi động hoặc tạm dừng hoạt động phản hồi của chatbot
+                {t("stopBot")} / {t("startBot")}
               </CardDescription>
             </div>
           </div>
@@ -188,12 +196,12 @@ export function SettingsTab({
                 {isSaving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Đang kích hoạt...
+                    {tCommon("loading")}
                   </>
                 ) : (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    Khởi động
+                    {t("startBot")}
                   </>
                 )}
               </Button>
@@ -205,8 +213,8 @@ export function SettingsTab({
                   disabled={isStoppingBot}
                   className="shadow-xs rounded-xl px-5 font-semibold"
                 >
-                  <Square className="mr-2 h-4 w-4 fill-current" />
-                  Tạm dừng
+                  <Square className="h-4 w-4 fill-current" />
+                  {t("stopBot")}
                 </Button>
               )
             )}
@@ -214,7 +222,54 @@ export function SettingsTab({
         </div>
       </Card>
 
-      {/* Xuất Báo Cáo Bot (Chỉ hiển thị cho gói Pro và Enterprise) */}
+      {/* Widget Language - FREE for all plans (không cần gói trả phí) */}
+      <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-center gap-3">
+            <div className="shadow-xs flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+              <Languages className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-semibold tracking-tight">
+                {t("widgetLanguageTitle")}
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                {t("widgetLanguageDesc")}
+              </CardDescription>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div className="shadow-xs inline-flex items-center rounded-xl border border-border/50 bg-muted/30 p-1 backdrop-blur-md">
+              {BOT_WIDGET_LANGUAGES.map((item) => {
+                const isSelected = uiLanguage === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => {
+                      setUiLanguage(item.value);
+                      if (onSaveAppearance) void onSaveAppearance({ ui_language: item.value });
+                    }}
+                    className={cn(
+                      "relative flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50",
+                      isSelected
+                        ? "shadow-xs border border-border/60 bg-background text-foreground ring-1 ring-primary/20"
+                        : "text-muted-foreground hover:bg-background/40 hover:text-foreground"
+                    )}
+                  >
+                    <span className="text-sm leading-none">{item.flag}</span>
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          </div>
+        </div>
+      </Card>
+
+      {/* Export Bot Report (Pro and Enterprise only) */}
       {isProOrEnterprise && (
         <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
           <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
@@ -223,9 +278,9 @@ export function SettingsTab({
                 <FileDown className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-base font-semibold">Xuất báo cáo Bot</CardTitle>
+                <CardTitle className="text-base font-semibold">{t("exportReportTitle")}</CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  Tạo và tải về báo cáo PDF tổng hợp dữ liệu, hiệu suất và năng lực của chatbot
+                  {t("exportReportDesc")}
                 </CardDescription>
               </div>
             </div>
@@ -240,7 +295,7 @@ export function SettingsTab({
         </Card>
       )}
 
-      {/* Tính năng Chatbot (Chỉ hiển thị cho các gói trả phí) */}
+      {/* Chatbot Features (Paid plans only) */}
       {isNavigationPlan && (
         <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
           <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
@@ -249,9 +304,11 @@ export function SettingsTab({
                 <Mic className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-base font-semibold">Tính năng Chatbot</CardTitle>
+                <CardTitle className="text-base font-semibold">
+                  {t("chatbotFeaturesTitle")}
+                </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  Quản lý các tính năng tương tác của chatbot trên Widget và trang Chat
+                  {t("chatbotFeaturesDesc")}
                 </CardDescription>
               </div>
             </div>
@@ -263,12 +320,10 @@ export function SettingsTab({
                   htmlFor="voice-chat-switch"
                   className="cursor-pointer text-sm font-medium leading-none"
                 >
-                  Trò chuyện bằng giọng nói
+                  {t("voiceChatLabel")}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  {isVoiceEnabled
-                    ? "Đang bật: Người dùng có thể thu âm gửi tin nhắn thoại."
-                    : "Đang tắt: Nút Micro sẽ bị ẩn hoàn toàn trên widget và trang chat."}
+                  {isVoiceEnabled ? t("voiceChatEnabled") : t("voiceChatDisabled")}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -290,7 +345,7 @@ export function SettingsTab({
         </Card>
       )}
 
-      {/* Chuyển hướng thông minh (Chỉ hiển thị cho các gói trả phí Standard/Pro/Enterprise) */}
+      {/* Smart Navigation (Standard/Pro/Enterprise only) */}
       {isNavigationPlan && (
         <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
           <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
@@ -299,11 +354,9 @@ export function SettingsTab({
                 <Globe className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-base font-semibold">
-                  Chuyển hướng thông minh (Smart Homepage)
-                </CardTitle>
+                <CardTitle className="text-base font-semibold">{t("smartNavTitle")}</CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  Điều khiển tính năng tự động đưa khách đến trang đích phù hợp
+                  {t("smartNavDesc")}
                 </CardDescription>
               </div>
             </div>
@@ -315,12 +368,10 @@ export function SettingsTab({
                   htmlFor="navigation-switch"
                   className="cursor-pointer text-sm font-medium leading-none"
                 >
-                  Chuyển hướng thông minh
+                  {t("smartNavLabel")}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  {navigationEnabled
-                    ? "Đang bật: Chatbot tự động chuyển khách đến trang đích khi nhận ý định phù hợp."
-                    : "Đang tắt: Tính năng chuyển hướng bị vô hiệu hóa hoàn toàn."}
+                  {navigationEnabled ? t("smartNavEnabled") : t("smartNavDisabled")}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -340,7 +391,7 @@ export function SettingsTab({
         </Card>
       )}
 
-      {/* Trang Chat Độc Lập */}
+      {/* Standalone Chat Page */}
       <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
         <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
           <div className="flex items-center gap-3">
@@ -348,9 +399,9 @@ export function SettingsTab({
               <Share2 className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-base font-semibold">Trang chat độc lập</CardTitle>
+              <CardTitle className="text-base font-semibold">{t("standaloneTitle")}</CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Chia sẻ chatbot qua đường link công khai trực tiếp
+                {t("standaloneDesc")}
               </CardDescription>
             </div>
           </div>
@@ -371,7 +422,7 @@ export function SettingsTab({
         </CardContent>
       </Card>
 
-      {/* Domain được phép */}
+      {/* Allowed Domains */}
       <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
         <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
           <div className="flex items-center justify-between">
@@ -380,9 +431,11 @@ export function SettingsTab({
                 <Globe className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-base font-semibold">Domain được phép tích hợp</CardTitle>
+                <CardTitle className="text-base font-semibold">
+                  {t("allowedDomainsTitle")}
+                </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  Chỉ tên miền thuộc danh sách này mới có thể nạp và hiển thị Widget Chat
+                  {t("allowedDomainsDesc")}
                 </CardDescription>
               </div>
             </div>
@@ -409,7 +462,7 @@ export function SettingsTab({
                     type="button"
                     variant="outline"
                     size="icon"
-                    aria-label="Xóa domain"
+                    aria-label={t("removeDomainAriaLabel")}
                     disabled={isSavingAllowedDomains}
                     onClick={() => handleRemoveAllowedDomain(index)}
                     className="h-10 w-10 shrink-0 rounded-xl border-border/60 bg-background/50 transition-all hover:border-destructive/60 hover:bg-destructive/10 hover:text-destructive"
@@ -425,7 +478,7 @@ export function SettingsTab({
             ) : null}
 
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Nhập tên miền (vd: domain.com). Hệ thống sẽ tự động loại bỏ protocol http/https.
+              {t("allowedDomainsHint")}
             </p>
           </div>
 
@@ -439,7 +492,7 @@ export function SettingsTab({
               className="rounded-xl border-border/60 bg-background/50 text-xs font-medium transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:scale-[0.98] disabled:opacity-50"
             >
               <Plus className="mr-1.5 h-4 w-4" />
-              Thêm domain
+              {t("addDomain")}
             </Button>
             <Button
               onClick={() => void onSaveAllowedDomains()}
@@ -447,13 +500,13 @@ export function SettingsTab({
               className="shadow-xs rounded-xl font-semibold"
             >
               {isSavingAllowedDomains && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Lưu danh sách Domain
+              {t("saveDomains")}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Giới hạn sử dụng */}
+      {/* Rate Limits */}
       <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-md transition-all hover:border-border/60">
         <CardHeader className="border-b border-border/40 bg-muted/20 p-5 sm:p-6">
           <div className="flex items-center gap-3">
@@ -461,9 +514,9 @@ export function SettingsTab({
               <ShieldAlert className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-base font-semibold">Giới hạn tần suất</CardTitle>
+              <CardTitle className="text-base font-semibold">{t("rateLimitTitle")}</CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Cấu hình giới hạn lượt phản hồi để kiểm soát dung lượng và tránh Spam
+                {t("rateLimitDesc")}
               </CardDescription>
             </div>
           </div>
@@ -472,14 +525,14 @@ export function SettingsTab({
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="rateLimitPerDay" className="text-xs font-medium">
-                Giới hạn tin nhắn / ngày
+                {t("rateLimitPerDayLabel")}
               </Label>
               <Input
                 id="rateLimitPerDay"
                 type="text"
                 inputMode="numeric"
                 pattern="[1-9][0-9]*"
-                placeholder="Không giới hạn"
+                placeholder={t("unlimitedPlaceholder")}
                 value={rateLimitPerDay}
                 onChange={(e) => handleRateLimitInputChange(e.target.value, setRateLimitPerDay)}
                 className="rounded-xl border-border/60 bg-background/50 text-sm focus-visible:ring-primary/20"
@@ -488,19 +541,19 @@ export function SettingsTab({
                 <p className="text-xs text-destructive">{rateLimitPerDayError}</p>
               ) : null}
               <p className="text-[11px] leading-relaxed text-muted-foreground">
-                Tổng số tin nhắn bot có thể phản hồi trong ngày.
+                {t("rateLimitPerDayHint")}
               </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="rateLimitPerIp" className="text-xs font-medium">
-                Giới hạn tin nhắn / IP / ngày
+                {t("rateLimitPerIpLabel")}
               </Label>
               <Input
                 id="rateLimitPerIp"
                 type="text"
                 inputMode="numeric"
                 pattern="[1-9][0-9]*"
-                placeholder="Không giới hạn"
+                placeholder={t("unlimitedPlaceholder")}
                 value={rateLimitPerIp}
                 onChange={(e) => handleRateLimitInputChange(e.target.value, setRateLimitPerIp)}
                 className="rounded-xl border-border/60 bg-background/50 text-sm focus-visible:ring-primary/20"
@@ -509,7 +562,7 @@ export function SettingsTab({
                 <p className="text-xs text-destructive">{rateLimitPerIpError}</p>
               ) : null}
               <p className="text-[11px] leading-relaxed text-muted-foreground">
-                Số tin nhắn tối đa từ một IP người dùng trong ngày.
+                {t("rateLimitPerIpHint")}
               </p>
             </div>
           </div>
@@ -520,7 +573,7 @@ export function SettingsTab({
               className="shadow-xs rounded-xl font-semibold"
             >
               {isSavingRateLimit && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Lưu cài đặt giới hạn
+              {t("saveRateLimit")}
             </Button>
           </div>
         </CardContent>

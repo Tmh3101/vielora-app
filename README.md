@@ -28,6 +28,12 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - **PWA Enhancements**: Expanded PWA support and workspace management across dashboard and chat surfaces.
 - **Checkout Refactor**: Unified checkout creation API with slimmed-down checkout and credits-checkout pages.
 
+## 🚀 Version 3.1.0 Highlights — Multilingual Support (EN/VI)
+
+- **Full-Coverage i18n (4 Layers)**: Public pages via URL prefix (`/vi`, `/en`) with `next-intl` + `hreflang` SEO (L1); Dashboard/Auth via cookie `NEXT_LOCALE` + `user_metadata.locale` fallback `vi` (L2); Widget chat per-bot via `widget_settings.ui_language` (`ESystemLanguage`) independent from platform locale (L3). See [i18n Spec](docs/specs/i18n-multilingual/spec.md) and [Quickstart](docs/specs/i18n-multilingual/quickstart.md).
+- **Widget Language Independence**: Each bot can serve different widget language; "Ngôn ngữ Widget" card in `SettingsTab` saves per-bot setting.
+- **Reserved Locale Slugs**: Workspace creation rejects `en`/`vi` as slugs (`config/reserved-subdomains.ts`).
+
 ## 🚀 Version 2.7.0 Highlights
 
 - **Group Chat Feature**: Multi-user private group chat for Pro/Enterprise bots (up to 5 members per group), real-time message broadcasting, unread receipts, knowledge pinning to bot RAG, daily LLM conversation summaries, inline PWA auth, offline queueing, and plan-gate downgrade management.
@@ -87,6 +93,7 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - **Invoice Worker**: BullMQ worker for automated EasyInvoice e-invoicing with retry and idempotency
 - **Report Export Worker**: BullMQ worker rendering report templates to PDF via Puppeteer with HMAC-signed download tokens
 - **Email**: Resend for transactional emails
+- **i18n**: [next-intl 4.x](https://next-intl.dev/) with URL prefix (`/vi`, `/en`) + cookie persistence + `hreflang` SEO
 - **Fingerprinting**: [FingerprintJS](https://fingerprint.com/) for visitor identification
 - **PWA**: Service Worker, Web App Manifest, dynamic apple-touch-icon
 - **Offline Detection**: `navigator.onLine` + event listeners with UI banner
@@ -133,11 +140,12 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
 - 💼 **Enterprise Plan**: Quote-based enterprise tier with dedicated upgrade page and 20-bot minimum.
 - 🏷️ **Workspace Branding**: Per-workspace branding customization with asset uploads.
 - 👥 **Group Chat**: Private multi-user group chat for Pro/Enterprise bots with realtime messaging, knowledge pinning, notes, insights, and PWA access.
+- 🌐 **Multilingual UI (EN/VI)**: Localized public pages (`/en`, `/vi` with `hreflang`), dashboard (cookie + DB persistence, no URL prefix), and per-bot widget chat (`StandaloneChatUI`, `GroupChatView`, `widget.js`) with platform/widget locale independence.
 
 ## 📂 Project Structure
 
 - `app/`: Next.js App Router pages and API routes.
-  - `(public)/`: Public pages (landing, about-us, posts).
+  - `[locale]/`: Localized public pages (`/`, `about-us`, `posts`, `privacy`, `terms`) with URL prefix (`/vi`, `/en`) and `hreflang` alternates — replaces legacy `(public)/`.
   - `api/auth/`: Login with password, auth callback.
   - `api/bots/`: Bot CRUD, knowledge, analytics, leads, config, personalities, skills, and group chat management (members, messages, notes, insights).
   - `api/dashboard/`: STT transcription and voice-note formatting for report authoring.
@@ -167,9 +175,11 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
   - `dashboard/settings/`: Workspace member management, InviteMemberModal.
   - `dashboard/shared/`: WorkspaceSwitcher, DashboardSidebar, DashboardMobileHeader.
   - `dashboard/upgrade/`: Payment history client.
-  - `landing/`: HeroSection, DataSourcesSection, ScrollDrivenFeatures, feature mockups.
+  - `landing/`: HeroSection, DataSourcesSection, FeaturesSection, AccessMethodsSection, feature mockups (MockupSmartHomepage, MockupGroupChat, MockupIntegration, etc.).
   - `shared/`: AIConfigurator, InvoiceForm, EmailChipsInput, DemoChatbotWidget.
 - `config/`: App-wide constants for credits, invoice, knowledge, pricing, RAG, scraper, storage, and widget behavior.
+- `i18n/`: `routing.ts` (`locales: ["vi","en"]`, `defaultLocale: "vi"`), `request.ts`, `navigation.ts` (typed `Link`/`useRouter` from `next-intl`).
+- `messages/`: `en.json`, `vi.json` (2552 lines each, parity-checked) for L1/L2 translations.
 - `hooks/`: Dashboard, onboarding, and feature-specific React hooks.
   - `dashboard/main/`: Dashboard data fetching hooks (useDashboardData).
   - `dashboard/bots/`: Bot list with search and pagination (useBotsList).
@@ -178,12 +188,13 @@ Vielora is an AI chatbot platform for creating, training, customizing, and deplo
   - `ai/` and `rag/`: Gemini integration, embeddings, retrieval, intent classification, and generation.
   - `cache/`: Redis bot cache with stampede protection.
   - `config/`: AI customization, cache, invoice, and Redis configuration.
-  - `helpers/`: EasyInvoice XML builder, invoice token, number-to-words, payment, PWA, and URL helpers.
+  - `helpers/`: EasyInvoice XML builder, invoice token, number-to-words, payment, PWA, URL helpers, and `seo-schema.helper.ts` (localized Schema.org JSON-LD for Home/About/Blog).
+  - `i18n/`: `dashboard-locale.ts` (cookie + `user_metadata` fallback), `update-locale.ts`, `widget-translations.ts` (per-bot widget strings, fallback `vi`).
   - `scraper/`: BullMQ queues, workers, extractors, and job processors.
   - `security/`: Rate limiting, widget security, and login-attempt tracking.
   - `services/`: Domain services for bots, pages, credits, payments, invoices, analytics, email, AI config, leads, auth, **workspaces**, **subscriptions**, **wallets**, **webhooks**, **subscription-cron**, **payment-history**, **group-chat**, and **security-events**.
   - `services/server/`: Invoice queue, invoice worker, and bot cache service.
-- `scripts/`: Worker, cron, deployment, test, and maintenance scripts.
+- `scripts/`: Worker, cron, deployment, test, maintenance, and `build-widget.ts`/`sync-widget-i18n.ts` (build `widget/widget.src.js` → `public/widget.js`).
 - `plugins/`: Third-party platform extensions (Shopify app, WordPress plugin).
 - `supabase/`: Database migrations, generated types, and hybrid search functions.
 - `store/`: Zustand stores (AI config, appearance, auth, bot detail, dashboard, onboarding).
@@ -303,6 +314,19 @@ Vielora uses a hybrid routing strategy:
 - **Bot PWA subdomain**: `{bot-slug}.vielora.vn` → middleware rewrites to `/public-bot/{bot-slug}` for embedded chatbot widgets with full PWA isolation (service worker, manifest, iOS A2HS).
 - **Reserved paths** (`auth`, `dashboard`, `api`, `posts`, `admin`, etc.) bypass workspace detection.
 - `/dashboard` redirects to `/{workspace-slug}` via 308 when a workspace cookie is present.
+
+### Multilingual Architecture (Hybrid + Widget)
+
+Vielora implements 4-layer i18n per `docs/specs/i18n-multilingual/spec.md`:
+
+| Layer  | Area                                                        | Mechanism                                                                    | URL Example                     |
+| ------ | ----------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------- |
+| **L1** | Public (landing, posts, legal)                              | `next-intl` URL prefix + `hreflang` alternates                               | `/en/pricing`, `/vi/about-us`   |
+| **L2** | Dashboard & Auth                                            | Cookie `NEXT_LOCALE` + `user_metadata.locale` (fallback `vi`), no URL prefix | `/dashboard` renders per cookie |
+| **L3** | Widget (`widget.js`, `StandaloneChatUI`, `GroupChatView`)   | `bots.widget_settings.ui_language` (JSONB, `ESystemLanguage`) per-bot        | Independent from L2             |
+| **L4** | `chat/[slug]`, `public-bot/[botSlug]`, `api/*`, `shopify/*` | No i18n (out of scope)                                                       | —                               |
+
+Middleware (`middleware.ts`) composes `createIntlMiddleware(routing)` only for `PUBLIC_I18N_PATHS` (`/`, `/about-us`, `/posts`, `/privacy`, `/terms`); locale prefix on non-public paths is stripped and redirected. `getDashboardLocale()` prioritizes cookie → `user_metadata` → `vi`. Adding a new language requires enum + `messages/{locale}.json` + widget translations — no DB migration (see `docs/specs/i18n-multilingual/quickstart.md`).
 
 ### Service Layer Pattern
 

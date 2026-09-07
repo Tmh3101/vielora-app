@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Quote, Star } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useTranslations } from "next-intl";
 
 const testimonials = [
   {
@@ -47,6 +48,7 @@ const testimonials = [
 ];
 
 const TestimonialsSection = () => {
+  const t = useTranslations("testimonials");
   // Duplicate testimonials for a seamless loop
   const duplicatedTestimonials = [...testimonials, ...testimonials];
 
@@ -65,7 +67,7 @@ const TestimonialsSection = () => {
           className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary"
         >
           <Star className="h-4 w-4 fill-primary" />
-          <span>Khách hàng nói gì về Vielora</span>
+          <span>{t("heading")}</span>
         </motion.div>
 
         <motion.h2
@@ -75,7 +77,7 @@ const TestimonialsSection = () => {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="heading-premium mb-6 text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl"
         >
-          Được tin dùng bởi các <span className="text-gradient">chủ doanh nghiệp</span>
+          {t("subheading")}
         </motion.h2>
       </div>
 

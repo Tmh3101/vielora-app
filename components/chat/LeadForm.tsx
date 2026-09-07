@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, CheckCircle2, X } from "lucide-react";
+import { ELanguage } from "@/types/enums";
+import { getWidgetTranslations } from "@/lib/i18n/widget-translations";
 
 interface LeadFormProps {
   botId: string;
@@ -14,6 +16,7 @@ interface LeadFormProps {
   primaryColor: string;
   headerTextColor: string;
   isStandalone?: boolean;
+  locale?: ELanguage | string;
   onSuccess: () => void;
   onClose?: () => void;
 }
@@ -28,6 +31,7 @@ export function LeadForm({
   primaryColor,
   headerTextColor,
   isStandalone = true,
+  locale = ELanguage.Vi,
   onSuccess,
   onClose,
 }: LeadFormProps) {
@@ -38,6 +42,8 @@ export function LeadForm({
   const [formState, setFormState] = useState<FormState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
+  const t = getWidgetTranslations(locale);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
@@ -46,12 +52,12 @@ export function LeadForm({
     const emailTrimmed = email.trim();
 
     if (!nameTrimmed || nameTrimmed.length < 2) {
-      setErrorMessage("Vui lòng nhập tên của bạn (ít nhất 2 ký tự)");
+      setErrorMessage(t.leadFormNameRequired);
       return;
     }
 
     if (!emailTrimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
-      setErrorMessage("Vui lòng nhập email hợp lệ");
+      setErrorMessage(t.leadFormEmailInvalid);
       return;
     }
 
@@ -88,9 +94,7 @@ export function LeadForm({
       onSuccess();
     } catch (error) {
       setFormState("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Có lỗi xảy ra, vui lòng thử lại sau"
-      );
+      setErrorMessage(error instanceof Error ? error.message : t.leadFormError);
     }
   };
 
@@ -104,11 +108,9 @@ export function LeadForm({
         <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-muted px-4 py-3 shadow-sm">
           <div className="flex items-center gap-2 font-medium text-green-600">
             <CheckCircle2 className="h-5 w-5" />
-            <span>Cảm ơn bạn!</span>
+            <span>{t.leadFormSuccess}</span>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Thông tin của bạn đã được gửi thành công. Đội ngũ hỗ trợ sẽ liên hệ với bạn sớm nhất!
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{t.leadFormSuccessDesc}</p>
         </div>
       </motion.div>
     );
@@ -130,14 +132,14 @@ export function LeadForm({
             <X className="h-4 w-4" />
           </button>
         )}
-        <p className="mb-1 text-sm font-medium">Vui lòng để lại thông tin:</p>
+        <p className="mb-1 text-sm font-medium">{t.leadFormTitle}:</p>
         <p className="mb-3 text-xs italic text-muted-foreground">
           &ldquo;{originalQuestion.slice(0, 100)}
           {originalQuestion.length > 100 ? "..." : ""}&rdquo;
         </p>
         <form onSubmit={handleSubmit} className="space-y-2">
           <Input
-            placeholder="Họ và tên *"
+            placeholder={t.leadFormNamePlaceholder}
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={formState === "submitting"}
@@ -147,7 +149,7 @@ export function LeadForm({
           />
           <Input
             type="email"
-            placeholder="Email *"
+            placeholder={t.leadFormEmailPlaceholder}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={formState === "submitting"}
@@ -157,7 +159,7 @@ export function LeadForm({
           />
           <Input
             type="tel"
-            placeholder="Số điện thoại"
+            placeholder={t.leadFormPhonePlaceholder}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             disabled={formState === "submitting"}
@@ -165,7 +167,7 @@ export function LeadForm({
             className="rounded-xl text-sm"
           />
           <textarea
-            placeholder="Ghi chú thêm"
+            placeholder={t.leadFormNotePlaceholder}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             disabled={formState === "submitting"}
@@ -183,10 +185,10 @@ export function LeadForm({
             {formState === "submitting" ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang gửi...
+                {t.leadFormSubmitting}
               </>
             ) : (
-              "Gửi thông tin"
+              t.leadFormSubmit
             )}
           </Button>
         </form>

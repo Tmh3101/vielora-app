@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
+import { ELanguage } from "@/types/enums";
+import { getWidgetTranslations } from "@/lib/i18n/widget-translations";
 
 export interface DeleteNoteConfirmModalProps {
   open?: boolean;
@@ -20,6 +22,7 @@ export interface DeleteNoteConfirmModalProps {
   // Aliases for compatibility
   isOpen?: boolean;
   onClose?: () => void;
+  locale?: ELanguage | string;
 }
 
 export function DeleteNoteConfirmModal({
@@ -30,7 +33,9 @@ export function DeleteNoteConfirmModal({
   isDeleting = false,
   isOpen: legacyIsOpen,
   onClose,
+  locale = ELanguage.Vi,
 }: DeleteNoteConfirmModalProps) {
+  const t = getWidgetTranslations(locale);
   const showModal = open ?? legacyIsOpen ?? false;
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -48,23 +53,18 @@ export function DeleteNoteConfirmModal({
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-400">
               <AlertTriangle className="h-4 w-4" />
             </div>
-            <span>Xác nhận xóa ghi chú</span>
+            <span>{t.deleteNoteTitle}</span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-2 py-1 text-xs leading-relaxed text-muted-foreground">
-          <p>
-            Bạn có chắc chắn muốn xóa vĩnh viễn ghi chú{" "}
-            <strong className="text-foreground">&ldquo;{noteTitle}&rdquo;</strong>?
-          </p>
+          <p>{t.deleteNoteDesc.replace("{title}", noteTitle)}</p>
           <div className="rounded-lg border border-border/80 bg-muted/30 p-2.5 text-[11px]">
-            <p className="font-semibold text-foreground">Hành động này sẽ:</p>
+            <p className="font-semibold text-foreground">{t.deleteNoteActionWill}</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
-              <li>Xóa hoàn toàn ghi chú khỏi danh sách nhóm.</li>
-              <li>Xóa tài liệu khỏi bộ nhớ RAG — Bot sẽ không còn nhớ nội dung này.</li>
-              <li className="text-muted-foreground">
-                Không hoàn lại credit đã sử dụng khi tạo ghi chú.
-              </li>
+              <li>{t.deleteNoteWarning1}</li>
+              <li>{t.deleteNoteWarning2}</li>
+              <li className="text-muted-foreground">{t.deleteNoteWarning3}</li>
             </ul>
           </div>
         </div>
@@ -78,7 +78,7 @@ export function DeleteNoteConfirmModal({
             disabled={isDeleting}
             className="text-xs transition-colors duration-200 hover:border-red-600 hover:bg-white hover:text-red-600 dark:hover:border-red-500 dark:hover:bg-background dark:hover:text-red-400"
           >
-            Hủy
+            {t.cancel}
           </Button>
           <Button
             type="button"
@@ -93,7 +93,7 @@ export function DeleteNoteConfirmModal({
             ) : (
               <Trash2 className="h-3 w-3" />
             )}
-            <span>Xóa ghi chú</span>
+            <span>{t.delete}</span>
           </Button>
         </DialogFooter>
       </DialogContent>

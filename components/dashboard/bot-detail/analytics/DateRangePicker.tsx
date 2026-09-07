@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 export interface DateRangePickerProps {
   from: Date;
@@ -18,7 +19,7 @@ export interface DateRangePickerProps {
 const PRESET_RANGES = [
   {
     key: "today",
-    label: "Hôm nay",
+    labelKey: "dashboard.botDetail.analytics.dateRange.today",
     getRange: () => ({
       from: startOfDay(new Date()),
       to: endOfDay(new Date()),
@@ -26,7 +27,7 @@ const PRESET_RANGES = [
   },
   {
     key: "week",
-    label: "Tuần",
+    labelKey: "dashboard.botDetail.analytics.dateRange.week",
     getRange: () => ({
       from: startOfDay(subDays(new Date(), 6)),
       to: endOfDay(new Date()),
@@ -34,13 +35,13 @@ const PRESET_RANGES = [
   },
   {
     key: "month",
-    label: "Tháng",
+    labelKey: "dashboard.botDetail.analytics.dateRange.month",
     getRange: () => ({
       from: startOfDay(subMonths(new Date(), 1)),
       to: endOfDay(new Date()),
     }),
   },
-];
+] as const;
 
 /**
  * Renders a date range picker button that opens a popover containing a range calendar and preset range buttons.
@@ -51,6 +52,7 @@ const PRESET_RANGES = [
  * @returns A React element containing the trigger button and popover calendar for selecting a date range.
  */
 export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [draftRange, setDraftRange] = useState<DateRange | undefined>({ from, to });
 
@@ -103,7 +105,7 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
                   setOpen(false);
                 }}
               >
-                {preset.label}
+                {t(preset.labelKey)}
               </Button>
             ))}
           </div>

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { deleteBot } from "@/lib/services/bot.service";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +49,7 @@ interface RestoredBotRow {
 }
 
 export function OnboardingWizard({ userId }: OnboardingWizardProps) {
+  const t = useTranslations("onboarding.wizard");
   const searchParams = useSearchParams();
   const isBulkMode = searchParams.get("mode") === "bulk";
 
@@ -201,6 +203,7 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
       : effectiveBotId && restoredBot
         ? getStepForBotStatus(restoredBot.status, step)
         : step;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 px-4 py-14">
       <div className="mx-auto max-w-5xl">
@@ -219,10 +222,8 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
               priority
             />
           </button>
-          <h1 className="mb-2 text-3xl font-bold text-foreground">
-            Tạo chatbot cho website của bạn
-          </h1>
-          <p className="text-muted-foreground">Chỉ mất vài phút để có chatbot AI thông minh</p>
+          <h1 className="mb-2 text-3xl font-bold text-foreground">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
 
         <div className="mb-12 flex items-center justify-center gap-2">
@@ -272,24 +273,21 @@ export function OnboardingWizard({ userId }: OnboardingWizardProps) {
       <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Rời khỏi quá trình tạo chatbot?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tiến trình tạo bot hiện tại sẽ bị hủy và bot sẽ bị xóa. Bạn có chắc chắn muốn rời
-              khỏi?
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t("exitDialog.title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("exitDialog.description")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel
               className="hover:border-primary hover:bg-white hover:text-primary"
               onClick={handleDialogCancel}
             >
-              Ở lại
+              {t("exitDialog.stay")}
             </AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={handleExitConfirm}
             >
-              Xóa và rời khỏi
+              {t("exitDialog.confirmExit")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

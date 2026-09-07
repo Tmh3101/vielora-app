@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FileText, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export interface SharedKnowledgeItem {
   id: string;
@@ -23,6 +24,8 @@ export interface SharedKnowledgeSectionProps {
 }
 
 export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionProps) {
+  const t = useTranslations("dashboard.workspaceKnowledge");
+  const tCommon = useTranslations("dashboard.common");
   const [items, setItems] = useState<SharedKnowledgeItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,16 +45,16 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
       const res = await fetch(`/api/workspaces/${workspaceId}/knowledge`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Không thể tải danh sách kiến thức dùng chung");
+        throw new Error(data.error || tCommon("error"));
       }
       const data = await res.json();
       setItems(data.knowledge || []);
     } catch (err: unknown) {
-      setError((err as Error).message || "Đã xảy ra lỗi khi tải dữ liệu");
+      setError((err as Error).message || tCommon("error"));
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId]);
+  }, [workspaceId, tCommon]);
 
   useEffect(() => {
     void fetchKnowledge();
@@ -74,7 +77,7 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Không thể thêm kiến thức mới");
+        throw new Error(data.error || t("addError"));
       }
 
       const data = await res.json();
@@ -88,14 +91,14 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
       setContent("");
       setIsAdding(false);
     } catch (err: unknown) {
-      alert((err as Error).message || "Đã xảy ra lỗi khi thêm kiến thức");
+      alert((err as Error).message || t("addGenericError"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (itemId: string) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa mục kiến thức này?")) {
+    if (!window.confirm(t("deleteConfirm"))) {
       return;
     }
 
@@ -107,12 +110,12 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Không thể xóa mục kiến thức");
+        throw new Error(data.error || tCommon("error"));
       }
 
       setItems((prev) => prev.filter((item) => item.id !== itemId));
     } catch (err: unknown) {
-      alert((err as Error).message || "Đã xảy ra lỗi khi xóa kiến thức");
+      alert((err as Error).message || tCommon("error"));
     } finally {
       setDeletingId(null);
     }
@@ -123,10 +126,8 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
       <Card className="glass">
         <CardHeader className="flex flex-col gap-4 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1">
-            <CardTitle>Kiến thức dùng chung</CardTitle>
-            <CardDescription>
-              Quản lý các thông tin và tài liệu dùng chung trong workspace
-            </CardDescription>
+            <CardTitle>{t("title")}</CardTitle>
+            <CardDescription>{t("subtitle")}</CardDescription>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <Button
@@ -138,18 +139,18 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang tải...
+                  {tCommon("loading")}
                 </>
               ) : (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4" />
-                  Làm mới
+                  {tCommon("refresh")}
                 </>
               )}
             </Button>
             <Button onClick={() => setIsAdding((prev) => !prev)} className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
-              Thêm kiến thức
+              {t("addKnowledge")}
             </Button>
           </div>
         </CardHeader>
@@ -159,11 +160,11 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
               onSubmit={handleAddKnowledge}
               className="mb-6 space-y-4 rounded-xl border border-border/50 bg-card p-4"
             >
-              <h4 className="font-semibold text-foreground">Thêm kiến thức mới</h4>
+              <h4 className="font-semibold text-foreground">{t("addKnowledge")}</h4>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Tiêu đề</label>
+                <label className="text-sm font-medium text-foreground">{t("knowledgeTitle")}</label>
                 <Input
-                  placeholder="Nhập tiêu đề kiến thức..."
+                  placeholder={t("titlePlaceholder")}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
@@ -171,9 +172,11 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Nội dung</label>
+                <label className="text-sm font-medium text-foreground">
+                  {t("knowledgeContent")}
+                </label>
                 <Textarea
-                  placeholder="Nhập nội dung chi tiết..."
+                  placeholder={t("contentPlaceholder")}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   rows={4}
@@ -188,16 +191,16 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
                   onClick={() => setIsAdding(false)}
                   disabled={isSubmitting}
                 >
-                  Hủy
+                  {tCommon("cancel")}
                 </Button>
                 <Button type="submit" disabled={isSubmitting || !title.trim() || !content.trim()}>
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Đang lưu...
+                      {tCommon("loading")}
                     </>
                   ) : (
-                    "Lưu kiến thức"
+                    tCommon("save")
                   )}
                 </Button>
               </div>
@@ -207,23 +210,21 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Loader2 className="mb-2 h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm">Đang tải kiến thức dùng chung...</p>
+              <p className="text-sm">{tCommon("loading")}</p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-12 text-center text-destructive">
               <p className="mb-4 text-sm">{error}</p>
               <Button variant="outline" size="sm" onClick={() => void fetchKnowledge()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Thử lại
+                {tCommon("retry")}
               </Button>
             </div>
           ) : items.length === 0 ? (
             <div className="pb-8 pt-12 text-center text-muted-foreground">
               <FileText className="mx-auto mb-4 h-12 w-12 opacity-50" />
-              <p className="mb-2">Chưa có kiến thức dùng chung nào.</p>
-              <p className="text-xs text-muted-foreground">
-                Nhấn &quot;Thêm kiến thức&quot; để bắt đầu tạo tài liệu dùng chung.
-              </p>
+              <p className="mb-2">{t("noKnowledgeTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t("noKnowledgeDesc")}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -242,7 +243,7 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
                           variant="outline"
                           className="shrink-0 border-0 bg-purple-100 text-[10px] text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
                         >
-                          Kiến thức
+                          {t("sharedBadge")}
                         </Badge>
                       </div>
                       <Button
@@ -251,7 +252,7 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
                         className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => handleDelete(item.id)}
                         disabled={deletingId === item.id}
-                        title="Xóa"
+                        title={tCommon("delete")}
                       >
                         {deletingId === item.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -271,13 +272,7 @@ export function SharedKnowledgeSection({ workspaceId }: SharedKnowledgeSectionPr
                     </p>
                   </div>
                   <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-3 text-[11px] text-muted-foreground">
-                    <span>
-                      {new Date(item.created_at).toLocaleDateString("vi-VN", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                      })}
-                    </span>
+                    <span>{new Date(item.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
               ))}

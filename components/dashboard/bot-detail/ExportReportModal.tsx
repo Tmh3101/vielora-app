@@ -44,6 +44,8 @@ import {
   RotateCcw,
   Sparkles,
 } from "lucide-react";
+import { useSafeTranslations, useSafeLocale } from "@/lib/i18n/useSafeTranslations";
+import { REPORT_LANGUAGE_LABELS } from "@/lib/constants";
 
 export interface ReportTemplateItem {
   id: string;
@@ -56,6 +58,17 @@ export interface ReportTemplateItem {
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface GeneratedReportFile {
+  id: string;
+  lang: string;
+  pdf_url: string;
+  pdf_size_bytes: number;
+  pdf_page_count: number;
+  pdf_checksum: string;
+  generation_duration_ms: number;
+  created_at: string;
 }
 
 export interface WorkspaceBrandingData {
@@ -81,18 +94,14 @@ export interface ExportReportModalProps {
   requestedByDisplayName?: string | null;
 }
 
-const LANGUAGE_LABELS: Record<string, { label: string; flag: string; name: string }> = {
-  vi: { label: "Tiếng Việt (VI)", flag: "🇻🇳", name: "Tiếng Việt" },
-  en: { label: "English (EN)", flag: "🇬🇧", name: "English" },
-  ar: { label: "العربية (AR)", flag: "🇸🇦", name: "العربية" },
-};
+const LANGUAGE_LABELS = REPORT_LANGUAGE_LABELS;
 
-const PROMPT_SUGGESTIONS = [
-  "Tập trung phân tích các giải pháp kỹ thuật & năng lực AI",
-  "Trình bày theo văn phong báo cáo chuyên gia cao cấp",
-  "Tóm tắt các chỉ số hiệu suất và thế mạnh nổi bật",
-  "Nhấn mạnh vào khả năng ứng dụng thực tế và dự án tiêu biểu",
-];
+const PROMPT_SUGGESTION_KEYS = [
+  "dashboard.botDetail.exportReport.step2.prompt1",
+  "dashboard.botDetail.exportReport.step2.prompt2",
+  "dashboard.botDetail.exportReport.step2.prompt3",
+  "dashboard.botDetail.exportReport.step2.prompt4",
+] as const;
 
 export function ExportReportModal({
   open,
@@ -102,7 +111,9 @@ export function ExportReportModal({
   groupId,
   requestedByDisplayName,
 }: ExportReportModalProps) {
-  // 4-step wizard: 1. Chọn mẫu -> 2. Tùy chỉnh & AI -> 3. Xác nhận -> 4. Trạng thái
+  const t = useSafeTranslations();
+  const locale = useSafeLocale();
+  // 4-step wizard: 1. Select template -> 2. Customize & AI -> 3. Confirm -> 4. Status
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   const { activeWorkspace } = useWorkspace();
@@ -214,7 +225,7 @@ export function ExportReportModal({
 
     if (!targetWsId) {
       setLoadingTemplates(false);
-      setTemplatesError("Không tìm thấy thông tin không gian làm việc của bot này.");
+      setTemplatesError(t("dashboard.botDetail.exportReport.workspaceNotFound"));
       return;
     }
 
@@ -230,8 +241,15 @@ export function ExportReportModal({
       const templatesPromise = fetch(
         `/api/workspaces/${encodeURIComponent(targetWsId)}/bots/${encodeURIComponent(botId)}/templates`
       )
-        .then((res) => (res.ok ? res.json() : { success: false, message: "Lỗi tải mẫu báo cáo" }))
-        .catch((err) => ({ success: false, message: err.message || "Lỗi tải mẫu báo cáo" }));
+        .then((res) =>
+          res.ok
+            ? res.json()
+            : { success: false, message: t("dashboard.botDetail.exportReport.loadTemplateError") }
+        )
+        .catch((err) => ({
+          success: false,
+          message: err.message || t("dashboard.botDetail.exportReport.loadTemplateError"),
+        }));
 
       const [reportsRes, templatesRes] = await Promise.all([reportsPromise, templatesPromise]);
 
@@ -258,15 +276,17 @@ export function ExportReportModal({
         }
       } else {
         setTemplates([]);
-        setTemplatesError(templatesRes.message || "Không thể tải danh sách mẫu báo cáo.");
+        setTemplatesError(
+          templatesRes.message || t("dashboard.botDetail.exportReport.loadTemplateListError")
+        );
       }
     } catch (err) {
       console.error("[ExportReportModal] loadInitialData error:", err);
-      setTemplatesError("Không thể kết nối đến máy chủ.");
+      setTemplatesError(t("dashboard.botDetail.exportReport.connectError"));
     } finally {
       setLoadingTemplates(false);
     }
-  }, [effectiveWorkspaceId, botId]);
+  }, [effectiveWorkspaceId, botId, t]);
 
   // Reset state when opening modal
   useEffect(() => {
@@ -367,10 +387,7 @@ export function ExportReportModal({
         setExportErrorCode(
           isPlanError ? EExportErrorCode.PlanUpgradeRequired : EExportErrorCode.Forbidden
         );
-        setExportError(
-          json?.message ||
-            "Tính năng xuất báo cáo chỉ khả dụng cho gói Pro và Enterprise. Vui lòng nâng cấp gói để sử dụng."
-        );
+        setExportError(json?.message || t("dashboard.botDetail.exportReport.featureProOnly"));
         return;
       }
 
@@ -378,22 +395,25 @@ export function ExportReportModal({
         setExportErrorCode(EExportErrorCode.InsufficientCredits);
         setExportError(
           json?.message ||
-            `Không đủ credits trong workspace (Yêu cầu: ${dynamicCreditCost} credits cho ${fileCount} file). Vui lòng nạp thêm credits hoặc nâng cấp gói.`
+            t("dashboard.botDetail.exportReport.insufficientCredits", {
+              cost: dynamicCreditCost,
+              count: fileCount,
+            })
         );
         return;
       }
 
       if (res.status === 429) {
         setExportErrorCode(EExportErrorCode.RateLimit);
-        setExportError(
-          json?.message ||
-            "Bạn đang yêu cầu xuất báo cáo quá nhanh. Vui lòng đợi trong giây lát rồi thử lại."
-        );
+        setExportError(json?.message || t("dashboard.botDetail.exportReport.rateLimit"));
         return;
       }
 
       if (!res.ok || !json?.success) {
-        setExportError(json?.message || `Lỗi xuất báo cáo (${res.status}). Vui lòng thử lại.`);
+        setExportError(
+          json?.message ||
+            t("dashboard.botDetail.exportReport.exportErrorWithStatus", { status: res.status })
+        );
         return;
       }
 
@@ -404,7 +424,7 @@ export function ExportReportModal({
       setStep(4);
     } catch (err) {
       console.error("[ExportReportModal] Trigger export error:", err);
-      setExportError("Đã xảy ra lỗi kết nối mạng. Vui lòng thử lại.");
+      setExportError(t("dashboard.botDetail.exportReport.networkError"));
     } finally {
       setIsExporting(false);
     }
@@ -486,7 +506,7 @@ export function ExportReportModal({
               <FileDown className="h-4 w-4 text-primary" />
             </div>
             <DialogTitle className="text-base font-bold text-foreground sm:text-lg">
-              Xuất Báo Cáo Bot
+              {t("dashboard.botDetail.exportReport.title")}
             </DialogTitle>
           </div>
 
@@ -506,7 +526,9 @@ export function ExportReportModal({
               >
                 1
               </span>
-              <span className="hidden sm:inline">Chọn mẫu</span>
+              <span className="hidden sm:inline">
+                {t("dashboard.botDetail.exportReport.steps.selectTemplate")}
+              </span>
             </div>
             <div className="h-0.5 w-3 bg-border/60 sm:w-6" />
             <div
@@ -525,7 +547,9 @@ export function ExportReportModal({
               >
                 2
               </span>
-              <span className="hidden sm:inline">Tùy chỉnh</span>
+              <span className="hidden sm:inline">
+                {t("dashboard.botDetail.exportReport.steps.customize")}
+              </span>
             </div>
             <div className="h-0.5 w-3 bg-border/60 sm:w-6" />
             <div
@@ -544,7 +568,9 @@ export function ExportReportModal({
               >
                 3
               </span>
-              <span className="hidden sm:inline">Xác nhận</span>
+              <span className="hidden sm:inline">
+                {t("dashboard.botDetail.exportReport.steps.confirm")}
+              </span>
             </div>
             <div className="h-0.5 w-3 bg-border/60 sm:w-6" />
             <div
@@ -561,7 +587,9 @@ export function ExportReportModal({
               >
                 4
               </span>
-              <span className="hidden sm:inline">Trạng thái</span>
+              <span className="hidden sm:inline">
+                {t("dashboard.botDetail.exportReport.steps.status")}
+              </span>
             </div>
           </div>
         </DialogHeader>
@@ -573,11 +601,12 @@ export function ExportReportModal({
             <Alert className="mb-3 rounded-xl border-amber-500/30 bg-amber-500/10 py-2.5 text-amber-900 dark:text-amber-200">
               <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
               <AlertTitle className="text-xs font-semibold">
-                Đang có yêu cầu xuất báo cáo
+                {t("dashboard.botDetail.exportReport.inProgress.title")}
               </AlertTitle>
               <AlertDescription className="text-xs">
-                Bot này đang có {inProgressExports.length} yêu cầu báo cáo đang được xử lý trong
-                hàng đợi. Bạn vẫn có thể tiếp tục tạo yêu cầu mới nếu cần.
+                {t("dashboard.botDetail.exportReport.inProgress.desc", {
+                  count: inProgressExports.length,
+                })}
               </AlertDescription>
             </Alert>
           )}
@@ -587,19 +616,21 @@ export function ExportReportModal({
             <div className="space-y-4 py-2">
               <div className="space-y-1">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Chọn mẫu báo cáo phù hợp
+                  {t("dashboard.botDetail.exportReport.step1.selectTemplate")}
                 </h4>
               </div>
 
               {loadingTemplates ? (
                 <div className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 bg-muted/20 p-6 text-center text-xs text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <span>Đang tải danh sách mẫu báo cáo...</span>
+                  <span>{t("dashboard.botDetail.exportReport.step1.loading")}</span>
                 </div>
               ) : templatesError ? (
                 <Alert variant="destructive" className="rounded-xl">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle className="text-xs font-semibold">Lỗi tải mẫu báo cáo</AlertTitle>
+                  <AlertTitle className="text-xs font-semibold">
+                    {t("dashboard.botDetail.exportReport.step1.loadErrorTitle")}
+                  </AlertTitle>
                   <AlertDescription className="text-xs">
                     {templatesError}
                     <Button
@@ -609,17 +640,18 @@ export function ExportReportModal({
                       className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl border-destructive/30 bg-destructive/10 text-xs font-medium text-destructive transition-all hover:border-destructive/60 hover:bg-destructive/20 active:scale-[0.98]"
                     >
                       <RefreshCw className="h-3 w-3" />
-                      Thử lại
+                      {t("dashboard.botDetail.exportReport.step1.retry")}
                     </Button>
                   </AlertDescription>
                 </Alert>
               ) : templates.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-8 text-center text-xs text-muted-foreground">
                   <FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />
-                  <p className="font-semibold text-foreground">Không có mẫu báo cáo nào khả dụng</p>
+                  <p className="font-semibold text-foreground">
+                    {t("dashboard.botDetail.exportReport.step1.noTemplateTitle")}
+                  </p>
                   <p className="mt-1">
-                    Workspace này hiện chưa được cấu hình mẫu báo cáo nào hoặc các mẫu đã bị vô hiệu
-                    hóa.
+                    {t("dashboard.botDetail.exportReport.step1.noTemplateDesc")}
                   </p>
                 </div>
               ) : (
@@ -694,7 +726,8 @@ export function ExportReportModal({
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-foreground">
-                      {selectedTemplate?.name || "Mẫu báo cáo"}
+                      {selectedTemplate?.name ||
+                        t("dashboard.botDetail.exportReport.step2.templateFallback")}
                     </p>
                     <div className="flex items-center gap-1.5">
                       {effectiveLanguages.map((lang) => {
@@ -717,8 +750,10 @@ export function ExportReportModal({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor={titleInputId} className="text-xs font-semibold text-foreground">
-                    Tiêu đề báo cáo{" "}
-                    <span className="font-normal text-muted-foreground">(Tùy chọn)</span>
+                    {t("dashboard.botDetail.exportReport.step2.titleLabel")}{" "}
+                    <span className="font-normal text-muted-foreground">
+                      {t("dashboard.botDetail.exportReport.step2.optional")}
+                    </span>
                   </Label>
                   <span className="text-[10px] text-muted-foreground">
                     {reportTitle.length}/{MAX_REPORT_TITLE_LENGTH}
@@ -729,12 +764,17 @@ export function ExportReportModal({
                   type="text"
                   value={reportTitle}
                   onChange={(e) => setReportTitle(e.target.value)}
-                  placeholder={`Ví dụ: ${selectedTemplate?.name || "Báo cáo tổng kết"} - ${new Date().toLocaleDateString("vi-VN")}`}
+                  placeholder={t("dashboard.botDetail.exportReport.step2.titlePlaceholder", {
+                    template:
+                      selectedTemplate?.name ||
+                      t("dashboard.botDetail.exportReport.step2.templateFallback"),
+                    date: new Date().toLocaleDateString(locale === "en" ? "en-US" : "vi-VN"),
+                  })}
                   className="shadow-xs h-9 rounded-xl bg-background text-xs transition-all focus-visible:ring-primary"
                   maxLength={MAX_REPORT_TITLE_LENGTH}
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Để trống nếu muốn sử dụng tiêu đề của mẫu báo cáo.
+                  {t("dashboard.botDetail.exportReport.step2.titleHint")}
                 </p>
               </div>
 
@@ -746,8 +786,10 @@ export function ExportReportModal({
                     className="flex items-center gap-1.5 text-xs font-semibold text-foreground"
                   >
                     <Sparkles className="h-3.5 w-3.5 text-primary" />
-                    Yêu cầu phân tích
-                    <span className="font-normal text-muted-foreground">(Tùy chọn)</span>
+                    {t("dashboard.botDetail.exportReport.step2.analysisRequest")}
+                    <span className="font-normal text-muted-foreground">
+                      {t("dashboard.botDetail.exportReport.step2.optional")}
+                    </span>
                   </Label>
                   <VoiceInputButton
                     scope="bot"
@@ -770,7 +812,7 @@ export function ExportReportModal({
                   id="custom-instructions"
                   value={customInstructions}
                   onChange={(e) => setCustomInstructions(e.target.value)}
-                  placeholder="Nhập yêu cầu để định hướng phân tích cho AI"
+                  placeholder={t("dashboard.botDetail.exportReport.step2.analysisPlaceholder")}
                   rows={4}
                   className="shadow-xs resize-none rounded-xl bg-background text-xs leading-relaxed transition-all focus-visible:ring-primary"
                   maxLength={MAX_REPORT_CUSTOM_INSTRUCTIONS_LENGTH}
@@ -784,18 +826,23 @@ export function ExportReportModal({
 
                 {/* Quick Suggestion Chips */}
                 <div className="space-y-1.5 pt-1">
-                  <p className="text-[11px] font-medium text-muted-foreground">Gợi ý nhanh:</p>
+                  <p className="text-[11px] font-medium text-muted-foreground">
+                    {t("dashboard.botDetail.exportReport.step2.quickSuggestions")}
+                  </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {PROMPT_SUGGESTIONS.map((suggestion, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleAddSuggestion(suggestion)}
-                        className="rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary active:scale-95"
-                      >
-                        + {suggestion}
-                      </button>
-                    ))}
+                    {PROMPT_SUGGESTION_KEYS.map((key, idx) => {
+                      const suggestion = t(key);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleAddSuggestion(suggestion)}
+                          className="rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary active:scale-95"
+                        >
+                          + {suggestion}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -807,13 +854,17 @@ export function ExportReportModal({
             <div className="space-y-4 py-2">
               <div className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
                 <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                  <span className="text-xs text-muted-foreground">Mẫu báo cáo:</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("dashboard.botDetail.exportReport.step3.template")}
+                  </span>
                   <span className="text-xs font-semibold text-foreground">
                     {selectedTemplate?.name || selectedTemplateKey}
                   </span>
                 </div>
                 <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                  <span className="text-xs text-muted-foreground">Ngôn ngữ xuất:</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("dashboard.botDetail.exportReport.step3.language")}
+                  </span>
                   <div className="flex flex-wrap items-center gap-1.5 text-right">
                     {effectiveLanguages.map((lang) => {
                       const meta = LANGUAGE_LABELS[lang] || {
@@ -833,14 +884,18 @@ export function ExportReportModal({
                   </div>
                 </div>
                 <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                  <span className="text-xs text-muted-foreground">Tiêu đề:</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("dashboard.botDetail.exportReport.step3.title")}
+                  </span>
                   <span className="max-w-[240px] truncate text-right text-xs font-semibold text-foreground">
-                    {reportTitle.trim() || "(Tiêu đề mặc định)"}
+                    {reportTitle.trim() || t("dashboard.botDetail.exportReport.step3.defaultTitle")}
                   </span>
                 </div>
                 {customInstructions.trim() && (
                   <div className="flex items-start justify-between border-b border-border/40 pb-2">
-                    <span className="text-xs text-muted-foreground">Yêu cầu riêng:</span>
+                    <span className="text-xs text-muted-foreground">
+                      {t("dashboard.botDetail.exportReport.step3.customRequest")}
+                    </span>
                     <span className="max-w-[240px] text-right text-xs font-medium italic text-foreground">
                       &ldquo;{customInstructions.trim()}&rdquo;
                     </span>
@@ -848,7 +903,7 @@ export function ExportReportModal({
                 )}
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-xs text-muted-foreground">
-                    Chi phí xuất ({fileCount} file PDF):
+                    {t("dashboard.botDetail.exportReport.step3.cost", { count: fileCount })}
                   </span>
                   <Badge
                     variant="outline"
@@ -877,10 +932,10 @@ export function ExportReportModal({
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle className="text-xs font-semibold">
                     {exportErrorCode === EExportErrorCode.InsufficientCredits
-                      ? "Không đủ Credits"
+                      ? t("dashboard.botDetail.exportReport.step3.insufficientCreditsTitle")
                       : exportErrorCode === EExportErrorCode.RateLimit
-                        ? "Giới hạn yêu cầu"
-                        : "Không thể tạo báo cáo"}
+                        ? t("dashboard.botDetail.exportReport.step3.rateLimitTitle")
+                        : t("dashboard.botDetail.exportReport.step3.exportFailedTitle")}
                   </AlertTitle>
                   <AlertDescription className="text-xs">{exportError}</AlertDescription>
                 </Alert>
@@ -897,9 +952,11 @@ export function ExportReportModal({
                     <Loader2 className="h-7 w-7 animate-spin" />
                   </div>
                   <div className="space-y-1">
-                    <h4 className="text-base font-bold text-foreground">Đang chờ xử lý...</h4>
+                    <h4 className="text-base font-bold text-foreground">
+                      {t("dashboard.botDetail.exportReport.step4.pendingTitle")}
+                    </h4>
                     <p className="text-xs text-muted-foreground">
-                      Yêu cầu xuất báo cáo đang được tiếp nhận và xử lý.
+                      {t("dashboard.botDetail.exportReport.step4.pendingDesc")}
                     </p>
                   </div>
                 </div>
@@ -912,10 +969,10 @@ export function ExportReportModal({
                   </div>
                   <div className="space-y-1">
                     <h4 className="text-base font-bold text-foreground">
-                      Đang tổng hợp dữ liệu...
+                      {t("dashboard.botDetail.exportReport.step4.renderingTitle")}
                     </h4>
                     <p className="text-xs text-muted-foreground">
-                      AI đang trích xuất, phân tích dữ liệu và tạo báo cáo theo mẫu.
+                      {t("dashboard.botDetail.exportReport.step4.renderingDesc")}
                     </p>
                   </div>
                 </div>
@@ -927,9 +984,11 @@ export function ExportReportModal({
                     <Clock className="h-7 w-7" />
                   </div>
                   <div className="space-y-1">
-                    <h4 className="text-base font-bold text-foreground">Báo cáo đã tạo xong</h4>
+                    <h4 className="text-base font-bold text-foreground">
+                      {t("dashboard.botDetail.exportReport.step4.awaitingTitle")}
+                    </h4>
                     <p className="text-xs text-muted-foreground">
-                      Báo cáo đang chờ quản trị viên phê duyệt trước khi phát hành chính thức.
+                      {t("dashboard.botDetail.exportReport.step4.awaitingDesc")}
                     </p>
                   </div>
                 </div>
@@ -943,10 +1002,10 @@ export function ExportReportModal({
                   </div>
                   <div className="space-y-1">
                     <h4 className="text-base font-bold text-foreground">
-                      Xuất báo cáo thành công!
+                      {t("dashboard.botDetail.exportReport.step4.successTitle")}
                     </h4>
                     <p className="text-xs text-muted-foreground">
-                      Báo cáo đã sẵn sàng để tải về theo từng ngôn ngữ hoặc toàn bộ gói nén.
+                      {t("dashboard.botDetail.exportReport.step4.successDesc")}
                     </p>
                   </div>
 
@@ -955,7 +1014,9 @@ export function ExportReportModal({
                     <div className="space-y-2.5 pt-2 text-left">
                       <div className="flex items-center justify-between gap-2 px-0.5">
                         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          Danh sách file báo cáo ({exportFiles.length})
+                          {t("dashboard.botDetail.exportReport.step4.fileList", {
+                            count: exportFiles.length,
+                          })}
                         </p>
                         {zipDownloadUrl && (
                           <Button
@@ -971,7 +1032,7 @@ export function ExportReportModal({
                               download
                             >
                               <Archive className="h-3.5 w-3.5" />
-                              Tải tất cả (.zip)
+                              {t("dashboard.botDetail.exportReport.step4.downloadAll")}
                             </a>
                           </Button>
                         )}
@@ -1004,7 +1065,7 @@ export function ExportReportModal({
                                 size="icon"
                                 variant="outline"
                                 className="shadow-2xs group h-8 w-8 shrink-0 rounded-xl border-border/70 bg-background transition-all duration-200 hover:border-primary hover:bg-primary hover:text-primary-foreground active:scale-90"
-                                title={`Tải file PDF (${meta.name})`}
+                                title={`${t("dashboard.botDetail.exportReport.step4.downloadPdf")} (${meta.name})`}
                               >
                                 <a
                                   href={file.downloadUrl}
@@ -1013,7 +1074,9 @@ export function ExportReportModal({
                                   download={file.filename}
                                 >
                                   <Download className="h-4 w-4 transition-transform duration-200 group-hover:translate-y-0.5" />
-                                  <span className="sr-only">Tải PDF</span>
+                                  <span className="sr-only">
+                                    {t("dashboard.botDetail.exportReport.step4.downloadPdf")}
+                                  </span>
                                 </a>
                               </Button>
                             </div>
@@ -1026,7 +1089,7 @@ export function ExportReportModal({
                       <Button asChild className="shadow-xs rounded-xl">
                         <a href={downloadUrl} target="_blank" rel="noopener noreferrer" download>
                           <Download className="h-4 w-4" />
-                          Tải báo cáo
+                          {t("dashboard.botDetail.exportReport.step4.downloadReport")}
                         </a>
                       </Button>
                     </div>
@@ -1040,9 +1103,11 @@ export function ExportReportModal({
                     <AlertCircle className="h-7 w-7" />
                   </div>
                   <div className="space-y-1">
-                    <h4 className="text-base font-bold text-destructive">Xuất báo cáo thất bại</h4>
+                    <h4 className="text-base font-bold text-destructive">
+                      {t("dashboard.botDetail.exportReport.step4.failedTitle")}
+                    </h4>
                     <p className="text-xs text-muted-foreground">
-                      {statusErrorMessage || "Đã xảy ra lỗi trong quá trình render báo cáo."}
+                      {statusErrorMessage || t("dashboard.botDetail.exportReport.step4.failedDesc")}
                     </p>
                   </div>
                   <Button
@@ -1057,7 +1122,7 @@ export function ExportReportModal({
                     className="inline-flex items-center gap-1.5 rounded-xl border-border/80 bg-muted/20 px-4 py-2 text-xs font-medium text-foreground transition-all hover:border-border hover:bg-muted/60 hover:text-foreground active:scale-[0.98]"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
-                    Thử lại
+                    {t("dashboard.botDetail.exportReport.step4.retry")}
                   </Button>
                 </div>
               )}
@@ -1075,7 +1140,7 @@ export function ExportReportModal({
                 onClick={() => onOpenChange(false)}
                 className="rounded-xl border-border/80 bg-muted/20 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:bg-muted/60 hover:text-foreground active:scale-[0.98]"
               >
-                Hủy
+                {t("dashboard.botDetail.exportReport.footer.cancel")}
               </Button>
               <Button
                 size="sm"
@@ -1083,7 +1148,7 @@ export function ExportReportModal({
                 disabled={!selectedTemplateKey || templates.length === 0}
                 className="shadow-xs rounded-xl text-xs font-semibold transition-all active:scale-[0.98]"
               >
-                Tiếp tục
+                {t("dashboard.botDetail.exportReport.footer.continue")}
                 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </>
@@ -1098,14 +1163,14 @@ export function ExportReportModal({
                 className="rounded-xl border-border/80 bg-muted/20 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:bg-muted/60 hover:text-foreground active:scale-[0.98]"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                Quay lại
+                {t("dashboard.botDetail.exportReport.footer.back")}
               </Button>
               <Button
                 size="sm"
                 onClick={() => setStep(3)}
                 className="shadow-xs rounded-xl text-xs font-semibold transition-all active:scale-[0.98]"
               >
-                Tiếp tục
+                {t("dashboard.botDetail.exportReport.footer.continue")}
                 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </>
@@ -1121,7 +1186,7 @@ export function ExportReportModal({
                 className="rounded-xl border-border/80 bg-muted/20 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:bg-muted/60 hover:text-foreground active:scale-[0.98]"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                Quay lại
+                {t("dashboard.botDetail.exportReport.footer.back")}
               </Button>
               <Button
                 size="sm"
@@ -1132,12 +1197,12 @@ export function ExportReportModal({
                 {isExporting ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Đang gửi yêu cầu...
+                    {t("dashboard.botDetail.exportReport.footer.sending")}
                   </>
                 ) : (
                   <>
                     <FileDown className="h-3.5 w-3.5" />
-                    Xác nhận xuất
+                    {t("dashboard.botDetail.exportReport.footer.confirm")}
                   </>
                 )}
               </Button>
@@ -1151,7 +1216,7 @@ export function ExportReportModal({
               onClick={() => onOpenChange(false)}
               className="w-full rounded-xl border-border/80 bg-muted/20 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:bg-muted/60 hover:text-foreground active:scale-[0.98] sm:w-auto"
             >
-              Đóng
+              {t("dashboard.botDetail.exportReport.footer.close")}
             </Button>
           )}
         </DialogFooter>

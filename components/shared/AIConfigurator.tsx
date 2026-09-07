@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useAIConfigStore } from "@/store/useAIConfigStore";
 import { Button } from "@/components/ui/button";
@@ -93,6 +94,7 @@ export function AIConfigurator({
   onSaved,
   showSaveButton = Boolean(botId),
 }: AIConfiguratorProps) {
+  const t = useTranslations("dashboard.botDetail.aiConfigurator");
   const { toast } = useToast();
   const store = useAIConfigStore();
   const { initializeFromBot } = store;
@@ -148,8 +150,8 @@ export function AIConfigurator({
     } catch (err) {
       console.error("Failed to fetch AI catalogs:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể tải danh sách tính cách và kỹ năng.",
+        title: t("toastLoadErrorTitle"),
+        description: t("toastLoadErrorDesc"),
         variant: "destructive",
       });
     } finally {
@@ -176,14 +178,22 @@ export function AIConfigurator({
       });
       const data = await res.json();
       if (data.success) {
-        toast({ title: "Đã lưu", description: "Thay đổi đã được cập nhật." });
+        toast({ title: t("toastSaveSuccessTitle"), description: t("toastSaveSuccessDesc") });
         setHasChanges(false);
         onSaved?.();
       } else {
-        toast({ title: "Lỗi", description: data.message, variant: "destructive" });
+        toast({
+          title: t("toastLoadErrorTitle"),
+          description: data.message,
+          variant: "destructive",
+        });
       }
     } catch {
-      toast({ title: "Lỗi", description: "Không thể lưu thay đổi.", variant: "destructive" });
+      toast({
+        title: t("toastLoadErrorTitle"),
+        description: t("toastSaveErrorDesc"),
+        variant: "destructive",
+      });
     } finally {
       store.setIsSaving(false);
     }
@@ -224,16 +234,14 @@ export function AIConfigurator({
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
                 <Sparkles className="h-4 w-4 text-primary" />
               </span>
-              Tính cách
+              {t("personalityTitle")}
             </CardTitle>
-            <CardDescription className="text-sm">
-              Chọn một tính cách để định hình giọng nói và phong cách giao tiếp
-            </CardDescription>
+            <CardDescription className="text-sm">{t("personalityDesc")}</CardDescription>
           </div>
           {store.selectedPersonalityId && (
             <Badge className="shrink-0 border-emerald-200 bg-emerald-50 text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-950/40 dark:text-emerald-400">
               <Check className="mr-1 h-3 w-3" />
-              Đã chọn
+              {t("selectedBadge")}
             </Badge>
           )}
         </CardHeader>
@@ -274,10 +282,10 @@ export function AIConfigurator({
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
                 <Brain className="h-4 w-4 text-primary" />
               </span>
-              Kỹ năng
+              {t("skillTitle")}
             </CardTitle>
             <CardDescription className="text-sm">
-              Chọn tối đa {MAX_SKILLS_PER_BOT} kỹ năng để chatbot hỗ trợ tốt hơn
+              {t("skillDesc", { max: MAX_SKILLS_PER_BOT })}
             </CardDescription>
           </div>
           <Badge
@@ -325,9 +333,7 @@ export function AIConfigurator({
       {/* Conditional Save Bar */}
       {showSaveButton && (
         <div className="flex items-center justify-between gap-4">
-          {hasChanges && (
-            <p className="pl-2 text-[13px] text-red-600">(*) Bạn có thay đổi chưa được lưu</p>
-          )}
+          {hasChanges && <p className="pl-2 text-[13px] text-red-600">{t("unsavedChanges")}</p>}
           <div className="flex-1" />
           <Button
             onClick={handleSave}
@@ -338,12 +344,12 @@ export function AIConfigurator({
             {store.isSaving ? (
               <>
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Đang lưu...
+                {t("saving")}
               </>
             ) : (
               <>
                 <Check className="h-4 w-4" />
-                Lưu thay đổi
+                {t("saveChanges")}
               </>
             )}
           </Button>
@@ -481,6 +487,7 @@ function DetailEyeButton({
   item: PersonalityOption | SkillOption;
   type: "personality" | "skill";
 }) {
+  const t = useTranslations("dashboard.botDetail.aiConfigurator");
   const isPersonality = type === "personality";
   return (
     <Dialog>
@@ -489,7 +496,7 @@ function DetailEyeButton({
           type="button"
           onClick={(e) => e.stopPropagation()}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground/60 opacity-0 transition-all duration-200 hover:bg-primary/10 hover:text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 group-hover:opacity-100"
-          title="Xem chi tiết"
+          title={t("viewDetail")}
         >
           <Eye className="h-3.5 w-3.5" />
         </button>
@@ -508,7 +515,7 @@ function DetailEyeButton({
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary">
                 {isPersonality ? <Sparkles className="h-3 w-3" /> : <Brain className="h-3 w-3" />}
-                {isPersonality ? "Tính cách" : "Kỹ năng"}
+                {isPersonality ? t("detailPersonality") : t("detailSkill")}
               </span>
             </div>
           </DialogHeader>
@@ -526,6 +533,7 @@ function DetailEyeButton({
 }
 
 function EmptyState({ type, onRetry }: { type: "personality" | "skill"; onRetry: () => void }) {
+  const t = useTranslations("dashboard.botDetail.aiConfigurator");
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/20 px-6 py-10">
       <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
@@ -536,19 +544,18 @@ function EmptyState({ type, onRetry }: { type: "personality" | "skill"; onRetry:
         )}
       </div>
       <p className="mb-1 text-sm font-medium text-foreground/70">
-        Không có {type === "personality" ? "tính cách" : "kỹ năng"} nào
+        {type === "personality" ? t("emptyPersonality") : t("emptySkill")}
       </p>
-      <p className="mb-4 text-xs text-muted-foreground/50">
-        Không thể tải danh sách. Vui lòng thử lại.
-      </p>
+      <p className="mb-4 text-xs text-muted-foreground/50">{t("emptyDesc")}</p>
       <Button variant="outline" size="sm" onClick={onRetry}>
-        Thử lại
+        {t("retry")}
       </Button>
     </div>
   );
 }
 
 function LockedState() {
+  const t = useTranslations("dashboard.botDetail.aiConfigurator");
   return (
     <Card className="relative overflow-hidden border-border/40 shadow-sm">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
@@ -557,11 +564,9 @@ function LockedState() {
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
             <Sparkles className="h-4.5 w-4.5 text-primary" />
           </span>
-          Tùy chỉnh tính cách & kỹ năng
+          {t("lockedTitle")}
         </CardTitle>
-        <CardDescription className="text-sm">
-          Tuỳ chỉnh tính cách và kỹ năng cho chatbot
-        </CardDescription>
+        <CardDescription className="text-sm">{t("lockedDesc")}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-br from-background via-muted/20 to-muted/30 shadow-sm">
@@ -580,17 +585,17 @@ function LockedState() {
                 <Crown className="h-7 w-7 text-white" />
               </div>
               <p className="mb-1 text-[15px] font-semibold text-foreground">
-                Nâng cấp để mở khóa tính năng này
+                {t("lockedUpgradeTitle")}
               </p>
               <p className="mb-5 text-[13px] leading-relaxed text-muted-foreground">
-                Gói Standard trở lên bao gồm tùy chỉnh tính cách, kỹ năng và nhiều hơn nữa
+                {t("lockedUpgradeDesc")}
               </p>
               <Link
                 href="/dashboard/upgrade"
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-[13px] font-medium text-primary-foreground shadow-sm shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-md active:scale-[0.97]"
               >
                 <Crown className="h-3.5 w-3.5" />
-                Xem gói nâng cấp
+                {t("lockedUpgradeBtn")}
               </Link>
             </div>
           </div>

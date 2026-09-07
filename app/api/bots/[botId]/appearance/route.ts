@@ -89,29 +89,59 @@ export async function POST(
       );
     }
 
-    // If suggestedQuestions is being set, check plan
+    // Fetch current settings early for plan checks (needed to allow ui_language free updates)
+    let currentSettingsForPlanCheck: Record<string, unknown> | null = null;
+    if (widgetSettings) {
+      const currentBotForPlan = await supabase
+        .from("bots")
+        .select("widget_settings")
+        .eq("id", botId)
+        .single();
+      currentSettingsForPlanCheck =
+        (currentBotForPlan.data?.widget_settings as Record<string, unknown>) || {};
+    }
+
+    // Helper to compare suggestedQuestions arrays (order matters)
+    const areSuggestedQuestionsEqual = (a: unknown, b: unknown): boolean => {
+      if (!Array.isArray(a) || !Array.isArray(b)) return false;
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+      return true;
+    };
+
+    // If suggestedQuestions is being set, check plan ONLY when they are new/changed
+    // This allows free plan to update ui_language (or other free fields) while keeping existing questions
     if (widgetSettings?.suggestedQuestions && widgetSettings.suggestedQuestions.length > 0) {
-      const planCode = await getBotActivePlanCode(supabase, bot);
+      const currentQuestions = (currentSettingsForPlanCheck as Record<string, unknown> | null)?.[
+        "suggestedQuestions"
+      ] as unknown[] | undefined;
+      const isUnchanged =
+        Array.isArray(currentQuestions) &&
+        areSuggestedQuestionsEqual(widgetSettings.suggestedQuestions, currentQuestions);
 
-      if (!planCode) {
-        return NextResponse.json(
-          { success: false, message: "Unable to verify subscription status" },
-          { status: 403, headers: corsHeaders }
-        );
+      if (!isUnchanged) {
+        const planCode = await getBotActivePlanCode(supabase, bot);
+
+        if (!planCode) {
+          return NextResponse.json(
+            { success: false, message: "Unable to verify subscription status" },
+            { status: 403, headers: corsHeaders }
+          );
+        }
+
+        // Check if plan allows using suggested questions
+        if (!SUGGESTED_QUESTIONS_ALLOWED_PLANS.includes(planCode as ESubscriptionPlan)) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "Upgrade to Standard or Pro plan to use suggested questions feature.",
+            },
+            { status: 403, headers: corsHeaders }
+          );
+        }
       }
 
-      // Check if plan allows using suggested questions
-      if (!SUGGESTED_QUESTIONS_ALLOWED_PLANS.includes(planCode as ESubscriptionPlan)) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Upgrade to Standard or Pro plan to use suggested questions feature.",
-          },
-          { status: 403, headers: corsHeaders }
-        );
-      }
-
-      // Validate suggestedQuestions format
+      // Validate suggestedQuestions format (always, even if unchanged, to catch corrupt data)
       const validation = validateSuggestedQuestions(widgetSettings.suggestedQuestions);
       if (!validation.valid) {
         return NextResponse.json(
@@ -124,13 +154,18 @@ export async function POST(
     // Build updated widget settings
     let updatedWidgetSettings = null;
     if (widgetSettings) {
-      // Get current widget settings
-      const currentBot = await supabase
-        .from("bots")
-        .select("widget_settings")
-        .eq("id", botId)
-        .single();
-      const currentSettings = (currentBot.data?.widget_settings as Record<string, unknown>) || {};
+      // Reuse already fetched settings if available to avoid double query
+      let currentSettings: Record<string, unknown>;
+      if (currentSettingsForPlanCheck) {
+        currentSettings = currentSettingsForPlanCheck;
+      } else {
+        const currentBot = await supabase
+          .from("bots")
+          .select("widget_settings")
+          .eq("id", botId)
+          .single();
+        currentSettings = (currentBot.data?.widget_settings as Record<string, unknown>) || {};
+      }
       const navigationWasEnabled = Boolean(currentSettings?.navigation_enabled);
 
       // Merge with new settings
@@ -178,6 +213,9 @@ export async function POST(
         }),
         ...(widgetSettings?.navigation_enabled !== undefined && {
           navigation_enabled: Boolean(widgetSettings.navigation_enabled),
+        }),
+        ...(widgetSettings?.ui_language !== undefined && {
+          ui_language: widgetSettings.ui_language,
         }),
       };
 

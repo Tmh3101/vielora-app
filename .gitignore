@@ -1,68 +1,68 @@
 # Dependencies
-node_modules
-.pnp
-.pnp.js
-.yarn/install-state.gz
-
-# Build output
-.next/
-out/
-build
-dist
-dist-ssr
-
-# Environment files (keep example templates)
-.env*
-!.env.example
-!.env.local.example
-!.env.*.example
+node_modules/
+.venv/
+venv/
 .env
+.env.local
+.env.*.local
 .env.production
 
-# Testing
-coverage
-
-# Cache
-.cache
-.eslintcache
-.stylelintcache
-.turbo
-
-# Debug logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# Vercel
-.vercel
+# Build outputs
+dist/
+build/
+out/
+.next/
+.generated/
 
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
 
-# IDE / Editor
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-.idea
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
 
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# GitNexus data
+.gitnexus/
+.gitnexus/*
+
+# OpenViking context scripts (local integration tools)
+scripts/context/
+
+# Hermes local scripts
+.hermes/
+.claude/
+.claude-plugin/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+
 # Supabase
 supabase/.temp/
+supabase/.branches/
+
 
 # Misc
 *.pem

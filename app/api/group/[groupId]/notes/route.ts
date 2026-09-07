@@ -130,6 +130,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gro
       contentHtml,
       contentText: contentText.trim(),
       userName: perm.userName,
+      locale: body?.locale || perm.botLocale,
     });
 
     return NextResponse.json({ success: true, data: note }, { status: 201, headers: corsHeaders });

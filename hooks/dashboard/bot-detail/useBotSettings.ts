@@ -15,9 +15,10 @@ import {
   updateBotRateLimit,
 } from "@/lib/services/bot.service";
 import { isHexColor } from "@/lib/helpers";
-import { EWidgetBackgroundType } from "@/types";
+import { EWidgetBackgroundType, ELanguage } from "@/types";
 import { useAppearanceStore } from "@/store/useAppearanceStore";
 import { useBotDetailUIStore } from "@/store/useBotDetailUIStore";
+import { useSafeTranslations } from "@/lib/i18n/useSafeTranslations";
 
 type SupabaseClient = ReturnType<typeof createBrowserSupabaseClient>;
 type BotType = Tables<"bots">;
@@ -50,6 +51,7 @@ export interface AppearanceSettingsOverrides {
   chatIconBgColor?: string;
   isVoiceEnabled?: boolean;
   navigation_enabled?: boolean;
+  ui_language?: string;
 }
 
 import { EWidgetIconType } from "@/types";
@@ -103,6 +105,10 @@ export function useBotSettings({
   const isStoppingBot = useAppearanceStore((s) => s.isStoppingBot);
   const setIsStoppingBot = useAppearanceStore((s) => s.setIsStoppingBot);
 
+  const tSettings = useSafeTranslations("dashboard.botDetail.settingsTab");
+  const tCommon = useSafeTranslations("dashboard.common");
+  const tAppearance = useSafeTranslations("dashboard.botDetail.appearanceTab");
+
   const setStopModalOpen = useBotDetailUIStore((s) => s.setStopModalOpen);
   const setUpgradeModalOpen = useBotDetailUIStore((s) => s.setUpgradeModalOpen);
   const setUpgradeModalMessage = useBotDetailUIStore((s) => s.setUpgradeModalMessage);
@@ -150,8 +156,8 @@ export function useBotSettings({
       const trimmedBotName = store.editBotName.trim();
       if (!trimmedBotName) {
         toast({
-          title: "Lỗi",
-          description: "Tên Bot không được để trống.",
+          title: tCommon("error") || "Lỗi",
+          description: tAppearance("validationBotNameRequired") || "Tên Bot không được để trống.",
           variant: "destructive",
         });
         return;
@@ -160,8 +166,9 @@ export function useBotSettings({
       const trimmedWelcomeMessage = store.welcomeMessage.trim();
       if (!trimmedWelcomeMessage) {
         toast({
-          title: "Lỗi",
-          description: "Tin nhắn chào mừng không được để trống.",
+          title: tCommon("error") || "Lỗi",
+          description:
+            tAppearance("validationWelcomeRequired") || "Tin nhắn chào mừng không được để trống.",
           variant: "destructive",
         });
         return;
@@ -170,8 +177,10 @@ export function useBotSettings({
       const normalizedPrimaryColor = store.primaryColor.trim();
       if (!isHexColor(normalizedPrimaryColor)) {
         toast({
-          title: "Lỗi",
-          description: "Màu thương hiệu phải là mã Hex hợp lệ dạng #RRGGBB.",
+          title: tCommon("error") || "Lỗi",
+          description:
+            tAppearance("validationHexFormat") ||
+            "Màu thương hiệu phải là mã Hex hợp lệ dạng #RRGGBB.",
           variant: "destructive",
         });
         return;
@@ -208,6 +217,10 @@ export function useBotSettings({
           chatIconBgColor: current.chatIconBgColor,
           isVoiceEnabled: current.isVoiceEnabled,
           navigation_enabled: current.navigation_enabled ?? current.navigationEnabled,
+          ui_language:
+            current.ui_language ??
+            (bot?.widget_settings as { ui_language?: string })?.ui_language ??
+            "vi",
         };
 
         if (
@@ -252,21 +265,24 @@ export function useBotSettings({
         );
 
         toast({
-          title: "Thành công",
-          description: "Đã lưu cài đặt giao diện.",
+          title: tCommon("success") || "Thành công",
+          description: tSettings("saveAppearanceSuccess") || "Đã lưu cài đặt giao diện.",
         });
       } catch (error) {
         console.error("Save error:", error);
         toast({
-          title: "Lỗi",
-          description: error instanceof Error ? error.message : "Không thể lưu cài đặt.",
+          title: tCommon("error") || "Lỗi",
+          description:
+            error instanceof Error
+              ? error.message
+              : tSettings("errorSaveAppearance") || "Không thể lưu cài đặt.",
           variant: "destructive",
         });
       } finally {
         useAppearanceStore.getState().setIsSaving(false);
       }
     },
-    [bot, setBot, supabase, toast]
+    [bot, setBot, supabase, toast, tCommon, tSettings, tAppearance]
   );
 
   const handleSaveRateLimit = useCallback(async () => {
@@ -314,20 +330,23 @@ export function useBotSettings({
       );
 
       toast({
-        title: "Thành công",
-        description: "Đã lưu cài đặt giới hạn.",
+        title: tCommon("success") || "Thành công",
+        description: tSettings("saveRateLimitSuccess") || "Đã lưu cài đặt giới hạn.",
       });
     } catch (error) {
       console.error("Save error:", error);
       toast({
-        title: "Lỗi",
-        description: error instanceof Error ? error.message : "Không thể lưu cài đặt.",
+        title: tCommon("error") || "Lỗi",
+        description:
+          error instanceof Error
+            ? error.message
+            : tSettings("errorSaveRateLimit") || "Không thể lưu cài đặt.",
         variant: "destructive",
       });
     } finally {
       useAppearanceStore.getState().setIsSavingRateLimit(false);
     }
-  }, [bot, setBot, supabase, toast]);
+  }, [bot, setBot, supabase, toast, tCommon, tSettings]);
 
   const handleSaveAllowedDomains = useCallback(async () => {
     if (!bot) return;
@@ -374,20 +393,23 @@ export function useBotSettings({
       );
 
       toast({
-        title: "Thành công",
-        description: "Đã lưu danh sách domain được phép.",
+        title: tCommon("success") || "Thành công",
+        description: tSettings("saveDomainsSuccess") || "Đã lưu danh sách domain được phép.",
       });
     } catch (error) {
       console.error("Save allowed domains error:", error);
       toast({
-        title: "Lỗi",
-        description: error instanceof Error ? error.message : "Không thể lưu allowed domains.",
+        title: tCommon("error") || "Lỗi",
+        description:
+          error instanceof Error
+            ? error.message
+            : tSettings("errorSaveDomains") || "Không thể lưu allowed domains.",
         variant: "destructive",
       });
     } finally {
       useAppearanceStore.getState().setIsSavingAllowedDomains(false);
     }
-  }, [bot, setBot, toast]);
+  }, [bot, setBot, toast, tCommon, tSettings]);
 
   const handleSaveSlugSettings = useCallback(async () => {
     if (!bot) return;
@@ -419,21 +441,24 @@ export function useBotSettings({
       );
 
       toast({
-        title: "Thành công",
-        description: "Đã lưu cài đặt trang chat độc lập.",
+        title: tCommon("success") || "Thành công",
+        description: tSettings("savedStandaloneDesc") || "Đã lưu cài đặt trang chat độc lập.",
       });
     } catch (error) {
       console.error("Save slug settings error:", error);
-      const message = error instanceof Error ? error.message : "Không thể lưu cài đặt.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : tSettings("errorSaveGeneric") || "Không thể lưu cài đặt.";
       toast({
-        title: "Lỗi",
+        title: tCommon("error") || "Lỗi",
         description: message,
         variant: "destructive",
       });
     } finally {
       useAppearanceStore.getState().setIsSavingSlugSettings(false);
     }
-  }, [bot, setBot, toast]);
+  }, [bot, setBot, toast, tCommon, tSettings]);
 
   const handleStopBot = useCallback(async () => {
     if (!bot) return;
@@ -445,20 +470,20 @@ export function useBotSettings({
       setStopModalOpen(false);
 
       toast({
-        title: "Thành công",
-        description: "Bot đã được dừng hoạt động.",
+        title: tCommon("success") || "Thành công",
+        description: tSettings("stopBotSuccess") || "Bot đã được dừng hoạt động.",
       });
     } catch (error) {
       console.error("Stop bot error:", error);
       toast({
-        title: "Lỗi",
-        description: "Không thể dừng bot. Vui lòng thử lại.",
+        title: tCommon("error") || "Lỗi",
+        description: tSettings("errorStopBot") || "Không thể dừng bot. Vui lòng thử lại.",
         variant: "destructive",
       });
     } finally {
       useAppearanceStore.getState().setIsStoppingBot(false);
     }
-  }, [bot, setBot, supabase, toast, setStopModalOpen]);
+  }, [bot, setBot, supabase, toast, setStopModalOpen, tCommon, tSettings]);
 
   const handleStartBot = useCallback(async () => {
     if (!bot || !user) return;
@@ -481,20 +506,31 @@ export function useBotSettings({
       setBot((prev) => (prev ? { ...prev, is_stopped: false } : prev));
 
       toast({
-        title: "Thành công",
-        description: "Bot đã được khởi động lại.",
+        title: tCommon("success") || "Thành công",
+        description: tSettings("startBotSuccess") || "Bot đã được khởi động lại.",
       });
     } catch (error) {
       console.error("Start bot error:", error);
       toast({
-        title: "Lỗi",
-        description: "Không thể khởi động bot. Vui lòng thử lại.",
+        title: tCommon("error") || "Lỗi",
+        description: tSettings("errorStartBot") || "Không thể khởi động bot. Vui lòng thử lại.",
         variant: "destructive",
       });
     } finally {
       useAppearanceStore.getState().setIsSaving(false);
     }
-  }, [bot, botsLimit, setBot, supabase, toast, user, setUpgradeModalMessage, setUpgradeModalOpen]);
+  }, [
+    bot,
+    botsLimit,
+    setBot,
+    supabase,
+    toast,
+    user,
+    setUpgradeModalMessage,
+    setUpgradeModalOpen,
+    tCommon,
+    tSettings,
+  ]);
 
   return {
     isSaving,

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Loader2, ShieldAlert, MessageSquare } from "lucide-react";
+import { LogoLoader } from "@/components/ui/logo-loader";
+import { ShieldAlert, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -12,6 +13,8 @@ import { GroupInvitePrompt } from "@/components/chat/group/GroupInvitePrompt";
 import { PwaAuthReturnOverlay } from "@/components/chat/pwa-install/PwaAuthReturnOverlay";
 import { getBotStandaloneChatPath, getBotAuthUrl } from "@/lib/utils/standalone-chat-url";
 import { useIOSAuthSync } from "@/hooks/public-bot/useIOSAuthSync";
+import { ELanguage } from "@/types/enums";
+import { getWidgetTranslations } from "@/lib/i18n/widget-translations";
 import {
   AUTH_EVENT_SIGNED_IN,
   AUTH_EVENT_SIGNED_OUT,
@@ -30,6 +33,7 @@ interface PwaGroupChatContainerProps {
   botSlug?: string;
   botName?: string;
   botData?: PublicBotData;
+  locale?: ELanguage | string;
 }
 
 export function PwaGroupChatContainer({
@@ -37,10 +41,18 @@ export function PwaGroupChatContainer({
   botSlug,
   botName = "Vielora Bot",
   botData,
+  locale: propLocale,
 }: PwaGroupChatContainerProps) {
   const [authState, setAuthState] = useState<AuthStateType>(GroupAuthState.LOADING);
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
+
+  const resolvedLocale =
+    propLocale ||
+    (botData?.widget_settings as { ui_language?: string; locale?: string })?.ui_language ||
+    (botData?.widget_settings as { ui_language?: string; locale?: string })?.locale ||
+    ELanguage.Vi;
+  const t = getWidgetTranslations(resolvedLocale);
 
   const supabase = createBrowserSupabaseClient();
   useIOSAuthSync();
@@ -115,9 +127,11 @@ export function PwaGroupChatContainer({
     return (
       <>
         <PwaAuthReturnOverlay />
-        <div className="flex h-full min-h-[400px] flex-col items-center justify-center gap-2 text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <p className="text-xs font-medium">Đang kiểm tra quyền truy cập nhóm...</p>
+        <div className="flex h-full min-h-[400px] flex-col items-center justify-center gap-4 text-muted-foreground">
+          <LogoLoader size={48} />
+          <p className="animate-pulse text-xs font-medium text-muted-foreground/80">
+            {t.checkingGroupAccess}
+          </p>
         </div>
       </>
     );
@@ -149,18 +163,15 @@ export function PwaGroupChatContainer({
                   <ShieldAlert className="h-7 w-7 text-amber-500" />
                 </div>
                 <h2 className="text-xl font-semibold text-foreground">
-                  Tính năng Nhóm chat chưa khả dụng
+                  {t.groupChatProRequiredTitle}
                 </h2>
               </div>
 
               <div className="space-y-3 text-center">
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  Nhóm chat với AI của <strong>{botName}</strong> là tính năng nâng cao chỉ khả dụng
-                  cho các chatbot thuộc gói <strong>Pro</strong> hoặc <strong>Enterprise</strong>.
+                  {t.groupChatProRequiredDesc.replace("{name}", botName)}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Vui lòng liên hệ quản trị viên không gian làm việc để nâng cấp gói dịch vụ.
-                </p>
+                <p className="text-xs text-muted-foreground">{t.groupChatProRequiredHint}</p>
               </div>
 
               <div className="flex w-full flex-col gap-3 pt-2">
@@ -170,7 +181,7 @@ export function PwaGroupChatContainer({
                 >
                   <Link href={standaloneChatUrl}>
                     <MessageSquare className="h-4 w-4" />
-                    Về trang Chat AI
+                    {t.backToAiChat}
                   </Link>
                 </Button>
               </div>
@@ -189,6 +200,7 @@ export function PwaGroupChatContainer({
           userEmail={userEmail}
           botName={botName}
           botSlug={botSlug}
+          locale={resolvedLocale}
           onSwitchToAuth={() => {
             window.location.assign(getBotAuthUrl(botSlug));
           }}

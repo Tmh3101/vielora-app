@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Code, Copy, Plug, Tag } from "lucide-react";
 import { Framework, type FrameworkType } from "@/lib/constants";
 import { getEmbededScript } from "@/lib/helpers";
+import { useTranslations } from "next-intl";
 
 export interface IntegrationTabProps {
   botId: string;
@@ -15,27 +16,30 @@ export interface IntegrationTabProps {
 }
 
 export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabProps) {
+  const t = useTranslations("dashboard.botDetail.integrationTab");
+  const tCommon = useTranslations("dashboard.common");
+
   return (
     <div className="space-y-6">
       <div className="mb-6">
-        <p className="text-muted-foreground">Chọn cách cài đặt phù hợp với website của bạn</p>
+        <p className="text-muted-foreground">{t("embedDescription")}</p>
       </div>
 
       <Tabs defaultValue="snippet" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3 bg-muted/60">
           <TabsTrigger value="gtm" className="flex items-center gap-2">
             <Tag className="h-4 w-4" />
-            <span className="hidden sm:inline">Google Tag Manager</span>
-            <span className="sm:hidden">GTM</span>
+            <span className="hidden sm:inline">{t("tabs.gtm")}</span>
+            <span className="sm:hidden">{t("tabs.gtmShort")}</span>
           </TabsTrigger>
           <TabsTrigger value="snippet" className="flex items-center gap-2">
             <Code className="h-4 w-4" />
-            <span className="hidden sm:inline">Copy Code</span>
-            <span className="sm:hidden">Code</span>
+            <span className="hidden sm:inline">{t("copyCode")}</span>
+            <span className="sm:hidden">{t("tabs.codeShort")}</span>
           </TabsTrigger>
           <TabsTrigger value="wordpress" className="flex items-center gap-2">
             <Plug className="h-4 w-4" />
-            <span>WordPress</span>
+            <span>{t("tabs.wordpress")}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -44,9 +48,9 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Tag className="h-5 w-5 text-primary" />
-                Cài đặt qua Google Tag Manager
+                {t("gtm.title")}
               </CardTitle>
-              <CardDescription>Cách dễ nhất nếu bạn đã dùng GTM</CardDescription>
+              <CardDescription>{t("gtm.description")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
@@ -55,9 +59,9 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                     1
                   </div>
                   <div>
-                    <h4 className="mb-1 font-medium">Mở Google Tag Manager</h4>
+                    <h4 className="mb-1 font-medium">{t("gtm.step1.title")}</h4>
                     <p className="text-sm text-muted-foreground">
-                      Đăng nhập vào{" "}
+                      {t("gtm.step1.descriptionPrefix")}{" "}
                       <a
                         href="https://tagmanager.google.com"
                         target="_blank"
@@ -75,10 +79,8 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                     2
                   </div>
                   <div>
-                    <h4 className="mb-1 font-medium">Tạo Tag mới</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Chọn &quot;Tags&quot; → &quot;New&quot; → &quot;Custom HTML&quot;
-                    </p>
+                    <h4 className="mb-1 font-medium">{t("gtm.step2.title")}</h4>
+                    <p className="text-sm text-muted-foreground">{t("gtm.step2.description")}</p>
                   </div>
                 </div>
 
@@ -87,10 +89,8 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                     3
                   </div>
                   <div>
-                    <h4 className="mb-1 font-medium">Dán code và lưu</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Dán đoạn code bên dưới, chọn Trigger &quot;All Pages&quot;, sau đó Publish
-                    </p>
+                    <h4 className="mb-1 font-medium">{t("gtm.step3.title")}</h4>
+                    <p className="text-sm text-muted-foreground">{t("gtm.step3.description")}</p>
                   </div>
                 </div>
               </div>
@@ -106,7 +106,7 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                   onClick={() => onCopyScript(Framework.GTM, "Code")}
                 >
                   <Copy className="mr-1 h-4 w-4" />
-                  Copy
+                  {tCommon("copy")}
                 </Button>
               </div>
             </CardContent>
@@ -118,9 +118,9 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Code className="h-5 w-5 text-primary" />
-                Copy code trực tiếp
+                {t("snippet.title")}
               </CardTitle>
-              <CardDescription>Dán code vào website của bạn</CardDescription>
+              <CardDescription>{t("snippet.description")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <Tabs defaultValue="html" className="space-y-4">
@@ -134,7 +134,7 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                         <ellipse rx="11" ry="4.2" transform="rotate(120)" />
                       </g>
                     </svg>
-                    React / HTML
+                    {t("snippet.frameworkTabs.react")}
                   </TabsTrigger>
                   <TabsTrigger value="vue" className="flex items-center gap-2">
                     <svg className="h-4 w-4" viewBox="0 0 261.76 226.69" fill="none">
@@ -147,7 +147,7 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                         fill="#34495E"
                       />
                     </svg>
-                    VueJS
+                    {t("snippet.frameworkTabs.vue")}
                   </TabsTrigger>
                   <TabsTrigger value="php" className="flex items-center gap-2">
                     <svg className="h-4 w-4" viewBox="0 0 256 134" fill="none">
@@ -164,15 +164,12 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                         php
                       </text>
                     </svg>
-                    PHP
+                    {t("snippet.frameworkTabs.php")}
                   </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="html" className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Dán đoạn code sau vào file HTML hoặc component React của bạn (trước thẻ{" "}
-                    {"</body>"})
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t("snippet.html.description")}</p>
                   <div className="relative">
                     <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-sm">
                       <code>{getEmbededScript(botId, appUrl, Framework.REACT)}</code>
@@ -184,32 +181,42 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                       onClick={() => onCopyScript(Framework.REACT, "Code")}
                     >
                       <Copy className="mr-1 h-4 w-4" />
-                      Copy
+                      {tCommon("copy")}
                     </Button>
                   </div>
                   <div className="space-y-3 pt-2">
-                    <h4 className="text-sm font-medium">Vị trí đặt code phổ biến:</h4>
+                    <h4 className="text-sm font-medium">{t("snippet.commonLocationsTitle")}</h4>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">Next.js (App Router)</p>
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.nextApp.title")}
+                        </p>
                         <code className="text-xs text-muted-foreground">
-                          app/layout.tsx (trước {"</body>"})
+                          {t("snippet.locations.nextApp.code")}
                         </code>
                       </div>
                       <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">Next.js (Pages Router)</p>
-                        <code className="text-xs text-muted-foreground">pages/_document.tsx</code>
-                      </div>
-                      <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">React (Vite / CRA)</p>
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.nextPages.title")}
+                        </p>
                         <code className="text-xs text-muted-foreground">
-                          index.html (trước {"</body>"})
+                          {t("snippet.locations.nextPages.code")}
                         </code>
                       </div>
                       <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">HTML thuần</p>
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.reactVite.title")}
+                        </p>
                         <code className="text-xs text-muted-foreground">
-                          index.html (trước {"</body>"})
+                          {t("snippet.locations.reactVite.code")}
+                        </code>
+                      </div>
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.htmlPure.title")}
+                        </p>
+                        <code className="text-xs text-muted-foreground">
+                          {t("snippet.locations.htmlPure.code")}
                         </code>
                       </div>
                     </div>
@@ -217,9 +224,7 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                 </TabsContent>
 
                 <TabsContent value="vue" className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Thêm đoạn code sau vào component chính (App.vue hoặc layout)
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t("snippet.vue.description")}</p>
                   <div className="relative">
                     <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-sm">
                       <code>{getEmbededScript(botId, appUrl, Framework.VUE)}</code>
@@ -231,30 +236,42 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                       onClick={() => onCopyScript(Framework.VUE, "Code")}
                     >
                       <Copy className="mr-1 h-4 w-4" />
-                      Copy
+                      {tCommon("copy")}
                     </Button>
                   </div>
                   <div className="space-y-3 pt-2">
-                    <h4 className="text-sm font-medium">Vị trí đặt code phổ biến:</h4>
+                    <h4 className="text-sm font-medium">{t("snippet.commonLocationsTitle")}</h4>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">Vue 3 (Vite)</p>
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.vue3Vite.title")}
+                        </p>
                         <code className="text-xs text-muted-foreground">
-                          index.html (trước {"</body>"})
+                          {t("snippet.locations.vue3Vite.code")}
                         </code>
                       </div>
                       <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">Nuxt 3</p>
-                        <code className="text-xs text-muted-foreground">app.vue</code>
-                      </div>
-                      <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">Vue 2 (CLI)</p>
-                        <code className="text-xs text-muted-foreground">public/index.html</code>
-                      </div>
-                      <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">Vue + Quasar</p>
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.nuxt3.title")}
+                        </p>
                         <code className="text-xs text-muted-foreground">
-                          src/App.vue hoặc src/layouts/MainLayout.vue
+                          {t("snippet.locations.nuxt3.code")}
+                        </code>
+                      </div>
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.vue2Cli.title")}
+                        </p>
+                        <code className="text-xs text-muted-foreground">
+                          {t("snippet.locations.vue2Cli.code")}
+                        </code>
+                      </div>
+                      <div className="rounded-lg border border-border/60 p-3">
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.vueQuasar.title")}
+                        </p>
+                        <code className="text-xs text-muted-foreground">
+                          {t("snippet.locations.vueQuasar.code")}
                         </code>
                       </div>
                     </div>
@@ -263,8 +280,10 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
 
                 <TabsContent value="php" className="space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Dán đoạn code sau vào file layout chính, ngay trước thẻ{" "}
-                    <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{"</body>"}</code>
+                    {t("snippet.php.descriptionPrefix")}{" "}
+                    <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                      {t("snippet.php.descriptionCode")}
+                    </code>
                   </p>
                   <div className="relative">
                     <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-sm">
@@ -277,34 +296,42 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                       onClick={() => onCopyScript(Framework.PHP, "Code")}
                     >
                       <Copy className="mr-1 h-4 w-4" />
-                      Copy
+                      {tCommon("copy")}
                     </Button>
                   </div>
                   <div className="space-y-3 pt-2">
-                    <h4 className="text-sm font-medium">Vị trí đặt code phổ biến:</h4>
+                    <h4 className="text-sm font-medium">{t("snippet.commonLocationsTitle")}</h4>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">Laravel</p>
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.laravel.title")}
+                        </p>
                         <code className="text-xs text-muted-foreground">
-                          resources/views/layouts/app.blade.php
+                          {t("snippet.locations.laravel.code")}
                         </code>
                       </div>
                       <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">CodeIgniter</p>
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.codeigniter.title")}
+                        </p>
                         <code className="text-xs text-muted-foreground">
-                          application/views/templates/footer.php
+                          {t("snippet.locations.codeigniter.code")}
                         </code>
                       </div>
                       <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">WordPress Theme</p>
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.wordpressTheme.title")}
+                        </p>
                         <code className="text-xs text-muted-foreground">
-                          wp-content/themes/your-theme/footer.php
+                          {t("snippet.locations.wordpressTheme.code")}
                         </code>
                       </div>
                       <div className="rounded-lg border border-border/60 p-3">
-                        <p className="mb-0.5 text-sm font-medium">PHP thuần</p>
+                        <p className="mb-0.5 text-sm font-medium">
+                          {t("snippet.locations.phpPure.title")}
+                        </p>
                         <code className="text-xs text-muted-foreground">
-                          includes/footer.php hoặc index.php
+                          {t("snippet.locations.phpPure.code")}
                         </code>
                       </div>
                     </div>
@@ -320,25 +347,25 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Plug className="h-5 w-5 text-primary" />
-                Cài đặt qua WordPress (WPCode)
+                {t("wordpress.title")}
               </CardTitle>
               <CardDescription>
-                Hướng dẫn từng bước nhúng chatbot vào website WordPress bằng plugin{" "}
+                {t("wordpress.descriptionPrefix")}{" "}
                 <a
                   href="https://wordpress.org/plugins/insert-headers-and-footers/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-medium text-primary hover:underline"
                 >
-                  WPCode
+                  {t("wordpress.descriptionLink")}
                 </a>{" "}
-                — không cần chỉnh sửa code theme.
+                {t("wordpress.descriptionSuffix")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-8">
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
                 <p className="mb-3 text-sm font-medium text-foreground">
-                  Script cần dán vào WPCode (sẽ sử dụng ở Bước 4):
+                  {t("wordpress.scriptLabel")}
                 </p>
                 <div className="relative">
                   <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-sm">
@@ -351,7 +378,7 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                     onClick={() => onCopyScript(Framework.REACT, "Script")}
                   >
                     <Copy className="mr-1 h-4 w-4" />
-                    Copy
+                    {tCommon("copy")}
                   </Button>
                 </div>
               </div>
@@ -364,26 +391,30 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                     </div>
                     <div className="flex-1 space-y-3">
                       <div>
-                        <h4 className="font-semibold">Tải plugin WPCode</h4>
+                        <h4 className="font-semibold">{t("wordpress.step1.title")}</h4>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Truy cập{" "}
+                          {t("wordpress.step1.descriptionPrefix")}{" "}
                           <a
                             href="https://wordpress.org/plugins/insert-headers-and-footers/"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="font-medium text-primary hover:underline"
                           >
-                            wordpress.org/plugins → WPCode
+                            {t("wordpress.step1.descriptionLink")}
                           </a>{" "}
-                          và nhấn nút <strong>Download</strong> để tải file{" "}
-                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">.zip</code> về
-                          máy.
+                          {t("wordpress.step1.descriptionMiddle")}{" "}
+                          <strong>{t("wordpress.step1.download")}</strong>{" "}
+                          {t("wordpress.step1.descriptionMiddle2")}{" "}
+                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                            {t("wordpress.step1.code")}
+                          </code>{" "}
+                          {t("wordpress.step1.descriptionSuffix")}
                         </p>
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border/40">
                         <Image
                           src="/images/guides/wordpress/Step1.webp"
-                          alt="Trang tải WPCode trên WordPress.org"
+                          alt={t("wordpress.step1.alt")}
                           width={800}
                           height={600}
                           className="w-full"
@@ -400,18 +431,15 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                     </div>
                     <div className="flex-1 space-y-3">
                       <div>
-                        <h4 className="font-semibold">Cài đặt plugin vào WordPress</h4>
+                        <h4 className="font-semibold">{t("wordpress.step2.title")}</h4>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Đăng nhập vào trang Admin WordPress → <strong>Plugin</strong> →{" "}
-                          <strong>Thêm Plugin</strong> → <strong>Tải plugin lên</strong> → chọn file{" "}
-                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">.zip</code> vừa
-                          tải → nhấn <strong>Cài đặt ngay</strong> → <strong>Kích hoạt</strong>.
+                          {t("wordpress.step2.description")}
                         </p>
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border/40">
                         <Image
                           src="/images/guides/wordpress/Step2.webp"
-                          alt="Upload plugin WPCode trên WordPress Admin"
+                          alt={t("wordpress.step2.alt")}
                           width={800}
                           height={600}
                           className="w-full"
@@ -428,18 +456,15 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                     </div>
                     <div className="flex-1 space-y-3">
                       <div>
-                        <h4 className="font-semibold">Tạo Custom Snippet mới</h4>
+                        <h4 className="font-semibold">{t("wordpress.step3.title")}</h4>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Trong menu WordPress, chọn <strong>Code Snippets</strong> →{" "}
-                          <strong>+ Add Snippet</strong> → nhấn nút{" "}
-                          <strong>&quot;Add Your Custom Code (New Snippet)&quot;</strong> để bắt đầu
-                          tạo snippet mới.
+                          {t("wordpress.step3.description")}
                         </p>
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border/40">
                         <Image
                           src="/images/guides/wordpress/Step3.webp"
-                          alt="Tạo Custom Snippet mới trong WPCode"
+                          alt={t("wordpress.step3.alt")}
                           width={800}
                           height={600}
                           className="w-full"
@@ -456,21 +481,23 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                     </div>
                     <div className="flex-1 space-y-3">
                       <div>
-                        <h4 className="font-semibold">Dán script Vielora vào snippet</h4>
+                        <h4 className="font-semibold">{t("wordpress.step4.title")}</h4>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Đặt tên cho snippet (ví dụ: <em>&quot;Vielora Chatbot&quot;</em>) → chọn{" "}
-                          <strong>Code Type</strong> là{" "}
+                          {t("wordpress.step4.descriptionPrefix")}{" "}
+                          <em>{t("wordpress.step4.exampleName")}</em>{" "}
+                          {t("wordpress.step4.descriptionMiddle")}{" "}
                           <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                            HTML Snippet
+                            {t("wordpress.step4.codeType")}
                           </code>{" "}
-                          → dán đoạn script Vielora (đã copy ở trên) vào ô{" "}
-                          <strong>Code Preview</strong>.
+                          {t("wordpress.step4.descriptionMiddle2")}{" "}
+                          <strong>{t("wordpress.step4.codePreview")}</strong>
+                          {t("wordpress.step4.descriptionSuffix")}
                         </p>
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border/40">
                         <Image
                           src="/images/guides/wordpress/Step4.webp"
-                          alt="Dán script Vielora vào Code Preview"
+                          alt={t("wordpress.step4.alt")}
                           width={800}
                           height={600}
                           className="w-full"
@@ -487,19 +514,15 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
                     </div>
                     <div className="flex-1 space-y-3">
                       <div>
-                        <h4 className="font-semibold">Cấu hình Insertion và kích hoạt</h4>
+                        <h4 className="font-semibold">{t("wordpress.step5.title")}</h4>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Kéo xuống phần <strong>Insertion</strong>: chọn Insert Method là{" "}
-                          <strong>Auto Insert</strong>, Location là{" "}
-                          <strong>Site Wide Footer</strong>. Cuối cùng, chuyển trạng thái từ{" "}
-                          <em>Inactive</em> sang <strong className="text-green-600">Active</strong>{" "}
-                          và nhấn <strong>Save Snippet</strong>.
+                          {t("wordpress.step5.description")}
                         </p>
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border/40">
                         <Image
                           src="/images/guides/wordpress/Step5.webp"
-                          alt="Cấu hình Auto Insert và Site Wide Footer"
+                          alt={t("wordpress.step5.alt")}
                           width={800}
                           height={600}
                           className="w-full"
@@ -512,9 +535,8 @@ export function IntegrationTab({ botId, appUrl, onCopyScript }: IntegrationTabPr
 
               <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
                 <p className="text-sm text-muted-foreground">
-                  <strong className="text-foreground">Lưu ý:</strong> Sau khi lưu snippet, chatbot
-                  sẽ xuất hiện trên toàn bộ website WordPress của bạn. Nếu chưa thấy, hãy xóa cache
-                  trình duyệt hoặc cache plugin (nếu có) rồi tải lại trang.
+                  <strong className="text-foreground">{t("wordpress.note.label")}</strong>{" "}
+                  {t("wordpress.note.description")}
                 </p>
               </div>
             </CardContent>

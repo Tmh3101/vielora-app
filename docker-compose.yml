@@ -53,6 +53,11 @@ x-worker-env: &worker-env
   # Report token & internal rendering URL
   REPORT_TOKEN_SECRET: "${REPORT_TOKEN_SECRET}"
   INTERNAL_BASE_URL: "${INTERNAL_BASE_URL:-http://web:3000}"
+  # Shopify Integration
+  DATABASE_URL: "${DATABASE_URL}"
+  SHOPIFY_SESSION_STORAGE: "${SHOPIFY_SESSION_STORAGE:-postgresql}"
+  NEXT_PUBLIC_SHOPIFY_CLIENT_ID: "${NEXT_PUBLIC_SHOPIFY_CLIENT_ID}"
+  SHOPIFY_CLIENT_SECRET: "${SHOPIFY_CLIENT_SECRET}"
 
 services:
   # 1. REDIS — Message broker (shared by both topologies)

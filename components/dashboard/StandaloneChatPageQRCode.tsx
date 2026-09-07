@@ -6,20 +6,35 @@ import { Download } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { QR_CODE_SIZE, AVATAR_SIZE, TRANSPARENT_AVATAR_SRC } from "@/config/widget";
+import { useSafeTranslations } from "@/lib/i18n/useSafeTranslations";
 
 export interface StandaloneChatPageQRCodeProps {
   url: string;
   avatarUrl: string | null;
   botName?: string;
+  downloadLabel?: string;
+  qrTitle?: string;
+  className?: string;
 }
 
 export function StandaloneChatPageQRCode({
   url,
   avatarUrl,
   botName,
+  downloadLabel,
+  qrTitle,
+  className,
 }: StandaloneChatPageQRCodeProps) {
+  const t = useSafeTranslations("standaloneChat.qr");
   const canvasId = useId().replace(/:/g, "");
   const avatarImageRef = React.useRef<HTMLImageElement>(null);
+
+  const resolvedDownloadLabel = downloadLabel || t("downloadQr") || "Tải mã QR";
+  const resolvedQrTitle =
+    qrTitle ||
+    (botName
+      ? t("qrTitleForBot", { botName }) || `Mã QR cho ${botName}`
+      : t("qrTitle") || "Mã QR trang chat");
 
   const handleDownload = () => {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
@@ -70,7 +85,7 @@ export function StandaloneChatPageQRCode({
   };
 
   return (
-    <div className="rounded-xl p-4">
+    <div className={`rounded-xl p-4 ${className || ""}`.trim()}>
       <div className="flex flex-col items-center gap-4">
         <div className="relative flex aspect-square w-full max-w-[246px] items-center justify-center overflow-hidden rounded-2xl border bg-white p-3 shadow-sm">
           <QRCodeCanvas
@@ -90,7 +105,7 @@ export function StandaloneChatPageQRCode({
                   }
                 : undefined
             }
-            title={botName ? `QR code for ${botName}` : "Standalone chat QR code"}
+            title={resolvedQrTitle}
           />
           {avatarUrl && (
             <Image
@@ -113,8 +128,8 @@ export function StandaloneChatPageQRCode({
           className="border-white bg-transparent text-primary hover:border hover:border-primary hover:bg-transparent hover:text-primary"
           onClick={handleDownload}
         >
-          <Download className="mr-2 h-4 w-4" />
-          Tải mã QR
+          <Download className="h-4 w-4" />
+          {resolvedDownloadLabel}
         </Button>
       </div>
     </div>

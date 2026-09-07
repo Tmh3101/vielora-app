@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import {
   FileText,
   Pin,
@@ -36,6 +37,7 @@ interface GroupNotesListProps {
 }
 
 export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
+  const t = useTranslations("dashboard.group.notesList");
   const [notes, setNotes] = useState<GroupNoteRow[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -73,15 +75,15 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
         setSelectedDetailNote(null);
       }
       toast({
-        title: "Đã xóa ghi chú",
-        description: "Ghi chú và vector RAG liên quan đã được xóa khỏi hệ thống.",
+        title: t("deletedTitle"),
+        description: t("deletedDesc"),
       });
       setDeletingNote(null);
     } catch (err) {
       console.error("Error deleting note:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể xóa ghi chú này.",
+        title: t("errorTitle"),
+        description: t("deleteFailed"),
         variant: "destructive",
       });
     } finally {
@@ -105,7 +107,7 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
     return (
       <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 p-6 text-center text-xs text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin text-primary" />
-        <span>Đang tải danh sách ghi chú & tri thức nhóm...</span>
+        <span>{t("loading")}</span>
       </div>
     );
   }
@@ -116,10 +118,9 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
           <FileText className="h-6 w-6 opacity-80" />
         </div>
-        <p className="text-sm font-semibold text-foreground">Chưa có ghi chú nào</p>
+        <p className="text-sm font-semibold text-foreground">{t("emptyTitle")}</p>
         <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">
-          Các ghi chú do thành viên tạo hoặc tin nhắn được ghim từ cuộc trò chuyện sẽ tự động xuất
-          hiện ở đây và được nạp vào cơ sở tri thức RAG của bot.
+          {t("emptyDesc")}
         </p>
       </div>
     );
@@ -135,7 +136,7 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm kiếm theo tiêu đề, nội dung ghi chú hoặc người tạo..."
+            placeholder={t("searchPlaceholder")}
             className="h-9 rounded-xl bg-background/50 pl-9 pr-8 text-xs focus-visible:bg-background"
           />
           {searchQuery && (
@@ -155,8 +156,11 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
             className="shadow-3xs h-7 shrink-0 rounded-lg border-primary/25 bg-primary/10 px-3 text-xs font-medium text-primary"
           >
             {searchQuery
-              ? `${filteredNotes.length} / ${notes.length} ghi chú`
-              : `${notes.length} ghi chú`}
+              ? t("badgeFiltered", {
+                  filtered: filteredNotes.length,
+                  total: notes.length,
+                })
+              : t("badgeCount", { count: notes.length })}
           </Badge>
         </div>
       </div>
@@ -164,14 +168,14 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
       {/* Notes List Container */}
       {filteredNotes.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center text-xs text-muted-foreground">
-          <p>Không tìm thấy ghi chú nào khớp với từ khóa &quot;{searchQuery}&quot;</p>
+          <p>{t("noResults", { query: searchQuery })}</p>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setSearchQuery("")}
             className="mt-2 h-7 text-xs text-primary"
           >
-            Xóa bộ lọc tìm kiếm
+            {t("clearFilter")}
           </Button>
         </div>
       ) : (
@@ -182,7 +186,7 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
               note.creator?.display_name ||
               note.creator?.full_name ||
               note.creator?.email?.split("@")[0] ||
-              "Thành viên";
+              t("fallbackMember");
             const isFromMessage = Boolean(note.source_message_id);
 
             const formattedDate = new Date(note.updated_at || note.created_at).toLocaleDateString(
@@ -221,19 +225,19 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
                         }}
                       >
                         <Pin className="h-3 w-3" />
-                        Đang ghim
+                        {t("badgePinned")}
                       </span>
                     )}
 
                     {isFromMessage ? (
                       <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-600 dark:border-sky-500/35 dark:bg-sky-950/40 dark:text-sky-400">
                         <MessageSquare className="h-3 w-3" />
-                        Từ tin nhắn
+                        {t("badgeFromMessage")}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-md border border-slate-400/25 bg-slate-500/10 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:border-slate-500/30 dark:bg-slate-800/60 dark:text-slate-300">
                         <FileText className="h-3 w-3" />
-                        Tạo thủ công
+                        {t("badgeManual")}
                       </span>
                     )}
                   </div>
@@ -281,7 +285,7 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
                     size="icon"
                     className="h-8 w-8 rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     onClick={() => setSelectedDetailNote(note)}
-                    title="Xem chi tiết ghi chú"
+                    title={t("viewDetail")}
                   >
                     <Eye className="h-4 w-4" />
                   </Button>
@@ -291,7 +295,7 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
                     size="icon"
                     className="h-8 w-8 rounded-xl text-muted-foreground opacity-70 transition-opacity hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
                     onClick={() => setDeletingNote(note)}
-                    title="Xóa ghi chú"
+                    title={t("deleteNote")}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -327,13 +331,10 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
         <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-destructive">
-              Xóa ghi chú nhóm
+              {t("deleteDialogTitle")}
             </DialogTitle>
             <DialogDescription className="text-xs leading-relaxed text-muted-foreground">
-              Bạn có chắc chắn muốn xóa ghi chú &quot;
-              <strong className="text-foreground">{deletingNote?.title}</strong>&quot;? Hành động
-              này sẽ đồng thời xóa dữ liệu vector RAG của ghi chú khỏi bộ não bot và không thể hoàn
-              tác.
+              {t("deleteDialogDesc", { title: deletingNote?.title ?? "" })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -345,7 +346,7 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
               onClick={() => setDeletingNote(null)}
               disabled={isDeleting}
             >
-              Hủy bỏ
+              {t("cancel")}
             </Button>
             <Button
               type="button"
@@ -358,10 +359,10 @@ export function GroupNotesList({ botId, primaryColor }: GroupNotesListProps) {
               {isDeleting ? (
                 <>
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  Đang xóa...
+                  {t("deleting")}
                 </>
               ) : (
-                "Xác nhận xóa"
+                t("confirmDelete")
               )}
             </Button>
           </DialogFooter>

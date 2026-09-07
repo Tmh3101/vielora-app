@@ -35,10 +35,26 @@ export async function createServerClient() {
       setAll(cookiesToSet) {
         try {
           cookiesToSet.forEach(({ name, value, options }) => {
+            const domain = sharedCookieOpts.domain ?? options.domain;
             cookieStore.set(name, value, {
               ...options,
-              domain: sharedCookieOpts.domain ?? options.domain,
+              domain,
             });
+            // Dọn host-only cũ nếu đang dùng shared domain .vielora.vn
+            // để tránh duplicate Cookie header (host-only + domain) gây refresh loop 429
+            if (domain && domain.startsWith(".")) {
+              try {
+                // Xóa bản host-only cũ (nếu có) bằng cách set maxAge 0 không domain
+                cookieStore.set(name, "", {
+                  ...options,
+                  domain: undefined,
+                  maxAge: 0,
+                  expires: new Date(0),
+                });
+              } catch {
+                // ignore
+              }
+            }
           });
         } catch {
           // Ignore cookie writes in contexts where response cookies are immutable.

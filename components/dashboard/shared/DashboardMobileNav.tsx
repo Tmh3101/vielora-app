@@ -4,8 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Book, CreditCard, FileBarChart, HelpCircle, Home, Users } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useTranslations } from "next-intl";
 
 export function DashboardMobileNav() {
+  const t = useTranslations("dashboard.shared.mobileNav");
   const pathname = usePathname();
   const { activeWorkspace } = useWorkspace();
 
@@ -61,7 +63,7 @@ export function DashboardMobileNav() {
               ? "font-semibold text-primary"
               : "text-muted-foreground hover:text-foreground"
           }`}
-          aria-label="Tổng quan"
+          aria-label={t("overview")}
         >
           <Home className="h-5 w-5" />
         </Link>
@@ -72,7 +74,7 @@ export function DashboardMobileNav() {
               ? "font-semibold text-primary"
               : "text-muted-foreground hover:text-foreground"
           }`}
-          aria-label="Kiến thức chung"
+          aria-label={t("knowledge")}
         >
           <Book className="h-5 w-5" />
         </Link>
@@ -84,7 +86,7 @@ export function DashboardMobileNav() {
                 ? "font-semibold text-primary"
                 : "text-muted-foreground hover:text-foreground"
             }`}
-            aria-label="Báo cáo"
+            aria-label={t("reports")}
           >
             <FileBarChart className="h-5 w-5" />
           </Link>
@@ -96,7 +98,7 @@ export function DashboardMobileNav() {
               ? "font-semibold text-primary"
               : "text-muted-foreground hover:text-foreground"
           }`}
-          aria-label="Thành viên"
+          aria-label={t("members")}
         >
           <Users className="h-5 w-5" />
         </Link>
@@ -107,7 +109,7 @@ export function DashboardMobileNav() {
               ? "font-semibold text-primary"
               : "text-muted-foreground hover:text-foreground"
           }`}
-          aria-label="Thanh toán"
+          aria-label={t("upgrade")}
         >
           <CreditCard className="h-5 w-5" />
         </Link>
@@ -118,7 +120,7 @@ export function DashboardMobileNav() {
               ? "font-semibold text-primary"
               : "text-muted-foreground hover:text-foreground"
           }`}
-          aria-label="Hỗ trợ"
+          aria-label={t("support")}
         >
           <HelpCircle className="h-5 w-5" />
         </Link>

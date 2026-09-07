@@ -5,6 +5,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import type { AnalyticsTrendPoint } from "@/lib/services/analytics.service";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { useTranslations } from "next-intl";
 
 export interface DualLineChartProps {
   data: AnalyticsTrendPoint[];
@@ -19,6 +20,7 @@ const CONVERSATIONS_COLOR = "#14b8a6";
  * @returns The card element containing the empty-state view when no data is available, or a dual-line chart plotting `messages` and `conversations` over time.
  */
 export function DualLineChart({ data }: DualLineChartProps) {
+  const t = useTranslations();
   const hasNoData =
     !data ||
     data.length === 0 ||
@@ -27,26 +29,31 @@ export function DualLineChart({ data }: DualLineChartProps) {
   return (
     <Card className="glass border-border/60">
       <CardHeader>
-        <CardTitle>Biểu đồ tương tác</CardTitle>
-        <CardDescription>Tin nhắn người dùng và cuộc hội thoại mới theo thời gian</CardDescription>
+        <CardTitle>{t("dashboard.botDetail.analytics.dualLine.title")}</CardTitle>
+        <CardDescription>{t("dashboard.botDetail.analytics.dualLine.description")}</CardDescription>
       </CardHeader>
       <CardContent>
         {hasNoData ? (
           <div className="flex h-[320px] items-center justify-center text-muted-foreground">
             <div className="max-w-md space-y-2 text-center">
               <Activity className="mx-auto mb-3 h-8 w-8 opacity-50" />
-              <p className="text-sm">Chưa có dữ liệu để hiển thị biểu đồ</p>
+              <p className="text-sm">{t("dashboard.botDetail.analytics.dualLine.empty")}</p>
               <p className="text-xs leading-5">
-                Bot của bạn đã sẵn sàng! Hãy gắn mã nhúng lên website hoặc chat thử tại mục
-                Playground để xem dữ liệu tại đây.
+                {t("dashboard.botDetail.analytics.dualLine.emptyDesc")}
               </p>
             </div>
           </div>
         ) : (
           <ChartContainer
             config={{
-              messages: { label: "Tin nhắn", color: "hsl(var(--primary))" },
-              conversations: { label: "Hội thoại", color: CONVERSATIONS_COLOR },
+              messages: {
+                label: t("dashboard.botDetail.analytics.dualLine.messages"),
+                color: "hsl(var(--primary))",
+              },
+              conversations: {
+                label: t("dashboard.botDetail.analytics.dualLine.conversations"),
+                color: CONVERSATIONS_COLOR,
+              },
             }}
             className="h-[320px] w-full"
           >

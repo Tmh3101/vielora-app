@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ALLOWED_KNOWLEDGE_FILE_EXTENSIONS } from "@/config/knowledge";
 import { validateKnowledgeFile } from "@/lib/helpers";
+import { useTranslations } from "next-intl";
 
 interface KnowledgeFileDropzoneProps {
   files: File[];
@@ -24,6 +25,7 @@ export function KnowledgeFileDropzone({
   maxFiles,
   className,
 }: KnowledgeFileDropzoneProps) {
+  const t = useTranslations("dashboard.botDetail.knowledgeDropzone");
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -36,7 +38,7 @@ export function KnowledgeFileDropzone({
     for (const file of Array.from(nextFiles)) {
       const validation = validateKnowledgeFile(file);
       if (!validation.valid) {
-        setFileError(validation.error ?? "Tệp không hợp lệ.");
+        setFileError(validation.error ?? t("invalidFile"));
         setIsDraggingFile(false);
         return;
       }
@@ -56,7 +58,7 @@ export function KnowledgeFileDropzone({
     const limitedFiles = maxFiles ? uniqueFiles.slice(0, maxFiles) : uniqueFiles;
 
     if (maxFiles && uniqueFiles.length > maxFiles) {
-      setFileError(`Bạn chỉ có thể chọn tối đa ${maxFiles} tệp với số credits hiện tại.`);
+      setFileError(t("maxFiles", { maxFiles: maxFiles! }));
     } else {
       setFileError(null);
     }
@@ -111,10 +113,10 @@ export function KnowledgeFileDropzone({
         } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
       >
         <Upload className="mx-auto mb-3 h-8 w-8 text-primary" />
-        <p className="text-sm font-medium text-foreground">Thả tệp vào đây</p>
-        <p className="mt-1 text-xs text-muted-foreground">hoặc bấm để chọn tệp từ máy tính</p>
+        <p className="text-sm font-medium text-foreground">{t("dropHere")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("orClick")}</p>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Định dạng hỗ trợ: {ALLOWED_KNOWLEDGE_FILE_EXTENSIONS.join(", ")}. Tối đa 10MB.
+          {t("supportedFormats", { extensions: ALLOWED_KNOWLEDGE_FILE_EXTENSIONS.join(", ") })}
         </p>
       </div>
 
@@ -129,9 +131,11 @@ export function KnowledgeFileDropzone({
               onClick={() => removeFile(index)}
             >
               <div className="min-w-0">
-                <p className="truncate font-medium text-foreground">Đã chọn tệp: {file.name}</p>
+                <p className="truncate font-medium text-foreground">
+                  {t("selectedFile", { name: file.name })}
+                </p>
                 <p className="text-muted-foreground">
-                  Kích thước: {(file.size / 1024).toFixed(1)} KB
+                  {t("size", { size: (file.size / 1024).toFixed(1) })}
                 </p>
               </div>
               <Button
@@ -144,7 +148,7 @@ export function KnowledgeFileDropzone({
                   e.stopPropagation();
                   removeFile(index);
                 }}
-                aria-label={`Bỏ chọn ${file.name}`}
+                aria-label={t("removeAria", { name: file.name })}
               >
                 <X className="h-4 w-4" />
               </Button>

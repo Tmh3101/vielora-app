@@ -79,6 +79,7 @@ export async function PATCH(
       contentHtml: content_html,
       contentText: content_text !== undefined ? content_text.trim() : undefined,
       userName: perm.userName,
+      locale: body?.locale || perm.botLocale,
     });
 
     return NextResponse.json({ success: true, data: updated }, { headers: corsHeaders });
@@ -148,11 +149,16 @@ export async function DELETE(
       );
     }
 
+    const queryLocale = req.nextUrl.searchParams.get("locale") || undefined;
+    const body = await req.json().catch(() => ({}));
+    const locale = body?.locale || queryLocale || perm.botLocale;
+
     await deleteGroupNote(supabase, {
       noteId,
       groupId,
       botId: perm.botId,
       userName: perm.userName,
+      locale,
     });
 
     return NextResponse.json(

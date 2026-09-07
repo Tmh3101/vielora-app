@@ -9,7 +9,7 @@ import { Card, CardDescription, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PricingToggle } from "@/components/shared/pricing/PricingToggle";
 import { PricingCard } from "@/components/shared/pricing/PricingCard";
-import { planCTA, planFeatures, planOrder, getPlanTheme } from "@/config/pricing";
+import { planFeatures, planOrder, getPlanTheme } from "@/config/pricing";
 import { comparePlans } from "@/lib/utils/pricing";
 import type { Tables } from "@/lib/supabase/types";
 import { ESubscriptionPlan, ESubscriptionCycle } from "@/types";
@@ -21,6 +21,8 @@ import {
   WorkspaceUpgradeSelector,
   type WorkspaceSelectorItem,
 } from "@/components/dashboard/upgrade/WorkspaceUpgradeSelector";
+import { useTranslations } from "next-intl";
+import { persistActiveWorkspaceId } from "@/hooks/useWorkspace";
 
 type PurchaseTab = "plans" | "credits";
 
@@ -39,7 +41,7 @@ interface UpgradeClientProps {
 
 function setWorkspaceCookie(wsId: string) {
   if (typeof document !== "undefined") {
-    document.cookie = `active_workspace_id=${wsId}; path=/; max-age=2592000; SameSite=Lax`;
+    persistActiveWorkspaceId(wsId);
   }
 }
 
@@ -55,6 +57,7 @@ export default function UpgradeClient({
   workspaceWallet,
   workspaceCreditSummary,
 }: UpgradeClientProps) {
+  const t = useTranslations("dashboard.upgrade");
   const router = useRouter();
   const currentWs =
     userWorkspaces.find((w) => w.id === initialWorkspaceId) || userWorkspaces[0] || null;
@@ -62,6 +65,23 @@ export default function UpgradeClient({
   const [billingCycle, setBillingCycle] = useState<ESubscriptionCycle>(initialBillingCycle);
   const [purchaseTab, setPurchaseTab] = useState<PurchaseTab>("plans");
   const processingPlan: string | null = null;
+
+  const translateFeature = (key: string): string => {
+    const featureMap: Record<string, string> = {
+      leadForm: t("featureLeadForm"),
+      mobileApp: t("featureMobileApp"),
+      customizeKnowledge: t("featureCustomizeKnowledge"),
+      suggestedQuestions: t("featureSuggestedQuestions"),
+      customizePersonality: t("featureCustomizePersonality"),
+      smartHomepage: t("featureSmartHomepage"),
+      voiceChat: t("featureVoiceChat"),
+      groupChatAI: t("featureGroupChatAI"),
+      exportReport: t("featureExportReport"),
+      customBotLimit: t("featureCustomBotLimit"),
+      customMonthlyCredits: t("featureCustomMonthlyCredits"),
+    };
+    return featureMap[key] || key;
+  };
 
   const handleWorkspaceChange = (slug: string, wsId: string) => {
     setSelectedSlug(slug);
@@ -80,14 +100,14 @@ export default function UpgradeClient({
     }
 
     if (planCode === ESubscriptionPlan.Free) {
-      toast.info("Gói Free chỉ được tự động kích hoạt khi gói trả phí hết hạn");
+      toast.info(t("freePlanInfo"));
       return;
     }
 
     let action = PaymentAction.Upgrade;
     if (currentPlan && currentPlan.code === planCode) {
       if (currentSubscription?.billing_cycle !== billingCycle) {
-        toast.error("Vui lòng chọn đúng chu kỳ để gia hạn");
+        toast.error(t("selectCorrectCycle"));
         return;
       }
       action = PaymentAction.Renew;
@@ -143,7 +163,9 @@ export default function UpgradeClient({
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">Gói hiện tại</span>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {t("currentPlan")}
+                    </span>
                     <span
                       className={`rounded-full border px-3 py-0.5 text-xs font-bold uppercase tracking-wider ${getPlanTheme(planCode).badgeClass}`}
                     >
@@ -153,22 +175,26 @@ export default function UpgradeClient({
                   <CardDescription className="mt-1 text-xs sm:text-sm">
                     {currentSubscription?.current_period_end &&
                       planCode !== ESubscriptionPlan.Free && (
-                        <>Hết hạn: {formatPaymentDate(currentSubscription.current_period_end)}</>
+                        <>
+                          {t("planExpired")}{" "}
+                          {formatPaymentDate(currentSubscription.current_period_end)}
+                        </>
                       )}
                   </CardDescription>
                 </div>
               </div>
               <div className="hidden text-right sm:block">
-                <p className="text-xs font-medium text-muted-foreground">Giới hạn hiện tại</p>
+                <p className="text-xs font-medium text-muted-foreground">{t("currentPlan")}</p>
                 <p className="text-sm font-semibold text-foreground">
-                  {currentSubscription?.bots_limit_override ?? currentPlan?.bots_limit ?? 1} bot tối
-                  đa
+                  {currentSubscription?.bots_limit_override ?? currentPlan?.bots_limit ?? 1}{" "}
+                  {t("botsLimit")}
                 </p>
                 {workspaceWallet != null && (
                   <div className="mt-2">
                     <span className="inline-block rounded-full border border-border bg-muted/60 px-3 py-0.5 text-xs font-medium text-muted-foreground">
-                      Credits: {workspaceCreditSummary?.subscriptionCredits ?? 0} (subscription) +{" "}
-                      {workspaceCreditSummary?.paygCredits ?? 0} (PAYG)
+                      {t("creditsBalance")} {workspaceCreditSummary?.subscriptionCredits ?? 0} (
+                      {t("subscriptionCredits")}) + {workspaceCreditSummary?.paygCredits ?? 0} (
+                      {t("paygCredits")})
                     </span>
                   </div>
                 )}
@@ -190,14 +216,14 @@ export default function UpgradeClient({
               className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-6 py-2 text-xs font-semibold transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
             >
               <Package className="h-4 w-4" />
-              Gói dịch vụ
+              {t("tabPlans")}
             </TabsTrigger>
             <TabsTrigger
               value="credits"
               className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-6 py-2 text-xs font-semibold transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
             >
               <CreditCard className="h-4 w-4" />
-              Nạp Credits
+              {t("tabCredits")}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -205,10 +231,8 @@ export default function UpgradeClient({
         <TabsContent value="plans" className="mt-0 space-y-8">
           <section className="space-y-8">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-foreground">Gói dịch vụ</h2>
-              <p className="mt-2 text-muted-foreground">
-                Chọn gói phù hợp với nhu cầu chatbot và credit hàng tháng.
-              </p>
+              <h2 className="text-2xl font-bold text-foreground">{t("title")}</h2>
+              <p className="mt-2 text-muted-foreground">{t("subtitle")}</p>
             </div>
 
             <div className="flex justify-center">
@@ -219,11 +243,11 @@ export default function UpgradeClient({
               {activePlans.map((plan) => {
                 const isEnterprise = plan.code === ESubscriptionPlan.Enterprise;
                 const features = isEnterprise
-                  ? (planFeatures.dashboard[plan.code] ?? [])
+                  ? (planFeatures.dashboard[plan.code] ?? []).map(translateFeature)
                   : [
                       `${plan.monthly_credits.toLocaleString()} credits/tháng`,
                       `${plan.bots_limit} chatbot`,
-                      ...(planFeatures.dashboard[plan.code] ?? []),
+                      ...(planFeatures.dashboard[plan.code] ?? []).map(translateFeature),
                     ];
 
                 const { isCurrentPlan, isDowngrade, isUpgrade } = comparePlans(
@@ -251,21 +275,21 @@ export default function UpgradeClient({
                 const isPopular = plan.code === ESubscriptionPlan.Standard && !isCurrentPlan;
                 const isHighlighted = initialPlanCode === plan.code;
 
-                let cta = planCTA.dashboard[plan.code] ?? "Chọn gói";
+                let cta = t("ctaSelect");
                 if (isEnterprise) {
-                  cta = isCurrentPlan ? "Thay đổi / Gia hạn gói" : "Cấu hình gói";
+                  cta = isCurrentPlan ? t("ctaChange") : t("ctaConfigure");
                 } else if (isCurrentPlan) {
                   if (isSamePlanDifferentCycle) {
-                    cta = "Sai chu kỳ gia hạn";
+                    cta = t("ctaWrongCycle");
                   } else if (hasQueuedCycle) {
-                    cta = "Đã có sẵn chu kỳ tiếp";
+                    cta = t("ctaQueued");
                   } else {
-                    cta = "Gia hạn gói";
+                    cta = t("ctaRenew");
                   }
                 } else if (isDowngrade) {
-                  cta = "Chờ hết hạn để hạ cấp";
+                  cta = t("ctaDowngrade");
                 } else if (isPaidPlan && isUpgrade) {
-                  cta = isYearlyToMonthly ? "Không hỗ trợ nâng xuống Tháng" : "Nâng cấp";
+                  cta = isYearlyToMonthly ? t("ctaDowngradeYearly") : t("ctaUpgrade");
                 }
 
                 return (
@@ -292,11 +316,8 @@ export default function UpgradeClient({
         <TabsContent value="credits" className="mt-0">
           <section>
             <div className="mb-6 text-center">
-              <h2 className="text-2xl font-bold text-foreground">Nạp Credit - Pay-as-you-go</h2>
-              <p className="mt-2 text-muted-foreground">
-                Cần thêm credit nhưng không muốn đổi gói? Mua lẻ credit không giới hạn thời gian sử
-                dụng.
-              </p>
+              <h2 className="text-2xl font-bold text-foreground">{t("creditsTitle")}</h2>
+              <p className="mt-2 text-muted-foreground">{t("creditsDesc")}</p>
             </div>
 
             <div className="grid gap-6 sm:grid-cols-3">
@@ -323,11 +344,11 @@ export default function UpgradeClient({
                       </div>
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <span>Không hết hạn</span>
+                        <span>{t("noExpiry")}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <span>Cộng dồn tự động</span>
+                        <span>{t("autoAccumulate")}</span>
                       </div>
                     </div>
                     <Button
@@ -335,7 +356,7 @@ export default function UpgradeClient({
                       className="mt-6 w-full bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
                       variant="ghost"
                     >
-                      Mua gói này
+                      {t("buyNow")}
                     </Button>
                   </div>
                 </Card>
@@ -346,9 +367,9 @@ export default function UpgradeClient({
       </Tabs>
       <div className="mt-12 text-center">
         <p className="text-muted-foreground">
-          Có câu hỏi?{" "}
+          {t("haveQuestions")}{" "}
           <a href="mailto:contact@vielora.vn" className="text-primary hover:underline">
-            Liên hệ support
+            {t("contactSupport")}
           </a>
         </p>
       </div>

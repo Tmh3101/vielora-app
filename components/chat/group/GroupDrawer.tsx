@@ -37,6 +37,8 @@ import { NoteDetailModal } from "@/components/chat/group/NoteDetailModal";
 import type { GroupMember } from "@/hooks/useGroupChat";
 import type { GroupNoteRow } from "@/types/group-chat";
 import { parseMarkdown } from "@/lib/helpers/chat-helpers";
+import { ELanguage } from "@/types/enums";
+import { getWidgetTranslations, getLocaleDateTag } from "@/lib/i18n/widget-translations";
 
 export interface GroupDrawerProps {
   isOpen?: boolean;
@@ -63,6 +65,7 @@ export interface GroupDrawerProps {
   onPinNoteClick?: (note: GroupNoteRow) => void;
   onUnpinNoteClick?: (note: GroupNoteRow) => void;
   onToggleMemberNotePermission?: (memberId: string, enabled: boolean) => Promise<void>;
+  locale?: ELanguage | string;
 }
 
 export function GroupDrawer({
@@ -89,7 +92,9 @@ export function GroupDrawer({
   onDeleteNoteClick = () => {},
   onPinNoteClick,
   onUnpinNoteClick,
+  locale = ELanguage.Vi,
 }: GroupDrawerProps) {
+  const t = getWidgetTranslations(locale);
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
   const [isLeaving, setIsLeaving] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
@@ -192,7 +197,7 @@ export function GroupDrawer({
                 BOT
               </span>
             </div>
-            <p className="text-[10px] text-muted-foreground">Trợ lý AI</p>
+            <p className="text-[10px] text-muted-foreground">{t.aiAssistant}</p>
           </div>
         </div>
       </div>
@@ -201,7 +206,7 @@ export function GroupDrawer({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between px-1">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Thành viên nhóm ({members.length})
+            {t.groupMembers} ({members.length})
           </p>
         </div>
 
@@ -211,8 +216,8 @@ export function GroupDrawer({
             const displayName =
               member.display_name ||
               member.full_name ||
-              (member.email ? member.email.split("@")[0] : "Thành viên");
-            const roleLabel = member.role_label || "Thành viên";
+              (member.email ? member.email.split("@")[0] : t.defaultMember);
+            const roleLabel = member.role_label || t.defaultMember;
             const initial = displayName.charAt(0).toUpperCase();
 
             return (
@@ -232,7 +237,7 @@ export function GroupDrawer({
                     <div className="flex items-center gap-1.5">
                       <p className="truncate text-xs font-medium text-foreground">
                         {displayName}
-                        {isMe && <span className="ml-1 text-[10px] text-primary">(Bạn)</span>}
+                        {isMe && <span className="ml-1 text-[10px] text-primary">({t.you})</span>}
                       </p>
                     </div>
                     <p className="truncate text-[10px] text-muted-foreground">{roleLabel}</p>
@@ -243,7 +248,7 @@ export function GroupDrawer({
                 <div className="flex shrink-0 items-center gap-1">
                   {Boolean(member.can_create_note || member.can_pin_knowledge) && (
                     <span
-                      title="Có quyền quản lý & tạo ghi chú"
+                      title={t.canManageNotesTooltip}
                       className="rounded-md bg-amber-500/10 p-1 text-amber-600 dark:bg-amber-950 dark:text-amber-400"
                     >
                       <StickyNote className="h-3 w-3" />
@@ -251,7 +256,7 @@ export function GroupDrawer({
                   )}
                   {Boolean(member.can_export_report || member.canExportReport) && (
                     <span
-                      title="Có quyền xuất báo cáo"
+                      title={t.canExportReportTooltip}
                       className="rounded-md bg-blue-500/10 p-1 text-blue-600 dark:bg-blue-950 dark:text-blue-400"
                     >
                       <FileDown className="h-3 w-3" />
@@ -268,7 +273,7 @@ export function GroupDrawer({
       {canExportReport && onExportReportClick && (
         <div className="space-y-1.5 pt-1">
           <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Báo cáo
+            {t.exportReport}
           </p>
 
           <button
@@ -285,11 +290,9 @@ export function GroupDrawer({
               </div>
               <div className="truncate">
                 <div className="flex items-center gap-1.5">
-                  <p className="truncate text-xs font-medium text-foreground">Xuất báo cáo</p>
+                  <p className="truncate text-xs font-medium text-foreground">{t.exportReport}</p>
                 </div>
-                <p className="truncate text-[10px] text-muted-foreground">
-                  Tạo tài liệu tổng hợp bot
-                </p>
+                <p className="truncate text-[10px] text-muted-foreground">{t.exportReportDesc}</p>
               </div>
             </div>
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
@@ -307,8 +310,8 @@ export function GroupDrawer({
             variant="ghost"
             size="icon"
             className="h-9 w-9 shrink-0 rounded-full text-current transition-colors hover:bg-white/20 active:scale-95"
-            title="Xem thông tin nhóm & ghi chú"
-            aria-label="Xem thông tin nhóm & ghi chú"
+            title={`${t.groupInfo} & ${t.notesTitle.toLowerCase()}`}
+            aria-label={`${t.groupInfo} & ${t.notesTitle.toLowerCase()}`}
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -317,7 +320,7 @@ export function GroupDrawer({
         <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-sm">
           {/* Header */}
           <SheetHeader className="border-b border-border/60 bg-muted/20 px-4 py-3">
-            <SheetTitle className="text-sm font-semibold">Thông tin nhóm</SheetTitle>
+            <SheetTitle className="text-sm font-semibold">{t.groupInfo}</SheetTitle>
           </SheetHeader>
 
           {/* Body Content with Tabs */}
@@ -334,14 +337,16 @@ export function GroupDrawer({
                     className="flex items-center gap-1.5 text-xs font-medium"
                   >
                     <Users className="h-3.5 w-3.5" />
-                    <span>Thành viên ({members.length})</span>
+                    <span>
+                      {t.groupMembers} ({members.length})
+                    </span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="notes"
                     className="flex items-center gap-1.5 text-xs font-medium"
                   >
                     <StickyNote className="h-3.5 w-3.5" />
-                    <span>Ghi chú</span>
+                    <span>{t.notesTitle}</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -363,7 +368,7 @@ export function GroupDrawer({
                     <div className="relative">
                       <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/70" />
                       <Input
-                        placeholder="Tìm kiếm ghi chú..."
+                        placeholder={t.searchNotes}
                         value={noteSearchQuery}
                         onChange={(e) => setNoteSearchQuery(e.target.value)}
                         className="h-8 rounded-xl border-border/60 bg-muted/40 pl-8 pr-7 text-xs transition-colors placeholder:text-muted-foreground/60 focus:bg-background"
@@ -373,7 +378,7 @@ export function GroupDrawer({
                           type="button"
                           onClick={() => setNoteSearchQuery("")}
                           className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-                          title="Xóa tìm kiếm"
+                          title={t.clearSearch}
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -394,7 +399,7 @@ export function GroupDrawer({
                             : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
                         }`}
                       >
-                        Tất cả
+                        {t.allNotes}
                       </button>
                       <button
                         type="button"
@@ -408,7 +413,7 @@ export function GroupDrawer({
                             : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
                         }`}
                       >
-                        Hôm nay
+                        {t.todayNotes}
                       </button>
                       <button
                         type="button"
@@ -422,7 +427,7 @@ export function GroupDrawer({
                             : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
                         }`}
                       >
-                        7 ngày qua
+                        {t.sevenDaysNotes}
                       </button>
                       <Popover>
                         <PopoverTrigger asChild>
@@ -437,11 +442,11 @@ export function GroupDrawer({
                             <CalendarIcon className="h-3 w-3" />
                             <span>
                               {dateFilter === "custom" && customDate
-                                ? customDate.toLocaleDateString("vi-VN", {
+                                ? customDate.toLocaleDateString(getLocaleDateTag(locale), {
                                     day: "2-digit",
                                     month: "2-digit",
                                   })
-                                : "Chọn ngày"}
+                                : t.pickDate}
                             </span>
                           </button>
                         </PopoverTrigger>
@@ -466,7 +471,7 @@ export function GroupDrawer({
                   {totalFilteredCount === 0 && (noteSearchQuery || dateFilter !== "all") ? (
                     <div className="rounded-xl border border-dashed border-border/80 p-6 text-center text-xs text-muted-foreground">
                       <StickyNote className="mx-auto mb-1.5 h-6 w-6 opacity-40" />
-                      <p>Không tìm thấy ghi chú nào phù hợp.</p>
+                      <p>{t.noMatchingNotes}</p>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -477,7 +482,7 @@ export function GroupDrawer({
                         }}
                         className="mt-2 h-7 text-xs text-primary"
                       >
-                        Đặt lại bộ lọc
+                        {t.resetFilter}
                       </Button>
                     </div>
                   ) : null}
@@ -486,7 +491,7 @@ export function GroupDrawer({
                   {notesList.length === 0 && !activeNote ? (
                     <div className="rounded-xl border border-dashed border-border/80 p-6 text-center text-xs text-muted-foreground">
                       <StickyNote className="mx-auto mb-1.5 h-7 w-7 opacity-40" />
-                      <p>Nhóm chưa có ghi chú nào.</p>
+                      <p>{t.notesEmpty}</p>
                     </div>
                   ) : null}
 
@@ -510,7 +515,7 @@ export function GroupDrawer({
                             }}
                           >
                             <Pin className="h-3 w-3" />
-                            Đang ghim
+                            {t.pinned}
                           </span>
                         </div>
 
@@ -525,7 +530,7 @@ export function GroupDrawer({
                                 e.stopPropagation();
                                 onUnpinNoteClick(filteredActiveNote);
                               }}
-                              title="Bỏ ghim khỏi banner"
+                              title={t.unpin}
                             >
                               <PinOff className="h-3.5 w-3.5" />
                             </Button>
@@ -564,7 +569,7 @@ export function GroupDrawer({
                         <span>
                           {new Date(
                             filteredActiveNote.updated_at || filteredActiveNote.created_at
-                          ).toLocaleDateString("vi-VN", {
+                          ).toLocaleDateString(getLocaleDateTag(locale), {
                             hour: "2-digit",
                             minute: "2-digit",
                             day: "2-digit",
@@ -580,7 +585,7 @@ export function GroupDrawer({
                   {filteredHistoryNotes.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Lịch sử ghi chú nhóm
+                        {t.groupNotes}
                       </p>
 
                       {filteredHistoryNotes.map((n) => (
@@ -613,7 +618,7 @@ export function GroupDrawer({
                                   e.stopPropagation();
                                   onPinNoteClick(n);
                                 }}
-                                title="Ghim lại lên banner"
+                                title={t.repin}
                               >
                                 <Pin className="h-3 w-3" />
                               </Button>
@@ -642,13 +647,16 @@ export function GroupDrawer({
                           <div className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
                             <Clock className="h-3 w-3" />
                             <span>
-                              {new Date(n.updated_at || n.created_at).toLocaleDateString("vi-VN", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                day: "2-digit",
-                                month: "2-digit",
-                                year: "numeric",
-                              })}
+                              {new Date(n.updated_at || n.created_at).toLocaleDateString(
+                                getLocaleDateTag(locale),
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                }
+                              )}
                             </span>
                           </div>
                         </div>
@@ -671,12 +679,12 @@ export function GroupDrawer({
                         {isLoadingNotes ? (
                           <>
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            <span>Đang tải thêm...</span>
+                            <span>{t.loading}...</span>
                           </>
                         ) : (
                           <>
                             <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                            <span>Xem thêm ghi chú</span>
+                            <span>{t.loadOlderMessages}</span>
                           </>
                         )}
                       </Button>
@@ -700,10 +708,10 @@ export function GroupDrawer({
               disabled={isLeaving}
               className="h-8 gap-1.5 rounded-lg px-3 text-xs font-medium text-destructive transition-all hover:bg-destructive/10 hover:text-destructive active:scale-95 disabled:opacity-50"
               onClick={() => setLeaveConfirmOpen(true)}
-              title="Rời khỏi nhóm chat"
+              title={t.leaveButton}
             >
               <LogOut className="h-3.5 w-3.5" />
-              <span>Rời nhóm</span>
+              <span>{t.leaveButton}</span>
             </Button>
           </div>
         </SheetContent>
@@ -717,15 +725,12 @@ export function GroupDrawer({
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-400">
                 <LogOut className="h-4 w-4" />
               </div>
-              <span>Rời khỏi nhóm chat?</span>
+              <span>{t.leaveGroupTitle}</span>
             </DialogTitle>
           </DialogHeader>
 
           <div className="py-1 text-xs leading-relaxed text-muted-foreground">
-            <p>
-              Bạn có chắc chắn muốn rời khỏi nhóm chat này không? Sau khi rời nhóm, bạn sẽ không
-              nhận được tin nhắn mới từ nhóm trừ khi được mời lại.
-            </p>
+            <p>{t.leaveGroupDesc}</p>
           </div>
 
           <DialogFooter className="gap-2 pt-2 sm:gap-0">
@@ -737,7 +742,7 @@ export function GroupDrawer({
               disabled={isLeaving}
               className="text-xs transition-colors duration-200 hover:border-red-600 hover:bg-white hover:text-red-600 dark:hover:border-red-500 dark:hover:bg-background dark:hover:text-red-400"
             >
-              Ở lại
+              {t.stay}
             </Button>
             <Button
               type="button"
@@ -752,7 +757,7 @@ export function GroupDrawer({
               ) : (
                 <LogOut className="h-3 w-3" />
               )}
-              <span>{isLeaving ? "Đang rời..." : "Xác nhận rời"}</span>
+              <span>{isLeaving ? t.loading : t.confirmLeave}</span>
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -766,6 +771,7 @@ export function GroupDrawer({
         activeNoteId={activeNote?.id}
         canManageNote={canCreateNote}
         primaryColor={primaryColor}
+        locale={locale}
         onPin={onPinNoteClick}
         onUnpin={onUnpinNoteClick}
         onEdit={onEditNoteClick}

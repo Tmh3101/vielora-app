@@ -5,6 +5,8 @@ import { Pin, PinOff, ChevronDown, ChevronUp, Edit3, Trash2, X, Clock } from "lu
 import { Button } from "@/components/ui/button";
 import type { GroupNoteRow } from "@/types/group-chat";
 import { parseMarkdown } from "@/lib/helpers/chat-helpers";
+import { ELanguage } from "@/types/enums";
+import { getWidgetTranslations, getLocaleDateTag } from "@/lib/i18n/widget-translations";
 
 export interface NoteBannerProps {
   note: GroupNoteRow | null;
@@ -15,6 +17,7 @@ export interface NoteBannerProps {
   onDelete?: (note: GroupNoteRow) => void;
   onOpenNotesDrawer?: () => void;
   onToggleCollapse?: (noteId: string, collapsed: boolean) => void;
+  locale?: ELanguage | string;
 }
 
 function subscribeNoteSeen(callback: () => void) {
@@ -35,7 +38,9 @@ export function NoteBanner({
   onDelete,
   // onOpenNotesDrawer,
   onToggleCollapse: _onToggleCollapse,
+  locale = ELanguage.Vi,
 }: NoteBannerProps) {
+  const t = getWidgetTranslations(locale);
   const [isExpanded, setIsExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -94,13 +99,16 @@ export function NoteBanner({
     return null;
   }
 
-  const formattedDate = new Date(note.updated_at || note.created_at).toLocaleDateString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  const formattedDate = new Date(note.updated_at || note.created_at).toLocaleDateString(
+    getLocaleDateTag(locale),
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }
+  );
 
   return (
     <div className="z-20 w-full px-4 sm:px-6" ref={containerRef}>
@@ -119,7 +127,7 @@ export function NoteBanner({
             onClick={handleToggle}
             role="button"
             tabIndex={0}
-            title={isExpanded ? "Thu gọn ghi chú" : "Xem chi tiết ghi chú nổi"}
+            title={isExpanded ? t.close : t.viewDetails}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
@@ -167,7 +175,7 @@ export function NoteBanner({
                         color: primaryColor,
                       }}
                     >
-                      Mới
+                      {t.newBadge}
                     </span>
                   </div>
                 )}
@@ -184,8 +192,8 @@ export function NoteBanner({
                 className="h-7 w-7 rounded-lg transition-all duration-150 hover:bg-black/5 hover:opacity-90 active:scale-95 dark:hover:bg-white/10"
                 style={{ color: primaryColor }}
                 onClick={() => onEdit(note)}
-                title="Sửa ghi chú"
-                aria-label="Sửa ghi chú"
+                title={t.edit}
+                aria-label={t.edit}
               >
                 <Edit3 className="h-3.5 w-3.5" />
               </Button>
@@ -198,8 +206,8 @@ export function NoteBanner({
                 className="h-7 w-7 rounded-lg transition-all duration-150 hover:bg-black/5 hover:opacity-90 active:scale-95 dark:hover:bg-white/10"
                 style={{ color: primaryColor }}
                 onClick={() => onUnpin(note)}
-                title="Bỏ ghim khỏi banner"
-                aria-label="Bỏ ghim khỏi banner"
+                title={t.unpin}
+                aria-label={t.unpin}
               >
                 <PinOff className="h-3.5 w-3.5" />
               </Button>
@@ -211,8 +219,8 @@ export function NoteBanner({
                 size="icon"
                 className="h-7 w-7 rounded-lg text-rose-600 transition-all duration-150 hover:bg-rose-500/10 hover:text-rose-700 active:scale-95 dark:text-rose-400 dark:hover:bg-rose-950/50"
                 onClick={() => onDelete(note)}
-                title="Xóa ghi chú"
-                aria-label="Xóa ghi chú"
+                title={t.delete}
+                aria-label={t.delete}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
@@ -224,7 +232,8 @@ export function NoteBanner({
               className="h-7 w-7 rounded-lg transition-all duration-150 hover:bg-black/5 hover:opacity-90 active:scale-95 dark:hover:bg-white/10"
               style={{ color: primaryColor }}
               onClick={handleToggle}
-              title={isExpanded ? "Đóng ghi chú" : "Xem chi tiết"}
+              title={isExpanded ? t.close : t.viewDetails}
+              aria-label={isExpanded ? t.close : t.viewDetails}
             >
               {isExpanded ? (
                 <ChevronUp className="h-3.5 w-3.5" />
@@ -266,7 +275,7 @@ export function NoteBanner({
                       }}
                     >
                       <Pin className="h-3 w-3" />
-                      Đang ghim
+                      {t.pinned}
                     </span>
                     <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                       <Clock className="h-3 w-3" />
@@ -283,7 +292,8 @@ export function NoteBanner({
                   size="icon"
                   className="h-7 w-7 rounded-lg text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95"
                   onClick={handleToggle}
-                  title="Đóng ghi chú nổi"
+                  title={t.close}
+                  aria-label={t.close}
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -322,7 +332,7 @@ export function NoteBanner({
                       }}
                     >
                       <PinOff className="h-3 w-3" />
-                      <span>Bỏ ghim</span>
+                      <span>{t.unpin}</span>
                     </Button>
                   )}
 
@@ -338,7 +348,7 @@ export function NoteBanner({
                       }}
                     >
                       <Edit3 className="h-3 w-3" />
-                      <span>Chỉnh sửa</span>
+                      <span>{t.edit}</span>
                     </Button>
                   )}
 
@@ -350,7 +360,7 @@ export function NoteBanner({
                     style={{ backgroundColor: primaryColor }}
                     onClick={handleToggle}
                   >
-                    Đóng
+                    {t.close}
                   </Button>
                 </div>
               </div>

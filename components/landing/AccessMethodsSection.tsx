@@ -18,10 +18,12 @@ import {
   Pin,
   SquarePen,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type AccessTab = "embed" | "standalone" | "group";
 
 export default function AccessMethodsSection() {
+  const t = useTranslations("accessMethods");
   const [activeTab, setActiveTab] = useState<AccessTab>("embed");
   const [isWidgetOpen, setIsWidgetOpen] = useState(true);
   const shouldReduceMotion = useReducedMotion();
@@ -43,7 +45,7 @@ export default function AccessMethodsSection() {
             transition={{ duration: 0.4 }}
             className="heading-premium mb-2.5 text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl"
           >
-            Đa dạng <span className="text-gradient-animated">phương thức tiếp cận</span> khách hàng
+            {t("heading")}
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 14 }}
@@ -52,17 +54,16 @@ export default function AccessMethodsSection() {
             transition={{ duration: 0.4, delay: 0.08 }}
             className="text-balance text-xs text-muted-foreground sm:text-sm"
           >
-            Linh hoạt triển khai chatbot trên mọi điểm chạm: từ nhúng website, trang chat độc lập
-            đến hội thoại nhóm
+            {t("subheading")}
           </motion.p>
 
           {/* Compact Segmented Control */}
           <div className="mt-6 flex justify-center">
             <div className="shadow-xs inline-flex rounded-xl border border-border/60 bg-background/80 p-1 backdrop-blur-md">
               {[
-                { id: "embed", label: "Nhúng Website", icon: Code2 },
-                { id: "standalone", label: "Trang Chat Độc Lập", icon: Globe },
-                { id: "group", label: "Nhóm Chat", icon: Users },
+                { id: "embed", label: t("tabs.embed"), icon: Code2 },
+                { id: "standalone", label: t("tabs.standalone"), icon: Globe },
+                { id: "group", label: t("tabs.group"), icon: Users },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -187,8 +188,12 @@ export default function AccessMethodsSection() {
                                 <Bot className="h-4 w-4 text-white" />
                               </div>
                               <div>
-                                <h4 className="text-xs font-bold text-white">Trợ lý AI Vielora</h4>
-                                <p className="text-[10px] text-white/80">Trực tuyến 24/7</p>
+                                <h4 className="text-xs font-bold text-white">
+                                  {t("mockups.embed.botName")}
+                                </h4>
+                                <p className="text-[10px] text-white/80">
+                                  {t("mockups.embed.online247")}
+                                </p>
                               </div>
                             </div>
                             <button
@@ -204,34 +209,32 @@ export default function AccessMethodsSection() {
                             {/* Bot Welcome Message */}
                             <div className="flex justify-start">
                               <div className="rounded-tl-xs max-w-[85%] rounded-2xl bg-muted/70 p-2.5 text-foreground">
-                                Xin chào! Tôi có thể hỗ trợ giải đáp thắc mắc về sản phẩm hoặc gửi
-                                báo giá nhanh cho bạn nhé?
+                                {t("mockups.embed.welcomeMsg")}
                               </div>
                             </div>
 
                             {/* User Question */}
                             <div className="flex justify-end">
                               <div className="rounded-tr-xs max-w-[85%] rounded-2xl bg-primary p-2.5 text-primary-foreground">
-                                Tôi muốn tư vấn bảng giá gói Pro
+                                {t("mockups.embed.userMsg")}
                               </div>
                             </div>
 
                             {/* Bot Answer */}
                             <div className="flex justify-start">
                               <div className="rounded-tl-xs max-w-[85%] rounded-2xl bg-muted/70 p-2.5 text-foreground">
-                                Gói Pro có giá 1.499.000đ/tháng, bao gồm đầy đủ tính năng Smart
-                                Homepage, Group Chat và tích hợp đa nền tảng không giới hạn.
+                                {t("mockups.embed.botAnswer")}
                               </div>
                             </div>
                           </div>
 
-                          {/* Suggested Question Pills (No border-t, bg matches chat card) */}
+                          {/* Suggested Question Pills */}
                           <div className="flex gap-1.5 overflow-x-auto px-3 py-1.5 text-[10px]">
                             <span className="shrink-0 cursor-pointer rounded-full border border-border/70 bg-muted/40 px-2.5 py-1 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
-                              Tính năng nổi bật
+                              {t("mockups.embed.suggestFeatures")}
                             </span>
                             <span className="shrink-0 cursor-pointer rounded-full border border-border/70 bg-muted/40 px-2.5 py-1 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
-                              Đặt lịch hẹn
+                              {t("mockups.embed.suggestSchedule")}
                             </span>
                           </div>
 
@@ -240,7 +243,7 @@ export default function AccessMethodsSection() {
                             <div className="shadow-2xs flex items-center gap-1.5 rounded-xl border border-border/80 bg-background/90 px-2 py-1">
                               <input
                                 disabled
-                                placeholder="Nhập tin nhắn..."
+                                placeholder={t("mockups.embed.inputPlaceholder")}
                                 className="outline-hidden flex-1 bg-transparent px-1 text-xs text-foreground placeholder:text-muted-foreground"
                               />
                               <div className="shadow-2xs flex h-6 w-6 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground">
@@ -259,7 +262,7 @@ export default function AccessMethodsSection() {
                     <button
                       onClick={() => setIsWidgetOpen((p) => !p)}
                       className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-xl shadow-primary/30 transition-transform hover:scale-105 active:scale-95"
-                      title="Mở chatbot"
+                      title={t("mockups.embed.launcherTooltip")}
                     >
                       {isWidgetOpen ? (
                         <X className="h-5 w-5" />
@@ -272,7 +275,7 @@ export default function AccessMethodsSection() {
               </motion.div>
             )}
 
-            {/* ================= TAB 2: STANDALONE PORTAL (DUAL SCREEN: WEB + APP) ================= */}
+            {/* ================= TAB 2: STANDALONE PORTAL (DUAL SCREEN: WEB + MOBILE) ================= */}
             {activeTab === "standalone" && (
               <motion.div
                 key="standalone-showcase"
@@ -298,7 +301,7 @@ export default function AccessMethodsSection() {
                         </span>
                       </div>
                       <span className="flex items-center gap-1 text-[10px] font-bold text-primary">
-                        <Globe className="h-3 w-3" /> Màn hình Web
+                        <Globe className="h-3 w-3" /> {t("mockups.standalone.webScreen")}
                       </span>
                     </div>
 
@@ -312,10 +315,10 @@ export default function AccessMethodsSection() {
                           </div>
                           <div>
                             <h4 className="text-xs font-bold leading-tight text-white">
-                              Trợ lý AI Vielora
+                              {t("mockups.standalone.botName")}
                             </h4>
                             <p className="text-[10px] text-white/80">
-                              Trực tuyến • Phản hồi tức thì
+                              {t("mockups.standalone.onlineInstant")}
                             </p>
                           </div>
                         </div>
@@ -333,30 +336,27 @@ export default function AccessMethodsSection() {
                       <div className="flex-1 space-y-2.5 p-4 text-xs">
                         <div className="flex justify-start">
                           <div className="rounded-tl-xs shadow-xs max-w-[85%] rounded-2xl border border-border/40 bg-card p-3 text-foreground">
-                            Chào bạn! Tôi là cổng trợ lý AI trực tiếp. Tôi có thể hỗ trợ bạn thông
-                            tin gì hôm nay?
+                            {t("mockups.standalone.webWelcome")}
                           </div>
                         </div>
                         <div className="flex justify-end">
                           <div className="rounded-tr-xs shadow-xs max-w-[85%] rounded-2xl bg-primary p-3 text-primary-foreground">
-                            Cho tôi xem bảng so sánh tính năng giữa các gói
+                            {t("mockups.standalone.webUserMsg1")}
                           </div>
                         </div>
                         <div className="flex justify-start">
                           <div className="rounded-tl-xs shadow-xs max-w-[85%] rounded-2xl border border-border/40 bg-card p-3 text-foreground">
-                            Gói Pro bao gồm đầy đủ tính năng Smart Homepage tự động điều hướng và
-                            cài đặt ứng dụng PWA Mobile App.
+                            {t("mockups.standalone.webBotMsg1")}
                           </div>
                         </div>
                         <div className="flex justify-end">
                           <div className="rounded-tr-xs shadow-xs max-w-[85%] rounded-2xl bg-primary p-3 text-primary-foreground">
-                            Gói Pro có giới hạn số lượng câu hỏi không?
+                            {t("mockups.standalone.webUserMsg2")}
                           </div>
                         </div>
                         <div className="flex justify-start">
                           <div className="rounded-tl-xs shadow-xs max-w-[85%] rounded-2xl border border-border/40 bg-card p-3 text-foreground">
-                            Không giới hạn lượt truy cập của khách hàng, tốc độ xử lý luôn ưu tiên
-                            cao nhất bạn nhé!
+                            {t("mockups.standalone.webBotMsg2")}
                           </div>
                         </div>
                       </div>
@@ -364,13 +364,13 @@ export default function AccessMethodsSection() {
                       {/* Suggested Questions */}
                       <div className="flex gap-2 overflow-x-auto border-t border-border/40 bg-background/80 px-4 py-2 text-[10px]">
                         <span className="shrink-0 rounded-full border border-border bg-card px-3 py-1 text-muted-foreground">
-                          Bảng giá chi tiết
+                          {t("mockups.standalone.suggestPricing")}
                         </span>
                         <span className="shrink-0 rounded-full border border-border bg-card px-3 py-1 text-muted-foreground">
-                          Đặt lịch Demo 1-1
+                          {t("mockups.standalone.suggestDemo")}
                         </span>
                         <span className="shrink-0 rounded-full border border-border bg-card px-3 py-1 text-muted-foreground">
-                          Chính sách hoàn tiền
+                          {t("mockups.standalone.suggestRefund")}
                         </span>
                       </div>
 
@@ -378,7 +378,7 @@ export default function AccessMethodsSection() {
                       <div className="flex items-center gap-2 border-t border-border/50 bg-card p-2.5">
                         <input
                           disabled
-                          placeholder="Nhập tin nhắn..."
+                          placeholder={t("mockups.standalone.inputPlaceholder")}
                           className="outline-hidden flex-1 rounded-xl border border-border/70 bg-background/80 px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground"
                         />
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-muted dark:text-slate-300">
@@ -392,12 +392,13 @@ export default function AccessMethodsSection() {
                   </div>
                 </div>
 
-                {/* 2. Màn hình Mobile App (col-span-5) - True Responsive StandaloneChatUI with Pinned Bottom Input */}
+                {/* 2. Màn hình Mobile App (col-span-5) */}
                 <div className="glass-lg flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-border/50 bg-background/95 p-4 shadow-xl sm:p-5 lg:col-span-5">
                   <div className="flex-shrink-0">
                     <div className="mb-3 flex w-full items-center justify-between border-b border-border/50 pb-2.5">
                       <span className="flex items-center gap-1 text-[10px] font-bold text-primary">
-                        <Smartphone className="h-3.5 w-3.5" /> Màn hình Mobile App
+                        <Smartphone className="h-3.5 w-3.5" />{" "}
+                        {t("mockups.standalone.mobileScreen")}
                       </span>
                     </div>
                   </div>
@@ -418,9 +419,11 @@ export default function AccessMethodsSection() {
                             </div>
                             <div>
                               <p className="text-[10px] font-bold leading-tight">
-                                Trợ lý AI Vielora
+                                {t("mockups.standalone.botName")}
                               </p>
-                              <p className="text-[7px] text-white/80">Trực tuyến 24/7</p>
+                              <p className="text-[7px] text-white/80">
+                                {t("mockups.standalone.online247")}
+                              </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-1 text-white/90">
@@ -437,37 +440,39 @@ export default function AccessMethodsSection() {
                       {/* Middle: Chat Stream */}
                       <div className="flex-1 space-y-2 overflow-y-auto py-1 text-[10px]">
                         <div className="rounded-tl-xs shadow-2xs rounded-xl border border-border/40 bg-card p-2 leading-relaxed text-foreground/90">
-                          Xin chào! Bạn có thể quét mã QR để mở trang này trên điện thoại.
+                          {t("mockups.standalone.mobileWelcome")}
                         </div>
                         <div className="rounded-tr-xs shadow-2xs ml-auto max-w-[90%] rounded-xl bg-primary p-2 leading-relaxed text-white">
-                          Giao diện tự động co giãn theo màn hình điện thoại rất mượt mà!
+                          {t("mockups.standalone.mobileUserMsg1")}
                         </div>
                         <div className="rounded-tl-xs shadow-2xs rounded-xl border border-border/40 bg-card p-2 leading-relaxed text-foreground/90">
-                          Hỗ trợ đầy đủ voice chat và cài đặt nhanh ngoài màn hình chính.
+                          {t("mockups.standalone.mobileBotMsg1")}
                         </div>
                         <div className="rounded-tr-xs shadow-2xs ml-auto max-w-[85%] rounded-xl bg-primary p-2 leading-relaxed text-white">
-                          Tuyệt vời, chatbot hoạt động rất nhanh!
+                          {t("mockups.standalone.mobileUserMsg2")}
                         </div>
                       </div>
 
                       {/* Bottom: Suggested Questions & Input firmly pinned at the bottom */}
                       <div className="mt-auto flex-shrink-0 space-y-1.5 pt-1">
-                        {/* Mobile Suggested Question Pills (Directly above input bar) */}
+                        {/* Mobile Suggested Question Pills */}
                         <div className="flex gap-1 overflow-x-auto text-[9px]">
                           <span className="shrink-0 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
-                            Bảng giá
+                            {t("mockups.standalone.mobileSuggestPricing")}
                           </span>
                           <span className="shrink-0 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
-                            Đặt lịch
+                            {t("mockups.standalone.mobileSuggestSchedule")}
                           </span>
                           <span className="shrink-0 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
-                            Tài liệu
+                            {t("mockups.standalone.mobileSuggestDocs")}
                           </span>
                         </div>
 
                         {/* Mobile Input with Mic & Send */}
                         <div className="flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1.5 text-[10px]">
-                          <span className="flex-1 text-muted-foreground">Gửi tin nhắn...</span>
+                          <span className="flex-1 text-muted-foreground">
+                            {t("mockups.standalone.mobileInputPlaceholder")}
+                          </span>
                           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-muted-foreground">
                             <Mic className="h-3 w-3" />
                           </div>
@@ -511,7 +516,7 @@ export default function AccessMethodsSection() {
                         </span>
                       </div>
                       <span className="flex items-center gap-1 text-[10px] font-bold text-primary">
-                        <Users className="h-3.5 w-3.5" /> Nhóm 5 thành viên
+                        <Users className="h-3.5 w-3.5" /> {t("mockups.group.webScreen")}
                       </span>
                     </div>
 
@@ -526,10 +531,12 @@ export default function AccessMethodsSection() {
                           <div>
                             <div className="flex items-center gap-1.5">
                               <h4 className="text-xs font-bold leading-tight text-white">
-                                Dự án Triển khai Khách hàng
+                                {t("mockups.group.groupTitle")}
                               </h4>
                             </div>
-                            <p className="text-[10px] text-white/80">Nhóm chat • 5 thành viên</p>
+                            <p className="text-[10px] text-white/80">
+                              {t("mockups.group.groupSubtitle")}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
@@ -543,12 +550,14 @@ export default function AccessMethodsSection() {
                       <div className="flex items-center justify-between border-b border-primary/20 bg-primary/10 px-4 py-2 text-[11px] text-primary">
                         <div className="flex items-center gap-2 font-medium">
                           <Pin className="h-3.5 w-3.5 rotate-45" />
-                          <span>Ghi chú ghim: Kế hoạch triển khai Sprint 14</span>
+                          <span>{t("mockups.group.pinnedNote")}</span>
                         </div>
-                        <span className="text-[10px] font-bold underline">Xem chi tiết</span>
+                        <span className="text-[10px] font-bold underline">
+                          {t("mockups.group.viewDetail")}
+                        </span>
                       </div>
 
-                      {/* Group Chat Messages (No @ symbol, direct AI assistant response, no bot highlight) */}
+                      {/* Group Chat Messages */}
                       <div className="flex-1 space-y-3 p-4 text-xs">
                         {/* Member Message 1 */}
                         <div className="flex items-start gap-2.5">
@@ -558,35 +567,39 @@ export default function AccessMethodsSection() {
                           <div className="space-y-1">
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs font-bold text-foreground">
-                                Hải Nam (PM)
+                                {t("mockups.group.user1Name")}
                               </span>
                               <span className="text-[9px] text-muted-foreground">10:15 AM</span>
                             </div>
                             <div className="rounded-tl-xs shadow-xs rounded-2xl border border-border/40 bg-card p-2.5 text-xs text-foreground">
-                              Tóm tắt 3 kết luận chính cuộc họp với đối tác giúp team nhé!
+                              {t("mockups.group.user1Msg")}
                             </div>
                           </div>
                         </div>
 
-                        {/* Bot Group Response (Standard bubble without color highlight) */}
+                        {/* Bot Group Response */}
                         <div className="flex items-start gap-2.5">
                           <div className="shadow-xs flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white">
                             <Bot className="h-3.5 w-3.5" />
                           </div>
                           <div className="flex-1 space-y-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-bold text-primary">Vielora Bot</span>
+                              <span className="text-xs font-bold text-primary">
+                                {t("mockups.group.botName")}
+                              </span>
                               <span className="py-0.2 rounded bg-primary/10 px-1 text-[8px] font-semibold text-primary">
-                                AI Assistant
+                                {t("mockups.group.aiAssistant")}
                               </span>
                             </div>
                             <div className="rounded-tl-xs shadow-xs rounded-2xl border border-border/40 bg-card p-2.5 text-xs text-foreground">
-                              <p className="font-semibold">3 Điểm thống nhất sáng nay:</p>
+                              <p className="font-semibold">
+                                {t("mockups.group.botResponseHeading")}
+                              </p>
                               <p className="mt-0.5 text-muted-foreground">
-                                1. Kích hoạt tính năng Smart Homepage cho 5 chi nhánh.
+                                {t("mockups.group.botResponsePoint1")}
                               </p>
                               <p className="text-muted-foreground">
-                                2. Đồng bộ lead tự động về CRM.
+                                {t("mockups.group.botResponsePoint2")}
                               </p>
                             </div>
                           </div>
@@ -600,12 +613,12 @@ export default function AccessMethodsSection() {
                           <div className="space-y-1">
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs font-bold text-foreground">
-                                Thu Trang (Sale Lead)
+                                {t("mockups.group.user2Name")}
                               </span>
                               <span className="text-[9px] text-muted-foreground">10:18 AM</span>
                             </div>
                             <div className="rounded-tl-xs shadow-xs rounded-2xl border border-border/40 bg-card p-2.5 text-xs text-foreground">
-                              Đã nhận thông tin, team bắt đầu triển khai ngay nhé!
+                              {t("mockups.group.user2Msg")}
                             </div>
                           </div>
                         </div>
@@ -615,7 +628,7 @@ export default function AccessMethodsSection() {
                       <div className="flex items-center gap-2 border-t border-border/50 bg-card p-2.5">
                         <input
                           disabled
-                          placeholder="Nhập tin nhắn trong nhóm..."
+                          placeholder={t("mockups.group.inputPlaceholder")}
                           className="outline-hidden flex-1 rounded-xl border border-border/70 bg-background/80 px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground"
                         />
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-muted dark:text-slate-300">
@@ -629,12 +642,12 @@ export default function AccessMethodsSection() {
                   </div>
                 </div>
 
-                {/* 2. Màn hình Mobile App (col-span-5) - True Responsive GroupChatView with Pinned Bottom Input */}
+                {/* 2. Màn hình Mobile App (col-span-5) */}
                 <div className="glass-lg flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-border/50 bg-background/95 p-4 shadow-xl sm:p-5 lg:col-span-5">
                   <div className="flex-shrink-0">
                     <div className="mb-3 flex w-full items-center justify-between border-b border-border/50 pb-2.5">
                       <span className="flex items-center gap-1 text-[10px] font-bold text-primary">
-                        <Smartphone className="h-3.5 w-3.5" /> Màn hình Mobile App
+                        <Smartphone className="h-3.5 w-3.5" /> {t("mockups.group.mobileScreen")}
                       </span>
                     </div>
                   </div>
@@ -655,9 +668,11 @@ export default function AccessMethodsSection() {
                             </div>
                             <div>
                               <p className="text-[10px] font-bold leading-tight">
-                                Dự án Triển khai
+                                {t("mockups.group.groupTitleShort")}
                               </p>
-                              <p className="text-[7px] text-white/80">Nhóm chat • 5 thành viên</p>
+                              <p className="text-[7px] text-white/80">
+                                {t("mockups.group.groupSubtitle")}
+                              </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-1 text-white/90">
@@ -671,22 +686,26 @@ export default function AccessMethodsSection() {
                         <div className="mb-1.5 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/10 px-2 py-1 text-[8px] text-primary">
                           <div className="flex items-center gap-1 truncate font-medium">
                             <Pin className="h-2.5 w-2.5 shrink-0 rotate-45" />
-                            <span className="truncate">Ghim: Kế hoạch Sprint 14</span>
+                            <span className="truncate">{t("mockups.group.pinnedNoteShort")}</span>
                           </div>
-                          <span className="ml-1 shrink-0 text-[7px] font-bold underline">Xem</span>
+                          <span className="ml-1 shrink-0 text-[7px] font-bold underline">
+                            {t("mockups.group.view")}
+                          </span>
                         </div>
                       </div>
 
-                      {/* Middle: Mobile Group Stream (No @ symbol, normal bot bubble) */}
+                      {/* Middle: Mobile Group Stream */}
                       <div className="flex-1 space-y-2 overflow-y-auto py-1 text-[10px]">
                         <div className="flex items-start gap-1.5">
                           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-[8px] font-bold text-blue-600 dark:text-blue-400">
                             H
                           </div>
                           <div className="flex-1 space-y-0.5">
-                            <p className="text-[8px] font-bold text-foreground">Hải Nam (PM)</p>
+                            <p className="text-[8px] font-bold text-foreground">
+                              {t("mockups.group.user1Name")}
+                            </p>
                             <div className="rounded-tl-xs shadow-2xs rounded-xl border border-border/40 bg-card p-1.5 text-[9px] leading-relaxed text-foreground">
-                              Tóm tắt 3 điểm chính cuộc họp nhé!
+                              {t("mockups.group.user1MsgShort")}
                             </div>
                           </div>
                         </div>
@@ -696,9 +715,11 @@ export default function AccessMethodsSection() {
                             <Bot className="h-3 w-3" />
                           </div>
                           <div className="flex-1 space-y-0.5">
-                            <p className="text-[8px] font-bold text-primary">Vielora Bot</p>
+                            <p className="text-[8px] font-bold text-primary">
+                              {t("mockups.group.botName")}
+                            </p>
                             <div className="rounded-tl-xs shadow-2xs rounded-xl border border-border/40 bg-card p-1.5 text-[9px] leading-relaxed text-foreground">
-                              Đã tóm tắt 3 kết luận & đồng bộ CRM.
+                              {t("mockups.group.botResponseShort")}
                             </div>
                           </div>
                         </div>
@@ -709,10 +730,10 @@ export default function AccessMethodsSection() {
                           </div>
                           <div className="flex-1 space-y-0.5">
                             <p className="text-[8px] font-bold text-foreground">
-                              Thu Trang (Sale Lead)
+                              {t("mockups.group.user2Name")}
                             </p>
                             <div className="rounded-tl-xs shadow-2xs rounded-xl border border-border/40 bg-card p-1.5 text-[9px] leading-relaxed text-foreground">
-                              Đã nhận, team bắt đầu triển khai ngay!
+                              {t("mockups.group.user2MsgShort")}
                             </div>
                           </div>
                         </div>
@@ -722,7 +743,7 @@ export default function AccessMethodsSection() {
                       <div className="mt-auto flex-shrink-0 pt-2">
                         <div className="flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1.5 text-[10px]">
                           <span className="flex-1 truncate text-muted-foreground">
-                            Nhắn trong nhóm...
+                            {t("mockups.group.mobileInputPlaceholder")}
                           </span>
                           <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                             <Mic className="h-3 w-3" />

@@ -2,8 +2,11 @@
 
 import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 const AboutHero = () => {
+  const t = useTranslations("aboutUs");
+
   return (
     <section className="relative overflow-hidden pb-20 pt-32 lg:pb-32 lg:pt-40">
       {/* Background decorations */}
@@ -24,7 +27,7 @@ const AboutHero = () => {
             className="glass-primary shadow-glow-sm mb-8 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-primary"
           >
             <Sparkles className="h-4 w-4" />
-            <span>Câu chuyện của Vielora</span>
+            <span>{t("badge")}</span>
           </motion.div>
 
           {/* Headline */}
@@ -34,8 +37,7 @@ const AboutHero = () => {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="heading-premium mb-6 text-4xl font-bold leading-tight text-foreground sm:text-5xl lg:text-6xl"
           >
-            Vielora - Đưa <span className="text-gradient-animated">Trợ lý AI túc trực 24/7</span>{" "}
-            vào website chỉ trong một nốt nhạc
+            {t("heading")}
           </motion.h1>
 
           {/* Subtitle */}
@@ -45,9 +47,7 @@ const AboutHero = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="mx-auto max-w-2xl text-lg text-muted-foreground sm:text-xl"
           >
-            Biến dữ liệu hiện có thành vũ khí bán hàng chỉ trong vài phút. Vielora tự động trích
-            xuất kiến thức từ website để tạo ra người đồng hành kỹ thuật số, tích hợp dễ dàng, sẵn
-            sàng tương tác với khách hàng mọi lúc.
+            {t("subheading")}
           </motion.p>
 
           {/* Stats/Icons */}

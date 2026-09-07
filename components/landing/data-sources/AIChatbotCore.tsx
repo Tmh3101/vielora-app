@@ -1,23 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { Bot } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTranslations } from "next-intl";
 
 interface AIChatbotCoreProps {
   reducedMotion?: boolean;
 }
 
-const MESSAGES = [
-  "Tôi có thể giúp gì cho bạn?",
-  "Khám phá dữ liệu ngay!",
-  "Kết nối thông minh ✨",
-  "Trợ lý AI của bạn",
-  "Hỏi tôi bất cứ điều gì! 💡",
-];
-
 export default function AIChatbotCore({ reducedMotion = false }: AIChatbotCoreProps) {
+  const t = useTranslations("dataSources");
+  const messages = useMemo(
+    () => [t("messages.0"), t("messages.1"), t("messages.2"), t("messages.3"), t("messages.4")],
+    [t]
+  );
   const [msgIndex, setMsgIndex] = useState(0);
   const [visible, setVisible] = useState(true);
 
@@ -27,16 +25,16 @@ export default function AIChatbotCore({ reducedMotion = false }: AIChatbotCorePr
     const next = () => {
       setVisible(false);
       timeoutId = setTimeout(() => {
-        setMsgIndex((i) => (i + 1) % MESSAGES.length);
+        setMsgIndex((i) => (i + 1) % messages.length);
         setVisible(true);
       }, 600);
     };
-    const t = setInterval(next, 5000);
+    const timer = setInterval(next, 5000);
     return () => {
-      clearInterval(t);
+      clearInterval(timer);
       clearTimeout(timeoutId);
     };
-  }, [reducedMotion]);
+  }, [reducedMotion, messages.length]);
 
   return (
     <div className="relative flex items-center justify-center">
@@ -89,7 +87,7 @@ export default function AIChatbotCore({ reducedMotion = false }: AIChatbotCorePr
               `,
                   }}
                 >
-                  {MESSAGES[msgIndex]}
+                  {messages[msgIndex]}
                   <div className="absolute -bottom-1.5 right-4 h-3 w-3 rotate-45 border-b border-r border-white/60 bg-white/95" />
                 </div>
               </motion.div>

@@ -2,6 +2,7 @@
 
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Bot, FileText, Users, Zap } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export interface StatsGridProps {
   messagesThisMonth: number;
@@ -20,12 +21,14 @@ export function StatsGrid({
   botsLimit,
   hasSubscription,
 }: StatsGridProps) {
+  const t = useTranslations("dashboard.overview.stats");
+
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Card className="card-stat">
         <CardDescription className="flex items-center gap-2">
           <Zap className="h-4 w-4 text-primary" />
-          Tin nhắn tháng này
+          {t("messagesThisMonth")}
         </CardDescription>
         <CardTitle className="text-3xl">{messagesThisMonth}</CardTitle>
       </Card>
@@ -33,7 +36,7 @@ export function StatsGrid({
       <Card className="card-stat">
         <CardDescription className="flex items-center gap-2">
           <Users className="h-4 w-4 text-primary" />
-          Cuộc hội thoại
+          {t("conversations")}
         </CardDescription>
         <CardTitle className="text-3xl">{totalConversations}</CardTitle>
       </Card>
@@ -41,7 +44,7 @@ export function StatsGrid({
       <Card className="card-stat">
         <CardDescription className="flex items-center gap-2">
           <Bot className="h-4 w-4 text-primary" />
-          Chatbots
+          {t("chatbots")}
         </CardDescription>
         <CardTitle className="text-3xl">
           {botCount}
@@ -54,7 +57,7 @@ export function StatsGrid({
       <Card className="card-stat">
         <CardDescription className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-primary" />
-          Tài liệu đã index
+          {t("indexedDocuments")}
         </CardDescription>
         <CardTitle className="text-3xl">{totalIndexedDocuments}</CardTitle>
       </Card>

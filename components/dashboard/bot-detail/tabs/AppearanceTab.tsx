@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState, type ChangeEvent, type WheelEvent } from "react";
+import { useTranslations } from "next-intl";
 import { PositionModal } from "@/components/dashboard/bot-detail/modals/PositionModal";
 import {
   uploadWidgetBackground,
@@ -39,6 +40,7 @@ const handleSuggestedQuestionsWheel = (e: WheelEvent<HTMLDivElement>) => {
 };
 
 export function AppearanceTab({ botId, currentPlan, onSaveAppearance }: AppearanceTabProps) {
+  const t = useTranslations("dashboard.botDetail.appearanceTab");
   const previewMessagesRef = useRef<HTMLDivElement>(null);
   const bgFileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingBg, setIsUploadingBg] = useState(false);
@@ -168,15 +170,15 @@ export function AppearanceTab({ botId, currentPlan, onSaveAppearance }: Appearan
 
   const handleBgFileSelect = async (file: File) => {
     if (!file.type.startsWith("image/")) {
-      setBgUploadError("Vui lòng chọn file ảnh");
+      setBgUploadError(t("errorSelectImage"));
       return;
     }
     if (file.type === "image/webp") {
-      setBgUploadError("Định dạng WEBP có vấn đề tương thích. Vui lòng dùng JPG hoặc PNG.");
+      setBgUploadError(t("errorWebpNotSupported"));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setBgUploadError("File quá lớn (tối đa 5MB)");
+      setBgUploadError(t("errorFileTooLarge5MB"));
       return;
     }
 
@@ -198,12 +200,14 @@ export function AppearanceTab({ botId, currentPlan, onSaveAppearance }: Appearan
           chatBackgroundValue: result.url,
         });
       } else {
-        setBgUploadError(result.error || "Upload thất bại");
+        setBgUploadError(result.error || t("errorUploadFailed"));
         setBgPreviewFile(null);
       }
     } catch (error) {
       setBgUploadError(
-        "Lỗi upload: " + (error instanceof Error ? error.message : "Không xác định")
+        t("errorUpload", {
+          message: error instanceof Error ? error.message : t("errorUnknown"),
+        })
       );
       setBgPreviewFile(null);
     } finally {
@@ -213,15 +217,15 @@ export function AppearanceTab({ botId, currentPlan, onSaveAppearance }: Appearan
 
   const handleIconFileSelect = async (file: File) => {
     if (!file.type.startsWith("image/")) {
-      setIconUploadError("Vui lòng chọn file ảnh");
+      setIconUploadError(t("errorSelectImage"));
       return;
     }
     if (file.type === "image/webp") {
-      setIconUploadError("Định dạng WEBP có vấn đề tương thích. Vui lòng dùng JPG hoặc PNG.");
+      setIconUploadError(t("errorWebpNotSupported"));
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setIconUploadError("File quá lớn (tối đa 2MB)");
+      setIconUploadError(t("errorFileTooLarge2MB"));
       return;
     }
 
@@ -240,11 +244,13 @@ export function AppearanceTab({ botId, currentPlan, onSaveAppearance }: Appearan
           chatIconUrl: result.url,
         });
       } else {
-        setIconUploadError(result.error || "Upload thất bại");
+        setIconUploadError(result.error || t("errorUploadFailed"));
       }
     } catch (error) {
       setIconUploadError(
-        "Lỗi upload: " + (error instanceof Error ? error.message : "Không xác định")
+        t("errorUpload", {
+          message: error instanceof Error ? error.message : t("errorUnknown"),
+        })
       );
     } finally {
       setIsUploadingIcon(false);
@@ -264,7 +270,11 @@ export function AppearanceTab({ botId, currentPlan, onSaveAppearance }: Appearan
         chatBackgroundValue: solidColor,
       });
     } catch (error) {
-      setBgUploadError("Lỗi xóa: " + (error instanceof Error ? error.message : "Không xác định"));
+      setBgUploadError(
+        t("errorDelete", {
+          message: error instanceof Error ? error.message : t("errorUnknown"),
+        })
+      );
     } finally {
       setIsUploadingBg(false);
     }
@@ -283,7 +293,11 @@ export function AppearanceTab({ botId, currentPlan, onSaveAppearance }: Appearan
         chatIconUrl: null,
       });
     } catch (error) {
-      setIconUploadError("Lỗi xóa: " + (error instanceof Error ? error.message : "Không xác định"));
+      setIconUploadError(
+        t("errorDelete", {
+          message: error instanceof Error ? error.message : t("errorUnknown"),
+        })
+      );
     } finally {
       setIsUploadingIcon(false);
     }

@@ -69,6 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gro
       userId: user.id,
       userName: perm.userName,
       isActive: Boolean(isActive),
+      locale: body?.locale || perm.botLocale,
     });
 
     return NextResponse.json({ success: true, data: note }, { status: 201, headers: corsHeaders });
@@ -81,7 +82,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gro
         {
           success: false,
           code: GROUP_ALREADY_PINNED_CODE,
-          message: "Tin nhắn này đã được lưu vào ghi chú trước đó.",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Tin nhắn này đã được lưu vào ghi chú trước đó.",
         },
         { status: 409, headers: corsHeaders }
       );

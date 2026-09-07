@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AlertTriangle, Crown } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export interface BotLimitDialogProps {
   open: boolean;
@@ -32,6 +33,8 @@ export function BotLimitDialog({
   creditsTotalThisMonth,
   onUpgrade,
 }: BotLimitDialogProps) {
+  const t = useTranslations("dashboard.shared.botLimitDialog");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -39,31 +42,29 @@ export function BotLimitDialog({
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/10">
             <AlertTriangle className="h-8 w-8 text-yellow-500" />
           </div>
-          <DialogTitle className="text-xl">Đã đạt giới hạn chatbot</DialogTitle>
+          <DialogTitle className="text-xl">{t("title")}</DialogTitle>
           <DialogDescription className="pt-2 text-base">
-            Gói <span className="font-semibold capitalize text-foreground">{currentPlanLabel}</span>{" "}
-            cho phép tối đa <span className="font-semibold text-foreground">{botsLimit}</span>{" "}
-            chatbot.
-            <br />
-            Bạn đã tạo <span className="font-semibold text-foreground">{botsCount}</span>/
-            {botsLimit}
-            chatbot.
+            {t("description", {
+              plan: currentPlanLabel,
+              limit: botsLimit,
+              count: botsCount,
+            })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 rounded-xl bg-muted/50 p-4">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Gói hiện tại</span>
+            <span className="text-muted-foreground">{t("currentPlan")}</span>
             <span className="font-medium capitalize">{currentPlanLabel}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Chatbot đã tạo</span>
+            <span className="text-muted-foreground">{t("createdBots")}</span>
             <span className="font-medium">
               {botsCount}/{botsLimit}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Credits đã dùng</span>
+            <span className="text-muted-foreground">{t("usedCredits")}</span>
             <span className="font-medium">
               {creditsUsedThisMonth.toLocaleString()}/{creditsTotalThisMonth.toLocaleString()}
             </span>
@@ -76,11 +77,11 @@ export function BotLimitDialog({
             onClick={() => onOpenChange(false)}
             className="w-full hover:bg-white hover:text-foreground sm:w-auto"
           >
-            Đóng
+            {t("close")}
           </Button>
           <Button onClick={onUpgrade} className="bg-gradient-primary btn-glow w-full sm:w-auto">
             <Crown className="mr-2 h-4 w-4" />
-            Nâng cấp gói
+            {t("upgradeBtn")}
           </Button>
         </DialogFooter>
       </DialogContent>

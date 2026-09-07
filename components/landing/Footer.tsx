@@ -1,19 +1,17 @@
-/**
- * Migration Note: Footer component migrated for Next.js
- * - Changed from react-router-dom Link to Next.js Link
- * - Can be a Server Component (no hooks or browser APIs)
- * - Enhanced with subtle gradient accents and refined styling
- */
+"use client";
 
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import Image from "next/image";
 import { Mail } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface FooterProps {
   isLegalLayout?: boolean;
 }
 
 const Footer = ({ isLegalLayout }: FooterProps) => {
+  const t = useTranslations("footer");
+
   return (
     <footer className="relative overflow-hidden rounded-t-3xl bg-[#111626] pb-12 pt-16 text-secondary-foreground">
       <div className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-8">
@@ -29,40 +27,37 @@ const Footer = ({ isLegalLayout }: FooterProps) => {
                 className="h-16 w-auto rounded-xl border border-white/10 shadow-lg"
               />
             </Link>
-            <p className="max-w-sm leading-relaxed text-secondary-foreground/70">
-              Tạo chatbot AI thông minh cho website của bạn trong vài phút. Hỗ trợ khách hàng 24/7
-              với sức mạnh của Google Gemini.
-            </p>
+            <p className="max-w-sm leading-relaxed text-secondary-foreground/70">{t("tagline")}</p>
           </div>
           {/* Links - Products */}
           <div>
             {!isLegalLayout && (
               <>
-                <h4 className="mb-4 font-semibold text-secondary-foreground">Sản phẩm</h4>
+                <h4 className="mb-4 font-semibold text-secondary-foreground">{t("product")}</h4>
                 <ul className="space-y-1 text-secondary-foreground/70">
                   <li>
-                    <a
-                      href="#features"
+                    <Link
+                      href="/#features"
                       className="link-underline inline-block py-1 transition-colors hover:text-secondary-foreground"
                     >
-                      Tính năng
-                    </a>
+                      {t("features")}
+                    </Link>
                   </li>
                   <li>
-                    <a
-                      href="#pricing"
+                    <Link
+                      href="/#pricing"
                       className="link-underline inline-block py-1 transition-colors hover:text-secondary-foreground"
                     >
-                      Bảng giá
-                    </a>
+                      {t("pricing")}
+                    </Link>
                   </li>
                   <li>
-                    <a
-                      href="#demo"
+                    <Link
+                      href="/#demo"
                       className="link-underline inline-block py-1 transition-colors hover:text-secondary-foreground"
                     >
-                      Demo
-                    </a>
+                      {t("demo")}
+                    </Link>
                   </li>
                 </ul>
               </>
@@ -73,22 +68,24 @@ const Footer = ({ isLegalLayout }: FooterProps) => {
           <div>
             {!isLegalLayout && (
               <>
-                <h4 className="mb-4 font-semibold text-secondary-foreground">Hỗ trợ</h4>
+                <h4 className="mb-4 font-semibold text-secondary-foreground">{t("resources")}</h4>
                 <ul className="space-y-1 text-secondary-foreground/70">
                   <li>
                     <Link
                       href="/about-us"
                       className="link-underline inline-block py-1 transition-colors hover:text-secondary-foreground"
                     >
-                      Về chúng tôi
+                      {t("about")}
                     </Link>
                   </li>
                   <li>
                     <a
                       href="https://dx4u.gitbook.io/velora-docs"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="link-underline inline-block py-1 transition-colors hover:text-secondary-foreground"
                     >
-                      Tài liệu
+                      {t("documentation")}
                     </a>
                   </li>
                 </ul>
@@ -98,7 +95,7 @@ const Footer = ({ isLegalLayout }: FooterProps) => {
 
           {/* Links - Contact */}
           <div>
-            <h4 className="mb-4 font-semibold text-secondary-foreground">Liên hệ</h4>
+            <h4 className="mb-4 font-semibold text-secondary-foreground">{t("contact")}</h4>
             <ul className="space-y-2 text-secondary-foreground/70">
               <li>
                 <a
@@ -164,15 +161,15 @@ const Footer = ({ isLegalLayout }: FooterProps) => {
         {/* Bottom bar */}
         <div className="flex flex-col items-center justify-between gap-4 border-t border-secondary-foreground/10 pt-6 sm:flex-row">
           <p className="text-sm text-secondary-foreground/60">
-            © {new Date().getFullYear()} Vielora. All rights reserved.
+            © {new Date().getFullYear()} Vielora. {t("copyright")}
           </p>
           <div className="flex items-center gap-6 text-sm text-secondary-foreground/60">
-            <a href="/terms" className="transition-colors hover:text-secondary-foreground">
-              Điều khoản sử dụng
-            </a>
-            <a href="/privacy" className="transition-colors hover:text-secondary-foreground">
-              Chính sách bảo mật
-            </a>
+            <Link href="/terms" className="transition-colors hover:text-secondary-foreground">
+              {t("terms")}
+            </Link>
+            <Link href="/privacy" className="transition-colors hover:text-secondary-foreground">
+              {t("privacy")}
+            </Link>
           </div>
         </div>
       </div>

@@ -8,7 +8,12 @@ import {
 } from "@/lib/security";
 import { API_RATE_LIMITS, corsHeaders } from "@/lib/constants";
 import { InitRequest, InitResponse, Message } from "@/types";
-import { ESubscriptionPlan, EWidgetBackgroundType, EWidgetIconType } from "@/types";
+import {
+  ESubscriptionPlan,
+  EWidgetBackgroundType,
+  EWidgetIconType,
+  ESystemLanguage,
+} from "@/types";
 import {
   findActiveConversation,
   getConversationMessages,
@@ -209,7 +214,17 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
       chatBackgroundValue?: string;
       chatBackgroundOpacity?: number;
       isVoiceEnabled?: boolean;
+      ui_language?: string;
+      locale?: string;
     } | null;
+
+    const rawLanguage = widgetSettings?.ui_language || widgetSettings?.locale || ESystemLanguage.Vi;
+    const botUiLanguage: ESystemLanguage =
+      rawLanguage === ESystemLanguage.En ? ESystemLanguage.En : ESystemLanguage.Vi;
+    const defaultWelcomeMessage =
+      botUiLanguage === ESystemLanguage.En
+        ? "Hello! How can I help you?"
+        : "Xin chào! Tôi có thể giúp gì cho bạn?";
 
     const canUseSuggestedQuestions =
       userPlanCode && SUGGESTED_QUESTIONS_ALLOWED_PLANS.includes(userPlanCode as ESubscriptionPlan);
@@ -258,14 +273,14 @@ export async function POST(req: NextRequest): Promise<NextResponse<InitResponse>
               }
             : undefined,
           errorCode: rateLimitResult?.code,
+          ui_language: botUiLanguage,
           settings: {
             primaryColor: widgetSettings?.primaryColor || "#3B82F6",
             textColor: widgetSettings?.textColor || "#1f2937",
             position: widgetSettings?.position || WIDGET_FALLBACK.POSITION,
             welcomeMessage:
-              statusInfo.message ||
-              widgetSettings?.welcomeMessage ||
-              "Xin chào! Tôi có thể giúp gì cho bạn?",
+              statusInfo.message || widgetSettings?.welcomeMessage || defaultWelcomeMessage,
+            ui_language: botUiLanguage,
             // Only include suggested questions if plan allows
             ...(canUseSuggestedQuestions && {
               suggestedQuestions: widgetSettings?.suggestedQuestions || [],

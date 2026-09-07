@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { OfflineBanner } from "@/components/chat/OfflineBanner";
 import { GroupDisabledView } from "@/components/chat/group/GroupDisabledView";
 import { ChatTabSwitcher } from "@/components/chat/ChatTabSwitcher";
+import { getWidgetTranslations } from "@/lib/i18n/widget-translations";
 
 import {
   ERROR_CODE_OTP_EXPIRED,
@@ -48,6 +49,8 @@ interface WidgetSettings {
   chatBackgroundValue?: string;
   chatBackgroundOpacity?: number;
   isVoiceEnabled?: boolean;
+  ui_language?: string;
+  locale?: string;
 }
 
 export function GroupChatView({
@@ -61,29 +64,6 @@ export function GroupChatView({
 }: GroupChatViewProps) {
   const isOnline = useNetworkStatus();
   const { toast } = useToast();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const hash = window.location.hash;
-    if (hash.includes(ERROR_CODE_OTP_EXPIRED) || hash.includes(ERROR_CODE_ACCESS_DENIED)) {
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
-
-      if (userId) {
-        toast({
-          title: "Thông báo",
-          description:
-            "Liên kết trong email đã được sử dụng trước đó. Bạn đã đăng nhập vào nhóm chat.",
-        });
-      } else {
-        toast({
-          title: "Liên kết hết hạn",
-          description:
-            "Liên kết xác thực trong email đã được sử dụng hoặc đã hết hạn. Vui lòng đăng nhập bằng email của bạn.",
-          variant: "destructive",
-        });
-      }
-    }
-  }, [userId, toast]);
 
   const [replyingToMessage, setReplyingToMessage] = useState<GroupMessageRow | null>(null);
   const [isFetchingOlder, setIsFetchingOlder] = useState(false);
@@ -100,6 +80,8 @@ export function GroupChatView({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerDefaultTab, setDrawerDefaultTab] = useState<"members" | "notes">("members");
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const propWidgetSettings = (botData?.widget_settings as WidgetSettings) || {};
+  const initialLocale = propWidgetSettings.ui_language || propWidgetSettings.locale || "vi";
 
   const {
     messages,
@@ -132,7 +114,34 @@ export function GroupChatView({
     unpinNote,
     deleteNote,
     toggleMemberNotePermission,
-  } = useGroupChat({ botId, userId, userEmail });
+  } = useGroupChat({ botId, userId, userEmail, locale: initialLocale });
+
+  const effectiveBotData = botData || botInfo;
+  const widgetSettings =
+    ((effectiveBotData?.widget_settings || botData?.widget_settings) as WidgetSettings) || {};
+  const locale = widgetSettings.ui_language || widgetSettings.locale || initialLocale;
+  const t = getWidgetTranslations(locale);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash;
+    if (hash.includes(ERROR_CODE_OTP_EXPIRED) || hash.includes(ERROR_CODE_ACCESS_DENIED)) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+
+      if (userId) {
+        toast({
+          title: t.notificationTitle,
+          description: t.emailLinkUsedDesc,
+        });
+      } else {
+        toast({
+          title: t.linkExpiredTitle,
+          description: t.linkExpiredDesc,
+          variant: "destructive",
+        });
+      }
+    }
+  }, [userId, toast, t]);
 
   const handleOpenCreateNote = useCallback(() => {
     setEditingNote(null);
@@ -156,20 +165,20 @@ export function GroupChatView({
       try {
         await pinNote(note.id);
         toast({
-          title: "Đã ghim ghi chú",
-          description: "Ghi chú đã được ghim lên nhóm.",
+          title: t.pinned,
+          description: t.messagePinnedToNotes,
         });
       } catch (err: unknown) {
         console.error("Error pinning note:", err);
-        const message = err instanceof Error ? err.message : "Không thể ghim ghi chú.";
+        const message = err instanceof Error ? err.message : t.pinNoteError;
         toast({
-          title: "Lỗi",
+          title: t.errorTitle,
           description: message,
           variant: "destructive",
         });
       }
     },
-    [pinNote, toast]
+    [pinNote, toast, t]
   );
 
   const handleUnpinNote = useCallback(
@@ -177,20 +186,20 @@ export function GroupChatView({
       try {
         await unpinNote(note.id);
         toast({
-          title: "Đã bỏ ghim ghi chú",
-          description: "Ghi chú đã được chuyển vào lịch sử.",
+          title: t.unpin,
+          description: t.unpinNoteSuccess,
         });
       } catch (err: unknown) {
         console.error("Error unpinning note:", err);
-        const message = err instanceof Error ? err.message : "Không thể bỏ ghim ghi chú.";
+        const message = err instanceof Error ? err.message : t.unpinNoteError;
         toast({
-          title: "Lỗi",
+          title: t.errorTitle,
           description: message,
           variant: "destructive",
         });
       }
     },
-    [unpinNote, toast]
+    [unpinNote, toast, t]
   );
 
   const handleOpenNotesDrawer = useCallback(() => {
@@ -209,8 +218,8 @@ export function GroupChatView({
             content_text: payload.contentText,
           });
           toast({
-            title: "Đã cập nhật ghi chú",
-            description: "Nội dung ghi chú đã được cập nhật.",
+            title: t.saveChanges,
+            description: t.updateNoteSuccess,
           });
         } else {
           await createNote({
@@ -219,17 +228,17 @@ export function GroupChatView({
             content_text: payload.contentText,
           });
           toast({
-            title: "Đã tạo & ghim ghi chú",
-            description: "Ghi chú đã được lưu.",
+            title: t.createAndPin,
+            description: t.createNoteSuccess,
           });
         }
         setEditorOpen(false);
         setEditingNote(null);
       } catch (err: unknown) {
         console.error("Error saving note:", err);
-        const message = err instanceof Error ? err.message : "Không thể lưu ghi chú.";
+        const message = err instanceof Error ? err.message : t.saveNoteError;
         toast({
-          title: "Lỗi",
+          title: t.errorTitle,
           description: message,
           variant: "destructive",
         });
@@ -237,7 +246,7 @@ export function GroupChatView({
         setIsSavingNote(false);
       }
     },
-    [editorMode, editingNote, updateNote, createNote, toast]
+    [editorMode, editingNote, updateNote, createNote, toast, t]
   );
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -246,30 +255,30 @@ export function GroupChatView({
     try {
       await deleteNote(deletingNote.id);
       toast({
-        title: "Đã xóa ghi chú",
-        description: "Ghi chú đã được xóa thành công.",
+        title: t.delete,
+        description: t.deleteNoteSuccess,
       });
       setDeleteOpen(false);
       setDeletingNote(null);
     } catch (err: unknown) {
       console.error("Error deleting note:", err);
-      const message = err instanceof Error ? err.message : "Không thể xóa ghi chú.";
+      const message = err instanceof Error ? err.message : t.deleteNoteError;
       toast({
-        title: "Lỗi",
+        title: t.errorTitle,
         description: message,
         variant: "destructive",
       });
     } finally {
       setIsDeletingNote(false);
     }
-  }, [deletingNote, deleteNote, toast]);
+  }, [deletingNote, deleteNote, toast, t]);
 
   const handlePinKnowledge = useCallback(
     async (msg: GroupMessageRow) => {
       if (pinnedMessageIds.has(msg.id)) {
         toast({
-          title: "Tin nhắn đã lưu",
-          description: "Tin nhắn này đã được lưu vào ghi chú nhóm trước đó.",
+          title: t.savedToNotes,
+          description: t.messageAlreadySaved,
         });
         return;
       }
@@ -281,14 +290,14 @@ export function GroupChatView({
       try {
         await pinMessageAsNote(msg.id, false);
         toast({
-          title: "Đã lưu vào ghi chú nhóm",
-          description: "Tin nhắn đã được chuyển thành ghi chú và nạp vào bộ não bot thành công.",
+          title: t.savedToNotes,
+          description: t.messageSavedSuccess,
         });
       } catch (err: unknown) {
         console.error("Error saving message as note:", err);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const code = (err as any)?.code;
-        const msgStr = err instanceof Error ? err.message : "Không thể lưu tin nhắn vào ghi chú.";
+        const msgStr = err instanceof Error ? err.message : t.messageSaveError;
 
         if (
           code === GROUP_ALREADY_PINNED_CODE ||
@@ -301,26 +310,25 @@ export function GroupChatView({
             return next;
           });
           toast({
-            title: "Tin nhắn đã lưu",
-            description: "Tin nhắn này đã nằm trong danh sách ghi chú của nhóm.",
+            title: t.savedToNotes,
+            description: t.messageAlreadyInNotes,
           });
         } else if (code === GROUP_INSUFFICIENT_CREDITS_CODE) {
           toast({
-            title: "Không đủ Credits",
-            description:
-              "Workspace không đủ credits để lưu ghi chú (cần 1 credit). Vui lòng nạp thêm credits.",
+            title: t.outOfCredits,
+            description: t.insufficientCreditsNoteError,
             variant: "destructive",
           });
         } else {
           toast({
-            title: "Không thể lưu ghi chú",
+            title: t.saveNoteErrorTitle,
             description: msgStr,
             variant: "destructive",
           });
         }
       }
     },
-    [onPinKnowledge, pinMessageAsNote, pinnedMessageIds, setPinnedMessageIds, toast]
+    [onPinKnowledge, pinMessageAsNote, pinnedMessageIds, setPinnedMessageIds, toast, t]
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -328,13 +336,7 @@ export function GroupChatView({
   const isUserNearBottomRef = useRef(true);
   const prevScrollHeightRef = useRef<number | null>(null);
 
-  const effectiveBotData = botData || botInfo;
-
   // Extract theme styling from botData or botInfo
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const widgetSettings =
-    ((effectiveBotData?.widget_settings ||
-      botData?.widget_settings) as unknown as WidgetSettings) || {};
   const primaryColor = widgetSettings.primaryColor || "#047857";
   const headerTextColor = getUserMessageTextColor(primaryColor);
   const isVoiceEnabled = widgetSettings.isVoiceEnabled ?? true;
@@ -476,7 +478,7 @@ export function GroupChatView({
     return (
       <div className="flex h-full min-h-[400px] flex-col items-center justify-center gap-2 text-muted-foreground">
         <RefreshCw className="h-6 w-6 animate-spin text-primary" />
-        <p className="text-sm font-medium">Đang tải cuộc trò chuyện nhóm...</p>
+        <p className="text-sm font-medium">{t.loadingGroupChat}</p>
       </div>
     );
   }
@@ -485,12 +487,8 @@ export function GroupChatView({
     return (
       <div className="flex h-full min-h-[400px] flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">
         <MessageSquare className="h-10 w-10 text-amber-500" />
-        <h3 className="text-base font-semibold text-foreground">
-          {error || "Nhóm chat chưa khả dụng"}
-        </h3>
-        <p className="max-w-sm text-xs">
-          Vui lòng liên hệ người quản trị để tạo hoặc kích hoạt nhóm chat cho Bot này.
-        </p>
+        <h3 className="text-base font-semibold text-foreground">{error || t.groupNotAvailable}</h3>
+        <p className="max-w-sm text-xs">{t.groupNotAvailableDesc}</p>
       </div>
     );
   }
@@ -502,6 +500,7 @@ export function GroupChatView({
         members={members}
         currentUserId={userId}
         botName={displayBotName}
+        locale={locale}
       />
     );
   }
@@ -539,8 +538,8 @@ export function GroupChatView({
             </div>
             <p className="truncate text-sm opacity-90">
               {isBotOutOfCredits
-                ? `Nhóm chat • ${members.length} thành viên • Tạm dừng AI do hết credits`
-                : `Nhóm chat • ${members.length} thành viên`}
+                ? `${t.groupTitle} • ${members.length} ${t.membersCount} • ${t.outOfCredits}`
+                : `${t.groupTitle} • ${members.length} ${t.membersCount}`}
             </p>
           </div>
 
@@ -552,8 +551,8 @@ export function GroupChatView({
                 size="icon"
                 className="h-9 w-9 shrink-0 rounded-full text-current transition-colors hover:bg-white/20 active:scale-95"
                 onClick={handleOpenCreateNote}
-                title="Tạo ghi chú mới"
-                aria-label="Tạo ghi chú mới"
+                title={t.createNewNote}
+                aria-label={t.createNewNote}
               >
                 <SquarePen className="h-5 w-5" />
               </Button>
@@ -586,6 +585,7 @@ export function GroupChatView({
               onPinNoteClick={handlePinNote}
               onUnpinNoteClick={handleUnpinNote}
               onToggleMemberNotePermission={toggleMemberNotePermission}
+              locale={locale}
             />
           </div>
         </div>
@@ -602,6 +602,7 @@ export function GroupChatView({
           onEdit={handleOpenEditNote}
           onUnpin={handleUnpinNote}
           onOpenNotesDrawer={handleOpenNotesDrawer}
+          locale={locale}
         />
       )}
 
@@ -619,7 +620,7 @@ export function GroupChatView({
               {isFetchingOlder ? (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: primaryColor }} />
-                  <span>Đang tải tin nhắn cũ...</span>
+                  <span>{t.loadingOlderMessages}</span>
                 </div>
               ) : (
                 <Button
@@ -628,7 +629,7 @@ export function GroupChatView({
                   onClick={handleLoadOlderMessages}
                   className="h-6 rounded-full px-3 text-[11px] text-muted-foreground hover:bg-muted/80"
                 >
-                  Tự động tải khi cuộn lên (hoặc bấm để tải)
+                  {t.loadOlderMessages}
                 </Button>
               )}
             </div>
@@ -637,10 +638,8 @@ export function GroupChatView({
           {messages.length === 0 ? (
             <div className="flex h-full min-h-[250px] flex-col items-center justify-center gap-2 text-center text-muted-foreground">
               <Bot className="h-8 w-8 opacity-60" style={{ color: primaryColor }} />
-              <p className="text-xs font-medium">Chưa có tin nhắn nào trong nhóm.</p>
-              <p className="text-[11px] opacity-70">
-                Hãy gửi tin nhắn đầu tiên để trò chuyện cùng AI và các thành viên!
-              </p>
+              <p className="text-xs font-medium">{t.noGroupMessages}</p>
+              <p className="text-[11px] opacity-70">{t.firstMessagePrompt}</p>
             </div>
           ) : (
             messages.map((msg) => (
@@ -661,6 +660,7 @@ export function GroupChatView({
                   onPin={handlePinKnowledge}
                   onReply={(m) => setReplyingToMessage(m)}
                   onScrollToMessage={handleScrollToMessage}
+                  locale={locale}
                 />
               </div>
             ))
@@ -678,7 +678,7 @@ export function GroupChatView({
                 markRead();
               }}
               className="pointer-events-auto relative flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-background/90 text-foreground shadow-md backdrop-blur-md transition-all hover:scale-105 hover:bg-muted active:scale-95"
-              aria-label="Cuộn xuống tin nhắn mới nhất"
+              aria-label={t.scrollToBottom}
             >
               <ChevronDown className="h-4 w-4" />
             </button>
@@ -692,8 +692,7 @@ export function GroupChatView({
           <div className="pointer-events-none absolute inset-x-0 bottom-full z-10 px-4">
             <div className="mx-auto max-w-3xl">
               <div className="rounded-t-lg border border-rose-200/80 bg-rose-50/95 px-4 py-2 text-xs font-medium text-rose-900 shadow-sm backdrop-blur-sm dark:border-rose-900/60 dark:bg-rose-950/90 dark:text-rose-200">
-                ⚠️ Bot đã hết credits để phản hồi AI trong nhóm. Thành viên vẫn có thể gửi tin nhắn
-                và trò chuyện bình thường.
+                {t.botCreditWarning}
               </div>
             </div>
           </div>
@@ -716,6 +715,7 @@ export function GroupChatView({
           members={members}
           onCancelReply={() => setReplyingToMessage(null)}
           isBotOutOfCredits={isBotOutOfCredits}
+          locale={locale}
         />
       </div>
 
@@ -733,6 +733,7 @@ export function GroupChatView({
           onSubmit={handleEditorSubmit}
           primaryColor={primaryColor}
           isSubmitting={isSavingNote}
+          locale={locale}
         />
       )}
 
@@ -747,6 +748,7 @@ export function GroupChatView({
           noteTitle={deletingNote.title}
           onConfirm={handleDeleteConfirm}
           isDeleting={isDeletingNote}
+          locale={locale}
         />
       )}
 
@@ -763,7 +765,7 @@ export function GroupChatView({
             members.find((m) => m.user_id === userId)?.full_name ||
             members.find((m) => m.user_id === userId)?.email ||
             userEmail ||
-            "Thành viên nhóm"
+            t.groupMembers
           }
         />
       )}

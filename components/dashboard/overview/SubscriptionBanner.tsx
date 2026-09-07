@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import type { Tables } from "@/lib/supabase/types";
 import { ESubscriptionPlan } from "@/types";
 import { getPlanTheme } from "@/config/plan-theme";
+import { useTranslations } from "next-intl";
 
 type SubscriptionType = Tables<"subscriptions">;
 
@@ -31,6 +32,7 @@ export function SubscriptionBanner({
   onUpgrade,
   onBuyCredits,
 }: SubscriptionBannerProps) {
+  const t = useTranslations("dashboard.overview.banner");
   const router = useRouter();
 
   const normalizedPlan = (currentPlan || ESubscriptionPlan.Free).toLowerCase();
@@ -44,10 +46,10 @@ export function SubscriptionBanner({
 
   const formattedPeriod =
     subscription?.current_period_start && subscription?.current_period_end
-      ? `${new Date(subscription.current_period_start).toLocaleDateString("vi-VN")} - ${new Date(
+      ? `${new Date(subscription.current_period_start).toLocaleDateString()} - ${new Date(
           subscription.current_period_end
-        ).toLocaleDateString("vi-VN")}`
-      : "Vĩnh viễn (Gói Miễn phí)";
+        ).toLocaleDateString()}`
+      : t("permanent");
 
   return (
     <Card
@@ -86,12 +88,12 @@ export function SubscriptionBanner({
                 <span
                   className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider ${theme.badgeClass}`}
                 >
-                  Gói {isFree ? "Miễn phí" : normalizedPlan.toUpperCase()}
+                  {t("planLabel", { plan: isFree ? t("freePlan") : normalizedPlan.toUpperCase() })}
                 </span>
               </div>
               {!isFree && (
                 <p className="mt-1 text-xs font-medium text-muted-foreground sm:text-sm">
-                  Thời hạn: {formattedPeriod}
+                  {t("period", { period: formattedPeriod })}
                 </p>
               )}
             </div>
@@ -99,10 +101,10 @@ export function SubscriptionBanner({
 
           <div className="flex items-center justify-between gap-4 sm:justify-start sm:gap-6">
             <div className="text-left sm:text-right">
-              <p className="text-xs font-medium text-muted-foreground">Credits đã dùng</p>
+              <p className="text-xs font-medium text-muted-foreground">{t("creditsUsage")}</p>
               {paygCredits > 0 && (
                 <p className="mt-0.5 text-xs font-semibold text-primary">
-                  + Dư PAYG: {paygCredits.toLocaleString()}
+                  {t("paygCredits", { amount: paygCredits.toLocaleString() })}
                 </p>
               )}
             </div>
@@ -142,19 +144,20 @@ export function SubscriptionBanner({
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
             <Button
               onClick={onUpgrade}
-              className={`w-full rounded-xl px-5 font-semibold transition-all sm:w-auto ${theme.buttonClass}`}
+              className={`h-9 w-full gap-1.5 rounded-xl px-4 text-xs font-semibold shadow-sm transition-all duration-200 hover:brightness-105 active:scale-[0.98] sm:w-auto ${theme.buttonClass}`}
             >
-              {isEnterprise ? "Gia hạn / Nâng cấp" : "Nâng cấp gói"}
+              <Crown className="h-3.5 w-3.5" />
+              {t("upgradeBtn")}
             </Button>
 
             {usagePercent > 80 && (
               <Button
                 onClick={onBuyCredits ?? (() => router.push("/dashboard/upgrade"))}
                 variant="outline"
-                className="w-full rounded-xl border-primary/40 text-primary hover:bg-primary/10 sm:w-auto"
+                className="h-9 w-full gap-1.5 rounded-xl border-primary/40 px-4 text-xs font-semibold text-primary transition-all duration-200 hover:bg-primary/10 active:scale-[0.98] sm:w-auto"
               >
-                <Zap className="mr-2 h-4 w-4" />
-                Nạp Credits
+                <Zap className="h-3.5 w-3.5" />
+                {t("buyCreditsBtn")}
               </Button>
             )}
           </div>

@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Check, Settings2, Sparkles, UserCheck, GraduationCap, ServerCog } from "lucide-react";
-import { ELanguage } from "@/types";
+import { EReportLanguage } from "@/types";
+import { REPORT_SUPPORTED_LANGUAGES } from "@/lib/constants";
 
 interface TemplateGeneralSettingsProps {
   templateName: string;
@@ -12,27 +13,9 @@ interface TemplateGeneralSettingsProps {
   promptDirective?: string;
   onPromptDirectiveChange?: (val: string) => void;
   templateLanguages: string[];
-  onToggleTemplateLang: (lang: ELanguage, checked: boolean) => void;
+  onToggleTemplateLang: (lang: EReportLanguage, checked: boolean) => void;
   isOwnerOrAdmin: boolean;
 }
-
-const SUPPORTED_LANGUAGES = [
-  {
-    id: ELanguage.Vi,
-    flag: "🇻🇳",
-    name: "Tiếng Việt",
-  },
-  {
-    id: ELanguage.En,
-    flag: "🇬🇧",
-    name: "English",
-  },
-  {
-    id: ELanguage.Ar,
-    flag: "🇸🇦",
-    name: "العربية",
-  },
-] as const;
 
 const PERSONA_PRESETS = [
   {
@@ -163,7 +146,7 @@ export function TemplateGeneralSettings({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 pt-0.5">
-            {SUPPORTED_LANGUAGES.map((lang) => {
+            {REPORT_SUPPORTED_LANGUAGES.map((lang) => {
               const isChecked = templateLanguages.includes(lang.id);
               const isOnlyOne = isChecked && templateLanguages.length === 1;
 

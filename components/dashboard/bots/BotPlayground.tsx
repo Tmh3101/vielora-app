@@ -1,5 +1,6 @@
 import React from "react";
 import { DemoChatbotWidget } from "@/components/shared/DemoChatbotWidget";
+import { useTranslations } from "next-intl";
 
 interface BotPlaygroundProps {
   botId: string;
@@ -7,14 +8,13 @@ interface BotPlaygroundProps {
 }
 
 export const BotPlayground: React.FC<BotPlaygroundProps> = ({ botId, position }) => {
+  const t = useTranslations("dashboard.botDetail.playground");
   return (
     <div className="space-y-6">
       {/* Instructions */}
       <div className="mb-6">
-        <h3 className="mb-2 text-lg font-semibold">Test Chatbot</h3>
-        <p className="text-muted-foreground">
-          Xem trước chatbot của bạn trong môi trường mô phỏng website thật.
-        </p>
+        <h3 className="mb-2 text-lg font-semibold">{t("title")}</h3>
+        <p className="text-muted-foreground">{t("description")}</p>
       </div>
 
       {/* Website mockup with chatbot - Using DemoChatbotWidget component */}
@@ -42,13 +42,14 @@ export const BotPlayground: React.FC<BotPlaygroundProps> = ({ botId, position })
             <line x1="12" y1="16" x2="12" y2="12"></line>
             <line x1="12" y1="8" x2="12.01" y2="8"></line>
           </svg>
-          <h3 className="font-semibold text-slate-700">Lưu ý</h3>
+          <h3 className="font-semibold text-slate-700">{t("noteTitle")}</h3>
         </div>
         <p className="text-sm text-slate-600">
-          Việc <strong>sử dụng chatbot sẽ tiêu tốn credit</strong> từ tài khoản của bạn. Vui lòng
-          kiểm tra số dư credit trong tài khoản trước khi test.{" "}
+          {t.rich("noteDescription", {
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}{" "}
           <code className="rounded bg-slate-200/60 px-1 text-xs">
-            Bot ID: {botId.slice(0, 8)}...
+            {t("botIdLabel", { id: botId.slice(0, 8) })}
           </code>
         </p>
       </div>

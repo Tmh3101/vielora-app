@@ -44,6 +44,7 @@ import { useBotsList } from "@/hooks/dashboard/main/useBotsList";
 import { BotsGrid } from "@/components/dashboard/overview/BotsGrid";
 import { BotsTable } from "@/components/dashboard/overview/BotsTable";
 import { getStatusColor, getStatusText } from "@/lib/helpers";
+import { useTranslations } from "next-intl";
 
 function getVisiblePages(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
   if (totalPages <= 7) {
@@ -81,6 +82,8 @@ export function BotsSection({
   onDeleteBot,
   onRefresh,
 }: BotsSectionProps) {
+  const t = useTranslations("dashboard.overview.botsSection");
+  const tCommon = useTranslations("dashboard.common");
   const {
     bots,
     total,
@@ -88,7 +91,6 @@ export function BotsSection({
     pageSize,
     totalPages,
     inputValue,
-    searchQuery,
     sortBy,
     sortOrder,
     viewMode,
@@ -140,19 +142,19 @@ export function BotsSection({
   const handleRefresh = useCallback(async () => {
     try {
       await Promise.all([refetch(), onRefresh ? Promise.resolve(onRefresh()) : Promise.resolve()]);
-      toast.success("Đã cập nhật danh sách chatbot mới nhất");
+      toast.success(tCommon("success"));
     } catch (error) {
       console.error("Error refreshing chatbot list:", error);
-      toast.error("Không thể làm mới danh sách. Vui lòng thử lại.");
+      toast.error(tCommon("error"));
     }
-  }, [refetch, onRefresh]);
+  }, [refetch, onRefresh, tCommon]);
 
   return (
     <section>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="heading-premium text-xl font-bold">Chatbots của bạn</h2>
-          <p className="text-sm text-muted-foreground">Quản lý và theo dõi chatbot</p>
+          <h2 className="heading-premium text-xl font-bold">{t("title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="bg-gradient-primary btn-glow shadow-glow-sm hover:shadow-glow-md inline-flex items-center rounded-xl p-0.5 transition-all duration-200 hover:brightness-105 active:scale-[0.98]">
           <Button
@@ -160,14 +162,14 @@ export function BotsSection({
             className="h-9 gap-1.5 rounded-l-lg rounded-r-none border-r border-white/20 bg-transparent px-3.5 text-xs font-semibold text-white shadow-none transition-colors hover:bg-white/20 focus-visible:ring-0 active:bg-white/25"
           >
             <Plus className="h-4 w-4" />
-            Tạo mới
+            {t("createBot")}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 size="icon"
                 className="group h-9 w-8 rounded-l-none rounded-r-lg bg-transparent px-0 text-white shadow-none transition-colors hover:bg-white/20 focus-visible:ring-0 active:bg-white/25 data-[state=open]:bg-white/20"
-                aria-label="Tùy chọn tạo bot"
+                aria-label={t("createBot")}
               >
                 <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
               </Button>
@@ -181,7 +183,7 @@ export function BotsSection({
                 className="group flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary"
               >
                 <Plus className="h-4 w-4 text-primary transition-transform group-hover:scale-110" />
-                <span>Tạo bot đơn</span>
+                <span>{t("createBot")}</span>
               </DropdownMenuItem>
               {onImportCSV && (
                 <DropdownMenuItem
@@ -189,7 +191,7 @@ export function BotsSection({
                   className="group flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary"
                 >
                   <Upload className="h-4 w-4 text-primary transition-transform group-hover:scale-110" />
-                  <span>Import file CSV</span>
+                  <span>{t("importCsv")}</span>
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -202,7 +204,7 @@ export function BotsSection({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative flex-1 sm:max-w-sm">
               <Input
-                placeholder="Tìm kiếm chatbot theo tên..."
+                placeholder={t("searchPlaceholder")}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => {
@@ -231,26 +233,26 @@ export function BotsSection({
               <Select value={currentSortValue} onValueChange={handleSortSelect}>
                 <SelectTrigger className="h-9 w-44 rounded-lg text-sm">
                   <ArrowUpDown className="mr-2 h-3.5 w-3.5" />
-                  <SelectValue placeholder="Sắp xếp" />
+                  <SelectValue placeholder={t("sortBy")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="name_asc" className="focus:bg-muted focus:text-foreground">
-                    Tên A → Z
+                    {t("sortName")}
                   </SelectItem>
                   <SelectItem value="name_desc" className="focus:bg-muted focus:text-foreground">
-                    Tên Z → A
+                    {t("sortName")} (Z-A)
                   </SelectItem>
                   <SelectItem
                     value="created_at_desc"
                     className="focus:bg-muted focus:text-foreground"
                   >
-                    Mới nhất
+                    {t("sortNewest")}
                   </SelectItem>
                   <SelectItem
                     value="created_at_asc"
                     className="focus:bg-muted focus:text-foreground"
                   >
-                    Cũ nhất
+                    {t("sortOldest")}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -260,8 +262,8 @@ export function BotsSection({
                 size="icon"
                 onClick={handleRefresh}
                 disabled={isFetching}
-                title="Làm mới danh sách"
-                aria-label="Làm mới danh sách chatbot"
+                title={tCommon("refresh")}
+                aria-label={tCommon("refresh")}
                 className="h-9 w-9 rounded-lg border transition-all hover:border-primary hover:bg-white hover:text-primary active:scale-95"
               >
                 <RotateCw className={`h-4 w-4 ${isFetching ? "animate-spin text-primary" : ""}`} />
@@ -315,14 +317,8 @@ export function BotsSection({
             <div className="bg-gradient-primary/10 mx-auto mb-2 flex h-20 w-20 items-center justify-center rounded-3xl">
               <Bot className="h-10 w-10 text-primary" />
             </div>
-            <h3 className="mb-3 text-xl font-semibold">
-              {searchQuery ? "Không tìm thấy chatbot" : "Chưa có chatbot nào"}
-            </h3>
-            <p className="mx-auto mb-6 max-w-sm text-muted-foreground">
-              {searchQuery
-                ? `Không có chatbot nào tên "${searchQuery}". Thử tìm kiếm khác.`
-                : "Tạo chatbot đầu tiên ngay bây giờ!"}
-            </p>
+            <h3 className="mb-3 text-xl font-semibold">{t("noBotsFound")}</h3>
+            <p className="mx-auto mb-6 max-w-sm text-muted-foreground">{t("noBotsDescription")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -351,8 +347,7 @@ export function BotsSection({
           {totalPages > 1 && (
             <div className="mt-6 flex flex-col items-center justify-between gap-4 sm:flex-row">
               <p className="text-sm text-muted-foreground">
-                Hiển thị {firstItem.toLocaleString("vi-VN")}-{lastItem.toLocaleString("vi-VN")}{" "}
-                trong {total.toLocaleString("vi-VN")} chatbot
+                {firstItem.toLocaleString()}-{lastItem.toLocaleString()} / {total.toLocaleString()}
               </p>
 
               <Pagination className="ml-auto w-auto justify-end">

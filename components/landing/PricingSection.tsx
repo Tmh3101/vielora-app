@@ -3,20 +3,21 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks/useAuth";
 import type { Tables } from "@/lib/supabase/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { getSubscriptionByWorkspaceId } from "@/lib/services/subscription.service";
 import { getActivePlans } from "@/lib/services/plan.service";
-import { planCTA, planFeatures, planOrder } from "@/config/pricing";
+import { planFeatureKeys, planOrder } from "@/config/pricing";
 import { comparePlans } from "@/lib/utils/pricing";
 import { PricingToggle } from "@/components/shared/pricing/PricingToggle";
 import { PricingCard } from "@/components/shared/pricing/PricingCard";
 import { ESubscriptionCycle, ESubscriptionPlan } from "@/types";
-
-import { useWorkspace } from "@/hooks/useWorkspace";
+import { useWorkspace, readActiveWorkspaceIdFromCookie } from "@/hooks/useWorkspace";
 
 const PricingSection = () => {
+  const t = useTranslations("pricing");
   const [billingCycle, setBillingCycle] = useState<ESubscriptionCycle>(ESubscriptionCycle.Monthly);
   const [plans, setPlans] = useState<Tables<"plans">[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(true);
@@ -25,7 +26,6 @@ const PricingSection = () => {
   const router = useRouter();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
-  // const [subscription, setSubscription] = useState<Tables<"subscriptions"> | null>(null);
   const [activePlanCode, setActivePlanCode] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,9 +39,7 @@ const PricingSection = () => {
         if (user) {
           const wsId =
             activeWorkspace?.id ||
-            (typeof document !== "undefined"
-              ? (document.cookie.match(/(?:^|;\s*)active_workspace_id=([^;]+)/)?.[1] ?? null)
-              : null);
+            (typeof document !== "undefined" ? readActiveWorkspaceIdFromCookie() : null);
           const subData = wsId ? await getSubscriptionByWorkspaceId(supabase, wsId) : null;
           if (subData) {
             const activePlan = plansData.find((p) => p.id === subData.plan_id);
@@ -59,7 +57,7 @@ const PricingSection = () => {
     if (!authLoading) {
       fetchPlansAndSub();
     }
-  }, [user, authLoading, supabase, activeWorkspace]);
+  }, [user, authLoading, activeWorkspace?.id, supabase]);
 
   const handleSelectPlan = (planCode: string) => {
     const targetSlug = activeWorkspace?.slug;
@@ -105,7 +103,7 @@ const PricingSection = () => {
             transition={{ duration: 0.5 }}
             className="heading-premium mb-4 text-3xl font-bold text-foreground sm:text-4xl"
           >
-            Bảng giá <span className="text-gradient-animated">Vielora</span> SaaS - Chatbot AI
+            {t("title")}
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 20 }}
@@ -114,7 +112,7 @@ const PricingSection = () => {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-lg text-muted-foreground"
           >
-            Giải pháp tự động hóa CSKH tối ưu chi phí cho mọi quy mô doanh nghiệp
+            {t("subtitle")}
           </motion.p>
         </div>
 
@@ -142,12 +140,17 @@ const PricingSection = () => {
             : plans.map((plan, index) => {
                 // Dynamically prepend DB values to static features (except for Enterprise plan)
                 const isEnterprisePlan = plan.code === ESubscriptionPlan.Enterprise;
+                const staticKeys = planFeatureKeys[plan.code as keyof typeof planFeatureKeys] ?? [];
+                const staticTranslated = staticKeys.map((key) =>
+                  t.has(`features.${key}`) ? t(`features.${key}`) : key
+                );
+
                 const features = isEnterprisePlan
-                  ? (planFeatures.landing[plan.code] ?? [])
+                  ? staticTranslated
                   : [
-                      `${plan.monthly_credits.toLocaleString()} credits/tháng`,
-                      `${plan.bots_limit} chatbot`,
-                      ...(planFeatures.landing[plan.code] ?? []),
+                      t("monthlyCredits", { credits: plan.monthly_credits.toLocaleString() }),
+                      t("chatbotCount", { count: plan.bots_limit }),
+                      ...staticTranslated,
                     ];
 
                 const { isCurrentPlan, isDowngrade, isUpgrade } = comparePlans(
@@ -160,16 +163,16 @@ const PricingSection = () => {
 
                 const isPopular = plan.code === ESubscriptionPlan.Standard && !isCurrentPlan;
 
-                let cta = planCTA.landing[plan.code] ?? "Chọn gói";
+                let cta = t("selectPlan");
                 if (isCurrentPlan) {
-                  cta = "Gói hiện tại";
+                  cta = t("currentPlan");
                 } else if (isDowngrade) {
-                  cta = "Hạ cấp";
+                  cta = t("downgrade");
                 } else if (isUpgrade) {
                   cta =
                     plan.code === ESubscriptionPlan.Enterprise
-                      ? "Cấu hình gói"
-                      : `Nâng cấp ${plan.name}`;
+                      ? t("configureEnterprise")
+                      : t("upgradeTo", { name: plan.name });
                 }
 
                 return (
@@ -190,20 +193,6 @@ const PricingSection = () => {
               })}
         </div>
 
-        {/* Policies section */}
-        {/* <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="mx-auto mt-20 max-w-4xl"
-        >
-          <h3 className="mb-8 text-center text-2xl font-bold text-foreground">
-            Chính sách dịch vụ
-          </h3>
-          <PricingPolicies variant="landing" />
-        </motion.div> */}
-
         {/* FAQ link */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -213,12 +202,12 @@ const PricingSection = () => {
           className="mt-12 text-center"
         >
           <p className="text-muted-foreground">
-            Có câu hỏi?{" "}
+            {t("haveQuestions")}{" "}
             <a
               href="mailto:contact@vielora.vn"
               className="link-underline text-primary hover:underline"
             >
-              liên hệ chúng tôi
+              {t("contactUs")}
             </a>
           </p>
         </motion.div>

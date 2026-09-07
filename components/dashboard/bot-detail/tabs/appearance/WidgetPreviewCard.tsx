@@ -10,6 +10,7 @@ import {
 } from "@/lib/helpers";
 import { Bot, Eye, MinusCircle } from "lucide-react";
 import { EWidgetIconType } from "@/types";
+import { useTranslations } from "next-intl";
 
 interface WidgetPreviewCardProps {
   previewMessagesRef: React.RefObject<HTMLDivElement | null>;
@@ -20,6 +21,7 @@ export function WidgetPreviewCard({
   previewMessagesRef,
   handleSuggestedQuestionsWheel,
 }: WidgetPreviewCardProps) {
+  const t = useTranslations("dashboard.botDetail.appearanceTab");
   const editBotName = useAppearanceStore((s) => s.editBotName);
   const avatarUrl = useAppearanceStore((s) => s.avatarUrl);
   const primaryColor = useAppearanceStore((s) => s.primaryColor);
@@ -48,9 +50,9 @@ export function WidgetPreviewCard({
             <Eye className="h-5 w-5" />
           </div>
           <div>
-            <CardTitle className="text-base font-semibold">Xem trước Widget</CardTitle>
+            <CardTitle className="text-base font-semibold">{t("previewTitle")}</CardTitle>
             <CardDescription className="text-xs text-muted-foreground">
-              Hiển thị thay đổi theo thời gian thực
+              {t("previewDescription")}
             </CardDescription>
           </div>
         </div>
@@ -85,9 +87,7 @@ export function WidgetPreviewCard({
                   <div className="text-sm font-semibold leading-tight">
                     {editBotName || "AI Assistant"}
                   </div>
-                  <div className="mt-0.5 text-xs leading-tight opacity-80">
-                    Luôn sẵn sàng hỗ trợ
-                  </div>
+                  <div className="mt-0.5 text-xs leading-tight opacity-80">{t("alwaysReady")}</div>
                 </div>
                 <div className="ml-auto cursor-not-allowed opacity-80">
                   <MinusCircle className="h-5 w-5" />
@@ -103,26 +103,17 @@ export function WidgetPreviewCard({
                   chatBackgroundOpacity / 100
                 )}
               >
-                <div className="my-2 text-center text-[11px] font-medium text-muted-foreground/70">
-                  Hôm nay
-                </div>
                 <div
                   className="shadow-xs max-w-[85%] rounded-2xl rounded-tl-none bg-muted/90 p-3 text-xs leading-relaxed duration-500 animate-in fade-in slide-in-from-bottom-2"
                   style={{ color: textColor }}
                 >
-                  {welcomeMessage || "Xin chào! Tôi có thể giúp gì cho bạn?"}
+                  {welcomeMessage || t("welcomeMessage")}
                 </div>
                 <div
                   className="shadow-xs ml-auto max-w-[85%] rounded-2xl rounded-tr-none p-3 text-xs leading-relaxed"
                   style={{ backgroundColor: primaryColor, color: getUserMessageTextColor() }}
                 >
-                  Xin chào! Tôi muốn tìm hiểu về dịch vụ.
-                </div>
-                <div
-                  className="shadow-xs max-w-[85%] rounded-2xl rounded-tl-none bg-muted/90 p-3 text-xs leading-relaxed delay-300 duration-500 animate-in fade-in slide-in-from-bottom-2"
-                  style={{ color: textColor }}
-                >
-                  Rất vui được hỗ trợ bạn! Hãy đặt câu hỏi bất kỳ cho tôi nhé...
+                  Hello! How can I help you?
                 </div>
                 <div className="flex h-7 w-11 items-center gap-1 rounded-2xl rounded-tl-none bg-muted/80 p-2 delay-500 duration-700 animate-in fade-in">
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/40" />
@@ -169,7 +160,7 @@ export function WidgetPreviewCard({
                 <div className="rounded-b-2xl bg-background p-3">
                   <div className="flex gap-2">
                     <div className="flex-1 cursor-not-allowed rounded-full border border-border/60 bg-muted/20 px-3.5 py-2 text-xs text-muted-foreground">
-                      Nhập câu hỏi...
+                      {t("widgetInputPlaceholder")}
                     </div>
                     <button
                       type="button"
@@ -198,7 +189,7 @@ export function WidgetPreviewCard({
             <div
               className="flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition-transform duration-300 hover:scale-105"
               style={{ backgroundColor: chatIconBgColor, cursor: "pointer" }}
-              title="Click để mở chat"
+              title={t("openChatTooltip")}
             >
               {chatIconType === EWidgetIconType.Preset ? (
                 <div

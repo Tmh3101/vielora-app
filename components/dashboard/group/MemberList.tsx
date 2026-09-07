@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { GroupMemberRow } from "@/lib/services/group-chat.service";
 import { updateMemberApi, removeMemberApi } from "@/lib/api/group-chat";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +30,7 @@ interface MemberListProps {
 }
 
 export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }: MemberListProps) {
+  const t = useTranslations("dashboard.group.memberList");
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [roleInput, setRoleInput] = useState("");
@@ -50,21 +52,23 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
           avatar_url: member.avatar_url,
         });
         toast({
-          title: "Cập nhật thành công",
-          description: `Đã ${canManage ? "cấp" : "thu hồi"} quyền ghi chú cho ${member.email}.`,
+          title: t("updateSuccessTitle"),
+          description: canManage
+            ? t("noteGranted", { email: member.email })
+            : t("noteRevoked", { email: member.email }),
         });
       } else {
         toast({
-          title: "Cập nhật thất bại",
-          description: res.message || "Không thể cập nhật quyền.",
+          title: t("updateFailedTitle"),
+          description: res.message || t("updateFailedDesc"),
           variant: "destructive",
         });
       }
     } catch (err) {
       console.error("Toggle note permission error:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể kết nối đến máy chủ.",
+        title: t("errorTitle"),
+        description: t("connectionFailed"),
         variant: "destructive",
       });
     } finally {
@@ -88,21 +92,23 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
           avatar_url: member.avatar_url,
         });
         toast({
-          title: "Cập nhật thành công",
-          description: `Đã ${canExport ? "cấp" : "thu hồi"} quyền xuất báo cáo cho ${member.email}.`,
+          title: t("updateSuccessTitle"),
+          description: canExport
+            ? t("exportGranted", { email: member.email })
+            : t("exportRevoked", { email: member.email }),
         });
       } else {
         toast({
-          title: "Cập nhật thất bại",
-          description: res.message || "Không thể cập nhật quyền.",
+          title: t("updateFailedTitle"),
+          description: res.message || t("updateFailedDesc"),
           variant: "destructive",
         });
       }
     } catch (err) {
       console.error("Toggle export report permission error:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể kết nối đến máy chủ.",
+        title: t("errorTitle"),
+        description: t("connectionFailed"),
         variant: "destructive",
       });
     } finally {
@@ -127,21 +133,24 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
         });
         setEditingId(null);
         toast({
-          title: "Cập nhật vai trò",
-          description: `Đã đổi vai trò cho ${member.email} thành "${finalRole || "Thành viên"}".`,
+          title: t("roleUpdatedTitle"),
+          description: t("roleUpdatedDesc", {
+            email: member.email,
+            role: finalRole || t("fallbackRole"),
+          }),
         });
       } else {
         toast({
-          title: "Lỗi",
-          description: res.message || "Không thể cập nhật vai trò.",
+          title: t("errorTitle"),
+          description: res.message || t("roleUpdateFailed"),
           variant: "destructive",
         });
       }
     } catch (err) {
       console.error("Save role error:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể kết nối đến máy chủ.",
+        title: t("errorTitle"),
+        description: t("connectionFailed"),
         variant: "destructive",
       });
     } finally {
@@ -156,21 +165,21 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
       if (res.success) {
         onMemberRemoved(member.id);
         toast({
-          title: "Đã xóa thành viên",
-          description: `Đã xóa ${member.email} khỏi nhóm chat.`,
+          title: t("memberRemovedTitle"),
+          description: t("memberRemovedDesc", { email: member.email }),
         });
       } else {
         toast({
-          title: "Lỗi",
-          description: res.message || "Không thể xóa thành viên.",
+          title: t("errorTitle"),
+          description: res.message || t("removeFailed"),
           variant: "destructive",
         });
       }
     } catch (err) {
       console.error("Remove member error:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể kết nối đến máy chủ.",
+        title: t("errorTitle"),
+        description: t("connectionFailed"),
         variant: "destructive",
       });
     } finally {
@@ -181,7 +190,7 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
   if (members.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-6 text-center text-xs text-muted-foreground">
-        Nhóm chưa có thành viên nào. Hãy nhập email bên trên để mời người dùng vào nhóm.
+        {t("empty")}
       </div>
     );
   }
@@ -212,21 +221,23 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
                 {Boolean(m.can_create_note || m.can_pin_knowledge) && (
                   <span className="inline-flex items-center rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-400">
                     <StickyNote className="mr-1 h-3 w-3" />
-                    Quyền ghi chú
+                    {t("badgeNotePermission")}
                   </span>
                 )}
 
                 {Boolean(m.can_export_report || m.canExportReport) && (
                   <span className="inline-flex items-center rounded-md border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[11px] font-semibold text-blue-600 dark:border-blue-500/30 dark:bg-blue-950/40 dark:text-blue-400">
                     <FileDown className="mr-1 h-3 w-3" />
-                    Quyền xuất báo cáo
+                    {t("badgeExportPermission")}
                   </span>
                 )}
               </div>
 
               {/* Role & Joined Date */}
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>Gia nhập: {new Date(m.joined_at).toLocaleDateString("vi-VN")}</span>
+                <span>
+                  {t("joinedAt", { date: new Date(m.joined_at).toLocaleDateString("vi-VN") })}
+                </span>
                 <span>•</span>
                 {isEditingRole ? (
                   <div className="flex items-center gap-1">
@@ -234,7 +245,7 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
                       autoFocus
                       size={1}
                       className="h-7 w-36 rounded-lg text-xs"
-                      placeholder="Vai trò (ví dụ: Giáo viên)"
+                      placeholder={t("rolePlaceholder")}
                       value={roleInput}
                       onChange={(e) => setRoleInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -248,7 +259,7 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
                       className="shadow-xs h-7 w-7 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/25 hover:text-emerald-700 active:scale-95 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/35 dark:hover:text-emerald-300"
                       onClick={() => handleSaveRole(m)}
                       disabled={isLoading}
-                      title="Lưu vai trò"
+                      title={t("saveRole")}
                     >
                       {isLoading ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -261,7 +272,7 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
                       variant="ghost"
                       className="shadow-xs h-7 w-7 rounded-xl border border-slate-200/80 bg-slate-100/80 text-slate-500 transition-all duration-200 hover:border-rose-500/40 hover:bg-rose-500/15 hover:text-rose-600 active:scale-95 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-rose-500/50 dark:hover:bg-rose-500/25 dark:hover:text-rose-400"
                       onClick={() => setEditingId(null)}
-                      title="Hủy"
+                      title={t("cancel")}
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
@@ -273,16 +284,16 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
                       setRoleInput(m.role_label || "");
                     }}
                     className="group inline-flex items-center gap-1 rounded-md border border-border/40 bg-muted/40 px-2 py-0.5 font-medium text-foreground/80 transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
-                    title="Bấm để chỉnh sửa vai trò"
+                    title={t("editRoleTitle")}
                   >
-                    <span>Vai trò: {m.role_label || "Thành viên"}</span>
+                    <span>{t("roleLabel", { role: m.role_label || t("fallbackRole") })}</span>
                     <Edit2 className="h-3 w-3 opacity-50 transition-opacity group-hover:opacity-100" />
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Actions: Toggle Quyền ghi chú, Toggle Export Report & Delete Button */}
+            {/* Actions: Toggle note permission, export report & delete */}
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center space-x-2">
                 <Switch
@@ -295,7 +306,7 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
                   htmlFor={`can-note-${m.id}`}
                   className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  Quyền ghi chú
+                  {t("permissionNote")}
                 </Label>
               </div>
 
@@ -310,7 +321,7 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
                   htmlFor={`can-export-${m.id}`}
                   className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  Quyền xuất báo cáo
+                  {t("permissionExport")}
                 </Label>
               </div>
 
@@ -320,26 +331,27 @@ export function MemberList({ botId, members, onMemberRemoved, onMemberUpdated }:
                     variant="outline"
                     size="icon"
                     className="h-8 w-8 rounded-xl border-border/60 text-muted-foreground transition-all duration-200 hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-600 active:scale-95 dark:hover:border-red-500/50 dark:hover:bg-red-500/20 dark:hover:text-red-400"
-                    title="Xóa thành viên"
+                    title={t("deleteMember")}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent className="rounded-2xl">
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Xác nhận xóa thành viên?</AlertDialogTitle>
+                    <AlertDialogTitle>{t("confirmDeleteTitle")}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Bạn có chắc chắn muốn xóa thành viên <strong>{m.email}</strong> khỏi nhóm chat
-                      này?
+                      {t("confirmDeleteDesc", { email: m.email })}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel className="rounded-xl">Hủy</AlertDialogCancel>
+                    <AlertDialogCancel className="rounded-xl">
+                      {t("confirmCancel")}
+                    </AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() => handleRemove(m)}
                       className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                      Xóa khỏi nhóm
+                      {t("confirmRemove")}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

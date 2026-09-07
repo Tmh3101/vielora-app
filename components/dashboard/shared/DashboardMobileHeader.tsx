@@ -25,6 +25,8 @@ import {
 import { ChevronDown, LogOut, Check, Building2, Plus } from "lucide-react";
 
 import { persistActiveWorkspaceId, useWorkspace, WorkspaceItem } from "@/hooks/useWorkspace";
+import { LanguageToggle } from "@/components/dashboard/LanguageToggle";
+import { useTranslations } from "next-intl";
 
 export interface DashboardMobileHeaderProps {
   fullName?: string;
@@ -35,6 +37,8 @@ export interface DashboardMobileHeaderProps {
 }
 
 export function DashboardMobileHeader({ fullName, email, onSignOut }: DashboardMobileHeaderProps) {
+  const tHeader = useTranslations("dashboard.shared.mobileHeader");
+  const tWs = useTranslations("dashboard.shared.workspaceSwitcher");
   const { activeWorkspace, workspaces, switchWorkspace, refreshWorkspaces } = useWorkspace();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [name, setName] = useState("");
@@ -137,91 +141,96 @@ export function DashboardMobileHeader({ fullName, email, onSignOut }: DashboardM
               />
             </Link>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="glass flex items-center gap-2">
-                  <div className="bg-gradient-primary flex h-7 w-7 items-center justify-center rounded-lg">
-                    <span className="text-xs font-medium text-primary-foreground">
-                      {fullName?.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="hidden text-left text-xs sm:block">
-                    <p className="font-semibold leading-none">
-                      {activeWorkspace?.name || fullName}
-                    </p>
-                    {activeWorkspace && (
-                      <p className="mt-0.5 text-[10px] font-medium uppercase leading-none text-primary">
-                        Gói {activeWorkspace.plans?.name || "Free"}
+            <div className="flex items-center gap-2">
+              <LanguageToggle />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="glass flex items-center gap-2">
+                    <div className="bg-gradient-primary flex h-7 w-7 items-center justify-center rounded-lg">
+                      <span className="text-xs font-medium text-primary-foreground">
+                        {fullName?.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="hidden text-left text-xs sm:block">
+                      <p className="font-semibold leading-none">
+                        {activeWorkspace?.name || fullName}
                       </p>
-                    )}
+                      {activeWorkspace && (
+                        <p className="mt-0.5 text-[10px] font-medium uppercase leading-none text-primary">
+                          {tHeader("planBadge", {
+                            plan: activeWorkspace.plans?.name || tWs("freePlan"),
+                          })}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="glass-md w-64 p-1.5 shadow-xl">
+                  <div className="px-2.5 py-2">
+                    <p className="text-sm font-semibold text-foreground">{fullName}</p>
+                    <p className="text-xs text-muted-foreground">{email}</p>
                   </div>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="glass-md w-64 p-1.5 shadow-xl">
-                <div className="px-2.5 py-2">
-                  <p className="text-sm font-semibold text-foreground">{fullName}</p>
-                  <p className="text-xs text-muted-foreground">{email}</p>
-                </div>
 
-                <DropdownMenuSeparator className="my-1 bg-border/40" />
+                  <DropdownMenuSeparator className="my-1 bg-border/40" />
 
-                <DropdownMenuLabel className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Workspace
-                </DropdownMenuLabel>
-                <div className="max-h-40 space-y-0.5 overflow-y-auto">
-                  {workspaces.map((ws: WorkspaceItem) => {
-                    const isActive = activeWorkspace?.id === ws.id;
-                    const planName = ws.plans?.name || "Free";
-                    const planNameLower = planName.toLowerCase();
-                    const badgeClass = planNameLower.includes("pro")
-                      ? "bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 font-semibold"
-                      : planNameLower.includes("standard")
-                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-semibold"
-                        : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20 font-medium";
+                  <DropdownMenuLabel className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {tWs("workspace")}
+                  </DropdownMenuLabel>
+                  <div className="max-h-40 space-y-0.5 overflow-y-auto">
+                    {workspaces.map((ws: WorkspaceItem) => {
+                      const isActive = activeWorkspace?.id === ws.id;
+                      const planName = ws.plans?.name || tWs("freePlan");
+                      const planNameLower = (ws.plans?.name || "").toLowerCase();
+                      const badgeClass = planNameLower.includes("pro")
+                        ? "bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 font-semibold"
+                        : planNameLower.includes("standard")
+                          ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-semibold"
+                          : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20 font-medium";
 
-                    return (
-                      <DropdownMenuItem
-                        key={ws.id}
-                        onClick={() => switchWorkspace(ws.slug)}
-                        className="flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
-                      >
-                        <div className="mr-2 flex min-w-0 flex-1 items-center justify-between gap-1.5">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate font-medium">{ws.name}</span>
+                      return (
+                        <DropdownMenuItem
+                          key={ws.id}
+                          onClick={() => switchWorkspace(ws.slug)}
+                          className="flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
+                        >
+                          <div className="mr-2 flex min-w-0 flex-1 items-center justify-between gap-1.5">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              <span className="truncate font-medium">{ws.name}</span>
+                            </div>
+                            <span
+                              className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] uppercase ${badgeClass}`}
+                            >
+                              {planName}
+                            </span>
                           </div>
-                          <span
-                            className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] uppercase ${badgeClass}`}
-                          >
-                            {planName}
-                          </span>
-                        </div>
-                        {isActive && <Check className="h-4 w-4 shrink-0 text-primary" />}
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </div>
+                          {isActive && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </div>
 
-                <DropdownMenuItem
-                  onClick={() => setIsModalOpen(true)}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
-                >
-                  <Plus className="h-4 w-4" />
-                  Tạo Workspace mới
-                </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {tWs("createNew")}
+                  </DropdownMenuItem>
 
-                <DropdownMenuSeparator className="my-1 bg-border/40" />
+                  <DropdownMenuSeparator className="my-1 bg-border/40" />
 
-                <DropdownMenuItem
-                  onClick={() => void onSignOut()}
-                  className="text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Đăng xuất
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem
+                    onClick={() => void onSignOut()}
+                    className="text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    {tHeader("signOut")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </header>
@@ -238,7 +247,7 @@ export function DashboardMobileHeader({ fullName, email, onSignOut }: DashboardM
       >
         <DialogContent className="rounded-2xl border-border/80 bg-card p-6 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold">Tạo Workspace mới</DialogTitle>
+            <DialogTitle className="text-lg font-bold">{tWs("createTitle")}</DialogTitle>
           </DialogHeader>
           {error && (
             <div className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{error}</div>
@@ -246,20 +255,20 @@ export function DashboardMobileHeader({ fullName, email, onSignOut }: DashboardM
           <form onSubmit={handleCreate} className="space-y-4 pt-2">
             <div className="space-y-1.5">
               <Label htmlFor="mobile-ws-name" className="text-xs font-medium">
-                Tên Workspace
+                {tWs("nameLabel")}
               </Label>
               <Input
                 id="mobile-ws-name"
                 required
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="VD: Workspace của tôi"
+                placeholder={tWs("namePlaceholder")}
                 className="h-9 rounded-lg border-border/60 bg-muted/40 text-xs focus-visible:ring-primary"
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="mobile-ws-slug" className="text-xs font-medium">
-                Workspace Slug
+                {tWs("slugLabel")}
               </Label>
               <Input
                 id="mobile-ws-slug"
@@ -271,12 +280,14 @@ export function DashboardMobileHeader({ fullName, email, onSignOut }: DashboardM
                   if (suggestions.length > 0) setSuggestions([]);
                   if (error) setError(null);
                 }}
-                placeholder="VD: workspace-cua-toi"
+                placeholder={tWs("slugPlaceholder")}
                 className="h-9 rounded-lg border-border/60 bg-muted/40 text-xs focus-visible:ring-primary"
               />
               {suggestions.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
-                  <span className="text-[11px] font-medium text-muted-foreground">Gợi ý:</span>
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    {tWs("suggestions")}
+                  </span>
                   {suggestions.map((sug) => (
                     <Badge
                       key={sug}
@@ -302,7 +313,7 @@ export function DashboardMobileHeader({ fullName, email, onSignOut }: DashboardM
                 onClick={() => setIsModalOpen(false)}
                 className="rounded-lg text-xs transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
               >
-                Hủy
+                {tWs("cancel")}
               </Button>
               <Button
                 type="submit"
@@ -310,7 +321,7 @@ export function DashboardMobileHeader({ fullName, email, onSignOut }: DashboardM
                 disabled={isLoading}
                 className="rounded-lg text-xs font-medium"
               >
-                {isLoading ? "Đang tạo..." : "Tạo Workspace"}
+                {isLoading ? tWs("creating") : tWs("createBtn")}
               </Button>
             </DialogFooter>
           </form>

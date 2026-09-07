@@ -1,7 +1,7 @@
 import type { ServiceClient } from "@/lib/services/types";
 import { GROUP_ALREADY_PINNED_CODE, GROUP_INSUFFICIENT_CREDITS_CODE } from "@/lib/constants";
 import { GROUP_CHAT_CONFIG } from "@/config/group-chat";
-import { GROUP_MESSAGES } from "@/lib/constants/group-chat-messages";
+import { getGroupChatMessages, GROUP_MESSAGES } from "@/lib/constants/group-chat-messages";
 import { EGroupSenderType, ETransactionType } from "@/types/enums";
 import { deductWorkspaceCredits, refundWorkspaceCredits } from "@/lib/services/credit.service";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -26,8 +26,10 @@ interface SenderMeta {
 async function validateMessageForNote(
   adminClient: ServiceClient,
   groupId: string,
-  messageId: string
+  messageId: string,
+  locale?: string
 ): Promise<GroupMessageRow> {
+  const msgs = getGroupChatMessages(locale);
   const { data: message, error: msgErr } = await adminClient
     .from("group_messages")
     .select("*")
@@ -37,7 +39,7 @@ async function validateMessageForNote(
     .single();
 
   if (msgErr || !message) {
-    throw new Error(GROUP_MESSAGES.ERRORS.MESSAGE_NOT_FOUND);
+    throw new Error(msgs.ERRORS.MESSAGE_NOT_FOUND);
   }
 
   // Check if already pinned
@@ -49,7 +51,7 @@ async function validateMessageForNote(
     .maybeSingle();
 
   if (existingNote) {
-    throw new GroupServiceError(GROUP_MESSAGES.ERRORS.ALREADY_PINNED, GROUP_ALREADY_PINNED_CODE);
+    throw new GroupServiceError(msgs.ERRORS.ALREADY_PINNED, GROUP_ALREADY_PINNED_CODE);
   }
 
   return message as GroupMessageRow;
@@ -64,11 +66,13 @@ async function resolveSenderMetadata(
   groupId: string,
   botName: string,
   userId: string,
-  userName?: string
+  userName?: string,
+  locale?: string
 ): Promise<SenderMeta> {
+  const msgs = getGroupChatMessages(locale);
   const isBot = msg.sender_type === EGroupSenderType.Bot;
-  let senderName = isBot ? botName : GROUP_MESSAGES.ROLES.DEFAULT_MEMBER;
-  let senderRole = isBot ? GROUP_MESSAGES.ROLES.AI_ASSISTANT : GROUP_MESSAGES.ROLES.DEFAULT_MEMBER;
+  let senderName = isBot ? botName : msgs.ROLES.DEFAULT_MEMBER;
+  let senderRole = isBot ? msgs.ROLES.AI_ASSISTANT : msgs.ROLES.DEFAULT_MEMBER;
 
   if (!isBot && msg.sender_id) {
     const { data: member } = await adminClient
@@ -102,7 +106,8 @@ async function resolveSenderMetadata(
     } else if (
       msg.sender_id === userId &&
       userName &&
-      userName !== GROUP_MESSAGES.ROLES.DEFAULT_MEMBER
+      userName !== GROUP_MESSAGES.ROLES.DEFAULT_MEMBER &&
+      userName !== msgs.ROLES.DEFAULT_MEMBER
     ) {
       senderName = userName;
     } else if (member?.email) {
@@ -110,8 +115,8 @@ async function resolveSenderMetadata(
     }
   }
 
-  const dateStr = new Date(msg.created_at || Date.now()).toLocaleString("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
+  const dateTag = locale?.startsWith("en") ? "en-US" : "vi-VN";
+  const dateStr = new Date(msg.created_at || Date.now()).toLocaleString(dateTag, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -129,24 +134,28 @@ function formatNoteContent(
   message: GroupMessageRow,
   parentMessage: GroupMessageRow | null,
   currentSender: SenderMeta,
-  parentSender: SenderMeta | null
+  parentSender: SenderMeta | null,
+  locale?: string
 ): { title: string; contentText: string } {
+  const msgs = getGroupChatMessages(locale);
   let title = "";
   let contentText = "";
 
   if (parentMessage && parentSender) {
     const parentSnippet = parentMessage.content.slice(0, 35).replace(/\n/g, " ").trim();
     const currentSnippet = message.content.slice(0, 35).replace(/\n/g, " ").trim();
+    const suffix = parentMessage.content.length > 35 ? "..." : "";
+    const currSuffix = message.content.length > 35 ? "..." : "";
 
     if (message.sender_type === EGroupSenderType.Bot) {
-      title = `Hỏi đáp: ${parentSnippet}${parentMessage.content.length > 35 ? "..." : ""}`;
-      contentText = `**Câu hỏi (${parentSender.senderName} - ${parentSender.senderRole}, ${parentSender.dateStr}):**
+      title = msgs.NOTE_FORMAT.QA_TITLE(`${parentSnippet}${suffix}`);
+      contentText = `${msgs.NOTE_FORMAT.QUESTION_HEADER(parentSender.senderName, parentSender.senderRole, parentSender.dateStr)}
 ${parentMessage.content}
 
-**Trả lời (${currentSender.senderName}, ${currentSender.dateStr}):**
+${msgs.NOTE_FORMAT.ANSWER_HEADER(currentSender.senderName, currentSender.dateStr)}
 ${message.content}`;
     } else {
-      title = `Phản hồi: ${currentSnippet}${message.content.length > 35 ? "..." : ""}`;
+      title = msgs.NOTE_FORMAT.REPLY_TITLE(`${currentSnippet}${currSuffix}`);
       contentText = `**${parentSender.senderName} (${parentSender.senderRole}, ${parentSender.dateStr}):**
 ${parentMessage.content}
 
@@ -155,12 +164,13 @@ ${message.content}`;
     }
   } else {
     const snippet = message.content.slice(0, 35).replace(/\n/g, " ").trim();
+    const suffix = message.content.length > 35 ? "..." : "";
     if (message.sender_type === EGroupSenderType.Bot) {
-      title = `Câu trả lời AI: ${snippet}${message.content.length > 35 ? "..." : ""}`;
-      contentText = `**${currentSender.senderName} (${GROUP_MESSAGES.ROLES.AI_ASSISTANT}, ${currentSender.dateStr}):**
+      title = msgs.NOTE_FORMAT.AI_ANSWER_TITLE(`${snippet}${suffix}`);
+      contentText = `**${currentSender.senderName} (${msgs.ROLES.AI_ASSISTANT}, ${currentSender.dateStr}):**
 ${message.content}`;
     } else {
-      title = `${currentSender.senderName} (${currentSender.senderRole}): ${snippet}${message.content.length > 35 ? "..." : ""}`;
+      title = `${currentSender.senderName} (${currentSender.senderRole}): ${snippet}${suffix}`;
       contentText = `**${currentSender.senderName} (${currentSender.senderRole}, ${currentSender.dateStr}):**
 ${message.content}`;
     }
@@ -180,24 +190,38 @@ export async function createNoteFromMessage(
   client: ServiceClient,
   input: CreateNoteFromMessageInput
 ): Promise<GroupNoteRow> {
-  const { groupId, botId, messageId, userId, userName, isActive = false } = input;
+  const {
+    groupId,
+    botId,
+    messageId,
+    userId,
+    userName,
+    isActive = false,
+    locale: explicitLocale,
+  } = input;
   const adminClient = createAdminClient();
 
-  // 1. Validate message
-  const message = await validateMessageForNote(adminClient, groupId, messageId);
-
-  // 2. Fetch bot and workspace
+  // 1. Fetch bot and workspace
   const { data: botData } = await adminClient
     .from("bots")
-    .select("name, workspace_id")
+    .select("name, workspace_id, widget_settings")
     .eq("id", botId)
     .single();
 
-  const botName = botData?.name || GROUP_MESSAGES.ROLES.AI_ASSISTANT;
+  const locale =
+    explicitLocale ||
+    (botData?.widget_settings as { ui_language?: string } | null)?.ui_language ||
+    "vi";
+  const msgs = getGroupChatMessages(locale);
+
+  const botName = botData?.name || msgs.ROLES.AI_ASSISTANT;
   const workspaceId = botData?.workspace_id;
   if (!workspaceId) {
-    throw new Error(GROUP_MESSAGES.ERRORS.BOT_WORKSPACE_NOT_FOUND);
+    throw new Error(msgs.ERRORS.BOT_WORKSPACE_NOT_FOUND);
   }
+
+  // 2. Validate message
+  const message = await validateMessageForNote(adminClient, groupId, messageId, locale);
 
   // 3. Resolve current and parent senders
   const currentSender = await resolveSenderMetadata(
@@ -206,7 +230,8 @@ export async function createNoteFromMessage(
     groupId,
     botName,
     userId,
-    userName
+    userName,
+    locale
   );
 
   let parentMessage: GroupMessageRow | null = null;
@@ -228,7 +253,8 @@ export async function createNoteFromMessage(
         groupId,
         botName,
         userId,
-        userName
+        userName,
+        locale
       );
     }
   }
@@ -239,7 +265,8 @@ export async function createNoteFromMessage(
     message,
     parentMessage,
     currentSender,
-    parentSender
+    parentSender,
+    locale
   );
   const contentHtml = parseMarkdown(contentText);
 
@@ -253,7 +280,7 @@ export async function createNoteFromMessage(
 
   if (!deductRes.success) {
     throw new GroupServiceError(
-      deductRes.message || GROUP_MESSAGES.ERRORS.INSUFFICIENT_CREDITS_CREATE,
+      deductRes.message || msgs.ERRORS.INSUFFICIENT_CREDITS_CREATE,
       GROUP_INSUFFICIENT_CREDITS_CODE
     );
   }
@@ -280,15 +307,15 @@ export async function createNoteFromMessage(
       .single();
 
     if (noteError || !noteData) {
-      throw noteError || new Error("Failed to insert group note from message");
+      throw noteError || new Error(msgs.ERRORS.CREATE_NOTE_FAILED);
     }
     createdNote = noteData as GroupNoteRow;
 
     // 7. Generate RAG embedding & insert into documents
+    const dateTag = locale.startsWith("en") ? "en-US" : "vi-VN";
     const saveFormattedDate = new Date(createdNote.created_at || Date.now()).toLocaleString(
-      "vi-VN",
+      dateTag,
       {
-        timeZone: "Asia/Ho_Chi_Minh",
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -296,12 +323,12 @@ export async function createNoteFromMessage(
         minute: "2-digit",
       }
     );
-    const contentToEmbed = `[Ghi chú nhóm - Trích xuất từ thảo luận nhóm]
-- Tiêu đề: ${title}
-- Người lưu ghi chú: ${userName || currentSender.senderName}
-- Thời gian lưu: ${saveFormattedDate}
-
-${contentText}`;
+    const contentToEmbed = msgs.NOTE_FORMAT.RAG_PINNED_MESSAGE_TEMPLATE(
+      title,
+      userName || currentSender.senderName,
+      saveFormattedDate,
+      contentText
+    );
 
     const { generateEmbedding } = await import("@/lib/rag/generative");
     const embedding = await generateEmbedding({ text: contentToEmbed });
@@ -331,7 +358,7 @@ ${contentText}`;
       .single();
 
     if (docError || !docData) {
-      throw docError || new Error(GROUP_MESSAGES.ERRORS.RAG_INDEX_FAILED);
+      throw docError || new Error(msgs.ERRORS.RAG_INDEX_FAILED);
     }
     documentId = docData.id;
 
@@ -347,7 +374,7 @@ ${contentText}`;
     const safeTitle = title.length > 35 ? `${title.slice(0, 35)}...` : title;
     await insertGroupSystemMessage(adminClient, {
       groupId,
-      content: `${userName || currentSender.senderName} đã lưu tin nhắn vào ghi chú: "${safeTitle}"`,
+      content: msgs.MESSAGE_SAVED_TO_NOTE(userName || currentSender.senderName, safeTitle),
     });
 
     return createdNote;

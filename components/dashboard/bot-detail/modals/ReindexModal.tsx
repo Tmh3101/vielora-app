@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { CrawlScopeType } from "@/types/scrape";
 import { CrawlScope } from "@/lib/constants";
+import { useTranslations } from "next-intl";
 
 export interface ReindexModalProps {
   open: boolean;
@@ -78,6 +79,7 @@ export function ReindexModal({
   onConfirm,
   renderStatusBadge,
 }: ReindexModalProps) {
+  const t = useTranslations();
   const showScopeSelection = !hasStartedDiscover && previewPages.length === 0 && !isDiscovering;
 
   return (
@@ -86,12 +88,14 @@ export function ReindexModal({
         {showScopeSelection ? (
           <>
             <DialogHeader>
-              <DialogTitle>Cập nhật nội dung</DialogTitle>
-              <DialogDescription>Chọn phạm vi crawl trước khi quét lại website.</DialogDescription>
+              <DialogTitle>{t("dashboard.botDetail.modals.reindex.title")}</DialogTitle>
+              <DialogDescription>
+                {t("dashboard.botDetail.modals.reindex.scopeDesc")}
+              </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-3 rounded-lg border p-4">
-              <Label>Phạm vi</Label>
+              <Label>{t("dashboard.botDetail.modals.reindex.scopeLabel")}</Label>
               <RadioGroup
                 value={reindexScope}
                 onValueChange={(value) => onScopeChange(value as CrawlScopeType)}
@@ -104,9 +108,11 @@ export function ReindexModal({
                     className="mt-0.5"
                   />
                   <span className="space-y-0.5">
-                    <span className="block text-sm font-medium">Toàn bộ website</span>
+                    <span className="block text-sm font-medium">
+                      {t("dashboard.botDetail.modals.reindex.scopeFull")}
+                    </span>
                     <span className="block text-xs text-muted-foreground">
-                      Crawl nội dung của toàn bộ website.
+                      {t("dashboard.botDetail.modals.reindex.scopeFullDesc")}
                     </span>
                   </span>
                 </label>
@@ -117,9 +123,11 @@ export function ReindexModal({
                     className="mt-0.5"
                   />
                   <span className="space-y-0.5">
-                    <span className="block text-sm font-medium">Chỉ hostname hiện tại</span>
+                    <span className="block text-sm font-medium">
+                      {t("dashboard.botDetail.modals.reindex.scopeHostname")}
+                    </span>
                     <span className="block text-xs text-muted-foreground">
-                      Chỉ crawl đúng hostname của URL bot hiện tại.
+                      {t("dashboard.botDetail.modals.reindex.scopeHostnameDesc")}
                     </span>
                   </span>
                 </label>
@@ -132,25 +140,25 @@ export function ReindexModal({
                 onClick={() => onOpenChange(false)}
                 className="hover:border-red-600 hover:bg-white hover:text-red-600"
               >
-                Hủy
+                {t("dashboard.botDetail.modals.reindex.cancel")}
               </Button>
               <Button onClick={() => void onStartDiscover()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Bắt đầu crawl
+                {t("dashboard.botDetail.modals.reindex.startCrawl")}
               </Button>
             </DialogFooter>
           </>
         ) : isLoadingPreview || isDiscovering ? (
           <>
             <DialogHeader>
-              <DialogTitle>Cập nhật nội dung</DialogTitle>
+              <DialogTitle>{t("dashboard.botDetail.modals.reindex.title")}</DialogTitle>
               <DialogDescription>
-                Đang được thực hiện crawl nội dung mới nhất. Vui lòng chờ trong giây lát...
+                {t("dashboard.botDetail.modals.reindex.crawlingDesc")}
               </DialogDescription>
             </DialogHeader>
             <div className="rounded-lg bg-muted/50 p-2">
               <ElegantProgress
-                title="Đang quét website..."
+                title={t("dashboard.botDetail.modals.reindex.scanningTitle")}
                 currentAction={currentAction}
                 crawledCount={crawledCount}
               />
@@ -162,16 +170,16 @@ export function ReindexModal({
                 disabled={isReindexing}
                 className="hover:border-red-600 hover:bg-white hover:text-red-600"
               >
-                Hủy
+                {t("dashboard.botDetail.modals.reindex.cancel")}
               </Button>
             </DialogFooter>
           </>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Cập nhật nội dung</DialogTitle>
+              <DialogTitle>{t("dashboard.botDetail.modals.reindex.title")}</DialogTitle>
               <DialogDescription>
-                Chọn các trang đã discover để đưa vào quá trình indexing.
+                {t("dashboard.botDetail.modals.reindex.selectPagesDesc")}
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-wrap gap-4 py-2">
@@ -183,25 +191,34 @@ export function ReindexModal({
                     ).length
                   }
                 </Badge>
-                <span className="text-muted-foreground">Chưa index</span>
+                <span className="text-muted-foreground">
+                  {t("dashboard.botDetail.modals.reindex.notIndexed")}
+                </span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <Badge className="bg-green-100 text-green-800">
                   {previewPages.filter((p) => p.status === EPageStatus.Completed).length}
                 </Badge>
-                <span className="text-muted-foreground">Đã index</span>
+                <span className="text-muted-foreground">
+                  {t("dashboard.botDetail.modals.reindex.indexed")}
+                </span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <Badge className="bg-red-100 text-red-700">
                   {previewPages.filter((p) => p.status === EPageStatus.Failed).length}
                 </Badge>
-                <span className="text-muted-foreground">Discover lỗi</span>
+                <span className="text-muted-foreground">
+                  {t("dashboard.botDetail.modals.reindex.discoverError")}
+                </span>
               </div>
             </div>
 
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
-                Đã chọn {selectedUrls.size}/{selectablePreviewPagesCount} trang
+                {t("dashboard.botDetail.modals.reindex.selected", {
+                  selected: selectedUrls.size,
+                  total: selectablePreviewPagesCount,
+                })}
               </span>
               <div className="flex items-center gap-2">
                 <Button
@@ -211,7 +228,7 @@ export function ReindexModal({
                   disabled={isLoadingPreview || maxSelectablePagesByCredit === 0}
                   className="hover:border-primary hover:bg-white hover:text-primary"
                 >
-                  Chọn tất cả
+                  {t("dashboard.botDetail.modals.reindex.selectAll")}
                 </Button>
                 <Button
                   variant="outline"
@@ -219,7 +236,7 @@ export function ReindexModal({
                   onClick={onDeselectAll}
                   className="hover:border-primary hover:bg-white hover:text-primary"
                 >
-                  Bỏ chọn tất cả
+                  {t("dashboard.botDetail.modals.reindex.deselectAll")}
                 </Button>
               </div>
             </div>
@@ -260,7 +277,9 @@ export function ReindexModal({
                       </div>
                       <div className="flex items-center gap-2">
                         {page.status === EPageStatus.Completed && (
-                          <Badge className="bg-slate-100 text-slate-700">Không có thay đổi</Badge>
+                          <Badge className="bg-slate-100 text-slate-700">
+                            {t("dashboard.botDetail.modals.reindex.noChange")}
+                          </Badge>
                         )}
                         {renderStatusBadge(page.status)}
                       </div>
@@ -271,7 +290,9 @@ export function ReindexModal({
                 {previewErrors.length > 0 && (
                   <div className="mt-4 border-t pt-4">
                     <p className="mb-2 text-sm font-medium text-destructive">
-                      Lỗi khi quét ({previewErrors.length})
+                      {t("dashboard.botDetail.modals.reindex.scanError", {
+                        count: previewErrors.length,
+                      })}
                     </p>
                     {previewErrors.map((error, idx) => (
                       <div
@@ -292,13 +313,13 @@ export function ReindexModal({
                 {selectedPendingCount >= maxSelectablePagesByCredit &&
                   selectablePreviewPagesCount > 0 && (
                     <p className="text-xs font-medium text-amber-600">
-                      Không thể chọn thêm trang vì đã đạt giới hạn credits hiện tại.
+                      {t("dashboard.botDetail.modals.reindex.cannotSelectMore")}
                     </p>
                   )}
                 <div className="inline-flex min-w-[250px] items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
                   <div>
                     <p className="text-[11px] tracking-wide text-muted-foreground">
-                      Credits cần dùng / Khả dụng
+                      {t("dashboard.botDetail.modals.reindex.creditsUsage")}
                     </p>
                     <p className="text-xs font-medium text-foreground">
                       {selectedCreditsCost.toLocaleString()} / {totalCredits.toLocaleString()}
@@ -306,8 +327,10 @@ export function ReindexModal({
                   </div>
                   <div className="h-8 w-px bg-border" />
                   <p className="text-xs text-muted-foreground">
-                    {CREDIT_PER_PAGE} credit/trang • tối đa{" "}
-                    {Math.max(0, maxSelectablePagesByCredit)} trang
+                    {t("dashboard.botDetail.modals.reindex.creditsPerPage", {
+                      count: CREDIT_PER_PAGE,
+                      max: Math.max(0, maxSelectablePagesByCredit),
+                    })}
                   </p>
                 </div>
               </div>
@@ -318,7 +341,7 @@ export function ReindexModal({
                   disabled={isReindexing}
                   className="hover:border-red-600 hover:bg-white hover:text-red-600"
                 >
-                  Hủy
+                  {t("dashboard.botDetail.modals.reindex.cancel")}
                 </Button>
                 <Button
                   onClick={() => void onConfirm()}
@@ -332,12 +355,16 @@ export function ReindexModal({
                   {isReindexing ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Đang cập nhật...
+                      {t("dashboard.botDetail.modals.reindex.updating")}
                     </>
                   ) : (
                     <>
                       <RefreshCw className="mr-2 h-4 w-4" />
-                      Cập nhật {selectedUrls.size > 0 && `(${selectedUrls.size})`}
+                      {selectedUrls.size > 0
+                        ? t("dashboard.botDetail.modals.reindex.updateWithCount", {
+                            count: selectedUrls.size,
+                          })
+                        : t("dashboard.botDetail.modals.reindex.update")}
                     </>
                   )}
                 </Button>

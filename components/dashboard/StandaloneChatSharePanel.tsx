@@ -21,6 +21,7 @@ import {
   getStandaloneChatAppUrl,
   getStandaloneChatUrlParts,
 } from "@/lib/utils/standalone-chat-url";
+import { useSafeTranslations } from "@/lib/i18n/useSafeTranslations";
 
 export interface StandaloneChatSharePanelProps {
   botName: string;
@@ -51,6 +52,7 @@ export function StandaloneChatSharePanel({
   className,
   variant = "default",
 }: StandaloneChatSharePanelProps) {
+  const t = useSafeTranslations("standaloneChat.share");
   const { toast } = useToast();
   const slugInputId = useId();
   const [slugError, setSlugError] = useState<string>("");
@@ -74,22 +76,24 @@ export function StandaloneChatSharePanel({
     }
 
     if (!/^[a-z0-9-]+$/.test(slug)) {
-      setSlugError("Chỉ được sử dụng chữ thường, số và dấu gạch ngang");
+      setSlugError(t("slugInvalidChars") || "Chỉ được sử dụng chữ thường, số và dấu gạch ngang");
       return;
     }
 
     if (slug.length < 3) {
-      setSlugError("Slug phải có ít nhất 3 ký tự");
+      setSlugError(t("slugMinLength") || "Slug phải có ít nhất 3 ký tự");
       return;
     }
 
     if (RESERVED_SUBDOMAINS.includes(slug.toLowerCase() as (typeof RESERVED_SUBDOMAINS)[number])) {
-      setSlugError("Tên miền/slug này dành riêng cho hệ thống. Vui lòng chọn tên khác.");
+      setSlugError(
+        t("slugReserved") || "Tên miền/slug này dành riêng cho hệ thống. Vui lòng chọn tên khác."
+      );
       return;
     }
 
     setSlugError("");
-  }, [slug]);
+  }, [slug, t]);
 
   const checkSlugAvailability = async () => {
     if (!slug || slugError || slug === savedSlug) return;
@@ -100,7 +104,7 @@ export function StandaloneChatSharePanel({
       const data = await response.json();
 
       if (!data.available) {
-        setSlugError("Slug này đã được sử dụng. Vui lòng chọn slug khác.");
+        setSlugError(t("slugTaken") || "Slug này đã được sử dụng. Vui lòng chọn slug khác.");
       }
     } catch (error) {
       console.error("Error checking slug:", error);
@@ -112,7 +116,7 @@ export function StandaloneChatSharePanel({
   const handleSave = async () => {
     if (slugError) {
       toast({
-        title: "Lỗi",
+        title: t("errorTitle") || "Lỗi",
         description: slugError,
         variant: "destructive",
       });
@@ -126,20 +130,20 @@ export function StandaloneChatSharePanel({
     if (!canShareStandalone) return;
 
     await navigator.clipboard.writeText(standaloneUrl);
-    toast({ title: "Đã sao chép link!" });
+    toast({ title: t("copyLinkSuccess") || "Đã sao chép link!" });
   };
 
   return (
     <div className={cn(isDropdown ? "space-y-3" : "space-y-4", className)}>
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <Label>Cho phép mọi người truy cập bot qua link</Label>
+          <Label>{t("allowPublicAccess") || "Cho phép mọi người truy cập bot qua link"}</Label>
         </div>
         <Switch checked={isPublic} onCheckedChange={onPublicChange} />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor={slugInputId}>Đường link tùy chỉnh</Label>
+        <Label htmlFor={slugInputId}>{t("customLink") || "Đường link tùy chỉnh"}</Label>
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="flex flex-1 items-stretch overflow-hidden rounded-md border">
             <div className="flex items-center bg-muted px-3 py-2">
@@ -170,7 +174,8 @@ export function StandaloneChatSharePanel({
             <Button
               variant="outline"
               size="icon"
-              aria-label="Mở trang chat công khai"
+              aria-label={t("openLink") || "Mở trang chat"}
+              title={t("openLink") || "Mở trang chat"}
               className={cn(
                 "shrink-0",
                 canPreviewSavedStandalone
@@ -193,7 +198,8 @@ export function StandaloneChatSharePanel({
                 <Button
                   variant="outline"
                   size="icon"
-                  aria-label="Sao chép link chat"
+                  aria-label={t("copyLinkSuccess") || "Sao chép link chat"}
+                  title={t("copyLinkSuccess") || "Sao chép link chat"}
                   className="shrink-0 hover:border-primary hover:bg-white hover:text-primary"
                   disabled={!canShareStandalone}
                   onClick={() => void handleCopyLink()}
@@ -206,7 +212,8 @@ export function StandaloneChatSharePanel({
                       type="button"
                       variant="outline"
                       size="icon"
-                      aria-label="Hiển thị mã QR"
+                      aria-label={t("showQr") || "Hiển thị mã QR"}
+                      title={t("showQr") || "Hiển thị mã QR"}
                       className="shrink-0 hover:border-primary hover:bg-white hover:text-primary"
                       disabled={!canShareStandalone}
                     >
@@ -215,7 +222,7 @@ export function StandaloneChatSharePanel({
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[360px]">
                     <DialogHeader>
-                      <DialogTitle>Mã QR trang chat</DialogTitle>
+                      <DialogTitle>{t("qrModalTitle") || "Mã QR trang chat"}</DialogTitle>
                     </DialogHeader>
                     <StandaloneChatPageQRCode
                       url={standaloneUrl}
@@ -236,7 +243,7 @@ export function StandaloneChatSharePanel({
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Chỉ chữ thường, số và dấu gạch ngang (tối thiểu 3 ký tự)
+            {t("slugHint") || "Chỉ chữ thường, số và dấu gạch ngang (tối thiểu 3 ký tự)"}
           </p>
         )}
       </div>
@@ -247,7 +254,7 @@ export function StandaloneChatSharePanel({
         className={cn(isDropdown && "w-full")}
       >
         {(isSaving || isCheckingSlug) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Lưu cài đặt
+        {t("saveSettings") || "Lưu cài đặt"}
       </Button>
     </div>
   );

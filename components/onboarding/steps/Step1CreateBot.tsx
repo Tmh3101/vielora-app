@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ArrowRight, FileText, Globe, Loader2 } from "lucide-react";
 import { AvatarUpload } from "@/components/AvatarUpload";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export interface Step1CreateBotProps {
 }
 
 export function Step1CreateBot({ userId, onNext }: Step1CreateBotProps) {
+  const t = useTranslations("onboarding.steps.step1");
   const router = useRouter();
   const { toast } = useToast();
   const { isCreating, createBotAndStartDiscover, createFileOnboardingBot } = useBotCreation();
@@ -54,8 +56,8 @@ export function Step1CreateBot({ userId, onNext }: Step1CreateBotProps) {
     if (!botName) return;
     if (isWebsiteMode && (!websiteUrl || websiteUrlError)) {
       toast({
-        title: "Lỗi",
-        description: websiteUrlError || "Vui lòng nhập website URL.",
+        title: t("errorTitle"),
+        description: websiteUrlError || t("errorUrlRequired"),
         variant: "destructive",
       });
       return;
@@ -83,9 +85,8 @@ export function Step1CreateBot({ userId, onNext }: Step1CreateBotProps) {
     } catch (error) {
       console.error("Error creating bot:", error);
       toast({
-        title: "Lỗi",
-        description:
-          error instanceof Error ? error.message : "Không thể tạo bot. Vui lòng thử lại.",
+        title: t("errorTitle"),
+        description: error instanceof Error ? error.message : t("errorCreateGeneric"),
         variant: "destructive",
       });
     }
@@ -104,34 +105,32 @@ export function Step1CreateBot({ userId, onNext }: Step1CreateBotProps) {
           ) : (
             <FileText className="h-5 w-5 text-primary" />
           )}
-          Tạo chatbot của bạn
+          {t("title")}
         </CardTitle>
-        <CardDescription>
-          Chọn cách thêm dữ liệu ban đầu để Vielora học nội dung cho chatbot.
-        </CardDescription>
+        <CardDescription>{t("description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={sourceMode} onValueChange={handleSourceModeChange}>
           <TabsList className="grid w-full grid-cols-2 bg-muted/60">
             <TabsTrigger value={ONBOARDING_SOURCE_MODE.WEBSITE} disabled={isCreating}>
               <Globe className="mr-2 h-4 w-4" />
-              Website URL
+              {t("sourceWebsite")}
             </TabsTrigger>
             <TabsTrigger value={ONBOARDING_SOURCE_MODE.FILES} disabled={isCreating}>
               <FileText className="mr-2 h-4 w-4" />
-              Tệp dữ liệu
+              {t("sourceFiles")}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value={ONBOARDING_SOURCE_MODE.WEBSITE} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="websiteUrl">
-                Website URL <span className="text-destructive">*</span>
+                {t("websiteUrlLabel")} <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="websiteUrl"
                 type="url"
-                placeholder="https://example.com"
+                placeholder={t("websiteUrlPlaceholder")}
                 value={websiteUrl}
                 aria-invalid={!!websiteUrlError}
                 disabled={isCreating}
@@ -151,7 +150,7 @@ export function Step1CreateBot({ userId, onNext }: Step1CreateBotProps) {
 
         <div className="grid items-start gap-6 sm:grid-cols-[auto_1fr]">
           <div className="flex flex-col items-center sm:items-start">
-            <Label className="mb-2">Avatar</Label>
+            <Label className="mb-2">{t("avatarLabel")}</Label>
             <AvatarUpload
               botName={botName || "Bot"}
               currentAvatarUrl={botAvatar.url}
@@ -162,23 +161,23 @@ export function Step1CreateBot({ userId, onNext }: Step1CreateBotProps) {
 
           <div className="space-y-2">
             <Label htmlFor="botName">
-              Tên chatbot <span className="text-destructive">*</span>
+              {t("botNameLabel")} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="botName"
               type="text"
-              placeholder="My Bot"
+              placeholder={t("botNamePlaceholder")}
               value={botName}
               disabled={isCreating}
               onChange={(e) => setBotName(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">Tên này sẽ hiển thị trong widget chat</p>
+            <p className="text-xs text-muted-foreground">{t("botNameHint")}</p>
           </div>
         </div>
 
         {isWebsiteMode && (
           <div className="space-y-2">
-            <Label>Phạm vi</Label>
+            <Label>{t("scopeLabel")}</Label>
             <RadioGroup
               value={crawlScope}
               onValueChange={(value) => setCrawlScope(value as CrawlScopeType)}
@@ -191,10 +190,8 @@ export function Step1CreateBot({ userId, onNext }: Step1CreateBotProps) {
                   className="mt-0.5"
                 />
                 <span className="space-y-0.5">
-                  <span className="block text-sm font-medium">Toàn bộ website</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Crawl nội dung của toàn bộ website.
-                  </span>
+                  <span className="block text-sm font-medium">{t("scopeFull")}</span>
+                  <span className="block text-xs text-muted-foreground">{t("scopeFullDesc")}</span>
                 </span>
               </label>
               <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/40">
@@ -204,9 +201,9 @@ export function Step1CreateBot({ userId, onNext }: Step1CreateBotProps) {
                   className="mt-0.5"
                 />
                 <span className="space-y-0.5">
-                  <span className="block text-sm font-medium">Chỉ hostname hiện tại</span>
+                  <span className="block text-sm font-medium">{t("scopeSubdomain")}</span>
                   <span className="block text-xs text-muted-foreground">
-                    Chỉ crawl đúng hostname bạn nhập ở URL khởi đầu.
+                    {t("scopeSubdomainDesc")}
                   </span>
                 </span>
               </label>
@@ -220,7 +217,7 @@ export function Step1CreateBot({ userId, onNext }: Step1CreateBotProps) {
             onClick={() => router.push("/dashboard")}
             className="hover:border-primary hover:bg-white hover:text-primary sm:min-w-[160px]"
           >
-            Về Dashboard
+            {t("backToDashboard")}
           </Button>
           <Button
             onClick={handleCreateBot}
@@ -232,11 +229,11 @@ export function Step1CreateBot({ userId, onNext }: Step1CreateBotProps) {
             {isCreating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang tạo...
+                {t("creating")}
               </>
             ) : (
               <>
-                Tiếp tục
+                {t("continue")}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </>
             )}

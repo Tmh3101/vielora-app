@@ -9,6 +9,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { canExportReport } from "@/lib/helpers/report-permission";
 import { ExportReportModal } from "@/components/dashboard/bot-detail/ExportReportModal";
+import { useTranslations } from "next-intl";
 
 export interface ExportReportButtonProps {
   botId: string;
@@ -23,6 +24,7 @@ export function ExportReportButton({
   botUserId,
   className,
 }: ExportReportButtonProps) {
+  const t = useTranslations("dashboard.reports");
   const [modalOpen, setModalOpen] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const user = useAuthStore((s) => s.user);
@@ -83,14 +85,14 @@ export function ExportReportButton({
           className ||
           "shadow-2xs rounded-xl border-border/60 bg-background/50 text-xs font-medium transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:scale-95"
         }
-        title="Xuất báo cáo cho bot này"
+        title={t("generateReport")}
       >
         {hasPermission === null ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
         ) : (
           <FileDown className="h-3.5 w-3.5" />
         )}
-        Xuất báo cáo
+        {t("generateReport")}
       </Button>
 
       {resolvedWsId && (

@@ -1,22 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Bot,
-  Pin,
-  Copy,
-  Check,
-  Reply,
-  AlertCircle,
-  StickyNote,
-  FileText,
-  Download,
-} from "lucide-react";
+import { Bot, Pin, Copy, Check, Reply, AlertCircle, StickyNote } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { parseMarkdown } from "@/lib/helpers";
 import { GroupMessageRow } from "@/lib/services/group-chat.service";
 import { GroupMember } from "@/hooks/useGroupChat";
-import { EGroupSenderType } from "@/types";
+import { EGroupSenderType, ESystemLanguage, ELanguage } from "@/types/enums";
+import { getWidgetTranslations } from "@/lib/i18n/widget-translations";
+import { parseSystemNotification } from "@/lib/helpers/group-chat-system-notification.helper";
+import { ReportNotificationCard } from "@/components/chat/group/ReportNotificationCard";
 
 interface MessageBubbleProps {
   message: GroupMessageRow;
@@ -31,6 +24,7 @@ interface MessageBubbleProps {
   onPin?: (message: GroupMessageRow) => void;
   onReply?: (message: GroupMessageRow) => void;
   onScrollToMessage?: (messageId: string) => void;
+  locale?: ESystemLanguage | ELanguage | string;
 }
 
 export function MessageBubble({
@@ -46,7 +40,9 @@ export function MessageBubble({
   onPin,
   onReply,
   onScrollToMessage,
+  locale = ESystemLanguage.Vi,
 }: MessageBubbleProps) {
+  const t = getWidgetTranslations(locale);
   const [copied, setCopied] = useState(false);
   const isSystem =
     (message.sender_type as string) === EGroupSenderType.System ||
@@ -60,62 +56,19 @@ export function MessageBubble({
     });
 
     const renderSystemContent = () => {
-      const actionKeywords = [
-        "đã lưu tin nhắn vào ghi chú",
-        "đã lưu vào ghi chú",
-        "đã lưu",
-        "đã tạo ghi chú",
-        "đã tạo",
-        "đã cập nhật ghi chú",
-        "đã cập nhật",
-        "đã ghim ghi chú",
-        "đã ghim",
-        "đã bỏ ghim ghi chú",
-        "đã bỏ ghim",
-        "đã xóa ghi chú",
-        "đã xóa",
-      ];
+      const parsed = parseSystemNotification(
+        message.content,
+        typeof locale === "string" ? locale : ESystemLanguage.Vi
+      );
 
-      let matchedKw: string | null = null;
-      let kwIdx = -1;
-
-      for (const kw of actionKeywords) {
-        const idx = message.content.indexOf(kw);
-        if (idx !== -1) {
-          matchedKw = kw;
-          kwIdx = idx;
-          break;
-        }
-      }
-
-      if (matchedKw && kwIdx !== -1) {
-        const actorName = message.content.slice(0, kwIdx).trim();
-        const afterActor = message.content.slice(kwIdx).trim();
-        const colonIndex = afterActor.indexOf(":");
-
-        let actionText = afterActor;
-        let titlePart = "";
-
-        if (colonIndex !== -1) {
-          actionText = afterActor.slice(0, colonIndex).trim();
-          titlePart = afterActor.slice(colonIndex + 1).trim();
-        }
-
-        // Strip enclosing quotes
-        if (
-          (titlePart.startsWith('"') && titlePart.endsWith('"')) ||
-          (titlePart.startsWith("“") && titlePart.endsWith("”")) ||
-          (titlePart.startsWith("”") && titlePart.endsWith("”")) ||
-          (titlePart.startsWith("“") && titlePart.endsWith("“"))
-        ) {
-          titlePart = titlePart.slice(1, -1).trim();
-        }
-
-        const displayTitle = titlePart.length > 35 ? `${titlePart.slice(0, 35)}...` : titlePart;
+      if (parsed) {
+        const { actorName, actionText, titlePart } = parsed;
+        const displayTitle =
+          titlePart && titlePart.length > 40 ? `${titlePart.slice(0, 40)}...` : titlePart;
 
         return (
           <span className="truncate">
-            <strong className="font-semibold text-foreground">{actorName}</strong>{" "}
+            {actorName && <strong className="font-semibold text-foreground">{actorName}</strong>}{" "}
             <span>
               {actionText}
               {titlePart ? ":" : ""}
@@ -157,7 +110,7 @@ export function MessageBubble({
 
   const email = senderMember?.user?.email || "";
 
-  const senderName = isBot ? botName : displayName || email || "Thành viên";
+  const senderName = isBot ? botName : displayName || email || t.defaultMember;
   const senderAvatar = senderMember?.avatar_url || senderMember?.user?.avatar_url;
 
   const formattedTime = new Date(message.created_at).toLocaleTimeString([], {
@@ -176,14 +129,14 @@ export function MessageBubble({
       : undefined;
   const replyTargetSenderName = replyTarget
     ? replyTarget.sender_type === EGroupSenderType.Bot
-      ? "AI Assistant"
+      ? t.aiAssistant
       : replyTargetSenderMember?.display_name ||
         replyTargetSenderMember?.user?.display_name ||
         replyTargetSenderMember?.full_name ||
         replyTargetSenderMember?.user?.full_name ||
         replyTargetSenderMember?.role_label ||
         replyTargetSenderMember?.user?.email ||
-        "Thành viên"
+        t.defaultMember
     : "";
 
   const handleCopyMessage = async () => {
@@ -198,158 +151,6 @@ export function MessageBubble({
 
   const isReportNotification =
     isBot && message.content.includes("Báo cáo mới đã được tạo thành công");
-
-  const renderReportCard = () => {
-    const lines = message.content.split("\n");
-    let templateName = "";
-    let reportTitle = "";
-    let requester = "";
-
-    for (const line of lines) {
-      if (line.includes("Mẫu báo cáo")) {
-        const parts = line.split(":");
-        if (parts.length > 1) {
-          templateName = parts.slice(1).join(":").replace(/[*_`]/g, "").trim();
-        }
-      } else if (line.includes("Tiêu đề")) {
-        const parts = line.split(":");
-        if (parts.length > 1) {
-          reportTitle = parts.slice(1).join(":").replace(/[*_`]/g, "").trim();
-        }
-      } else if (line.includes("Người yêu cầu") || line.includes("Người xuất")) {
-        const parts = line.split(":");
-        if (parts.length > 1) {
-          requester = parts
-            .slice(1)
-            .join(":")
-            .replace(/[*_`@]/g, "")
-            .trim();
-        }
-      }
-    }
-
-    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-    const downloadLinks: Array<{ label: string; url: string }> = [];
-    let match;
-    while ((match = linkRegex.exec(message.content)) !== null) {
-      downloadLinks.push({ label: match[1], url: match[2] });
-    }
-
-    const hasCustomTitle = Boolean(
-      reportTitle && reportTitle.trim() && reportTitle.trim() !== templateName.trim()
-    );
-    const mainTitle = hasCustomTitle
-      ? reportTitle.trim()
-      : templateName && templateName.trim()
-        ? templateName.trim()
-        : "Báo cáo PDF Bot";
-
-    const exportDate = new Date(message.created_at);
-    const formattedExportDate = !isNaN(exportDate.getTime())
-      ? exportDate.toLocaleDateString("vi-VN", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        })
-      : "";
-
-    const resolveLanguage = (rawLabel: string) => {
-      const clean = rawLabel.replace(/\s*\(PDF\)\s*/i, "").trim();
-
-      if (clean.includes("Ả Rập") || clean.includes("AR") || clean.includes("ar")) {
-        return { flag: "🇸🇦", name: "Tiếng Ả Rập" };
-      }
-      if (clean.includes("Việt") || clean.includes("vi")) {
-        return { flag: "🇻🇳", name: "Tiếng Việt" };
-      }
-      if (clean.includes("English") || clean.includes("en")) {
-        return { flag: "🇬🇧", name: "English" };
-      }
-      if (clean.includes("Nhật") || clean.includes("ja")) {
-        return { flag: "🇯🇵", name: "Tiếng Nhật" };
-      }
-      if (clean.includes("Hàn") || clean.includes("ko")) {
-        return { flag: "🇰🇷", name: "Tiếng Hàn" };
-      }
-      if (clean.includes("Trung") || clean.includes("zh")) {
-        return { flag: "🇨🇳", name: "Tiếng Trung" };
-      }
-      if (clean.includes("Pháp") || clean.includes("fr")) {
-        return { flag: "🇫🇷", name: "Tiếng Pháp" };
-      }
-      if (clean.includes("Đức") || clean.includes("de")) {
-        return { flag: "🇩🇪", name: "Tiếng Đức" };
-      }
-      if (clean.includes("Tây Ban Nha") || clean.includes("es")) {
-        return { flag: "🇪🇸", name: "Tiếng TBN" };
-      }
-
-      return {
-        flag: "🌐",
-        name: clean,
-      };
-    };
-
-    return (
-      <div className="shadow-2xs rounded-tl-xs flex flex-col gap-2 rounded-2xl border border-border bg-card p-3.5 text-foreground">
-        <div className="flex items-center gap-2.5 border-b border-border/60 pb-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400">
-            <FileText className="h-4.5 w-4.5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h4 className="truncate text-xs font-semibold text-foreground" title={mainTitle}>
-              {mainTitle}
-            </h4>
-            {hasCustomTitle && templateName ? (
-              <p className="truncate text-[10.5px] text-muted-foreground">Mẫu: {templateName}</p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
-            {formattedExportDate && (
-              <div>
-                <span>Ngày xuất: </span>
-                <span className="font-medium text-foreground">{formattedExportDate}</span>
-              </div>
-            )}
-            {requester && (
-              <div>
-                <span>Người xuất: </span>
-                <span className="font-medium text-foreground">{requester}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {downloadLinks.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-            {downloadLinks.map((link, idx) => {
-              const langMeta = resolveLanguage(link.label);
-              return (
-                <a
-                  key={idx}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={`Tải báo cáo (${langMeta.name})`}
-                  aria-label={`Tải báo cáo (${langMeta.name})`}
-                  className="shadow-2xs inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-xs font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary active:scale-95"
-                >
-                  <Download className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-xs leading-none">{langMeta.flag}</span>
-                  <span className="py-0.2 rounded bg-background px-1 text-[9px] font-bold text-muted-foreground">
-                    PDF
-                  </span>
-                </a>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div
@@ -436,9 +237,14 @@ export function MessageBubble({
           )}
 
           {message.deleted_at ? (
-            <span>Tin nhắn đã bị xóa</span>
+            <span>{t.messageDeleted}</span>
           ) : isReportNotification ? (
-            renderReportCard()
+            <ReportNotificationCard
+              content={message.content}
+              createdAt={message.created_at}
+              locale={locale}
+              t={t}
+            />
           ) : isBot ? (
             <div className="flex items-start gap-1.5">
               {(message.content.includes("hết credits") ||
@@ -470,7 +276,8 @@ export function MessageBubble({
                 type="button"
                 onClick={() => onReply(message)}
                 className="flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 active:scale-95 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                title="Trả lời tin nhắn"
+                title={t.replyMessage}
+                aria-label={t.replyMessage}
               >
                 <Reply className="h-3 w-3" />
               </button>
@@ -481,7 +288,8 @@ export function MessageBubble({
               type="button"
               onClick={handleCopyMessage}
               className="flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 active:scale-95 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              title="Sao chép tin nhắn"
+              title={t.copyMessage}
+              aria-label={t.copyMessage}
             >
               {copied ? (
                 <Check className="h-3 w-3 text-emerald-500" />
@@ -498,7 +306,8 @@ export function MessageBubble({
                   type="button"
                   disabled
                   className="flex h-5 cursor-default items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 text-emerald-600 transition-all dark:bg-emerald-950/60 dark:text-emerald-400"
-                  title="Tin nhắn đã được lưu vào ghi chú nhóm"
+                  title={t.messagePinnedToNotes}
+                  aria-label={t.messagePinnedToNotes}
                 >
                   <Pin className="h-3 w-3 fill-emerald-600 dark:fill-emerald-400" />
                   <Check className="h-2.5 w-2.5 stroke-[2.5]" />
@@ -508,7 +317,8 @@ export function MessageBubble({
                   type="button"
                   onClick={() => onPin(message)}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-amber-50 hover:text-amber-600 active:scale-95 dark:text-slate-400 dark:hover:bg-amber-950 dark:hover:text-amber-400"
-                  title="Lưu tin nhắn vào ghi chú nhóm"
+                  title={t.pinToGroupNotes}
+                  aria-label={t.pinToGroupNotes}
                 >
                   <Pin className="h-3 w-3" />
                 </button>

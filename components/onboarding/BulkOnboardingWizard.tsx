@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { CheckCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { Step1CSVUpload } from "@/components/onboarding/bulk-steps/Step1CSVUpload";
@@ -11,6 +12,7 @@ import { Step3RealtimeProgress } from "@/components/onboarding/bulk-steps/Step3R
 import { Step4CompletionReport } from "@/components/onboarding/bulk-steps/Step4CompletionReport";
 
 export function BulkOnboardingWizard(_props: { userId?: string }) {
+  const t = useTranslations("onboarding.bulkWizard");
   const router = useRouter();
   const { activeWorkspace } = useWorkspace();
   const workspaceId = activeWorkspace?.id ?? null;
@@ -35,10 +37,8 @@ export function BulkOnboardingWizard(_props: { userId?: string }) {
               priority
             />
           </button>
-          <h1 className="mb-2 text-3xl font-bold text-foreground">Tạo chatbot hàng loạt</h1>
-          <p className="text-muted-foreground">
-            Tải file CSV và thiết lập nhanh danh sách chatbot của bạn
-          </p>
+          <h1 className="mb-2 text-3xl font-bold text-foreground">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
 
         {/* 4 Step Stepper Bar */}
@@ -73,7 +73,7 @@ export function BulkOnboardingWizard(_props: { userId?: string }) {
           ) : (
             <div className="flex flex-col items-center justify-center space-y-3 py-16 text-muted-foreground">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <p className="text-sm">Đang tải thông tin Workspace...</p>
+              <p className="text-sm">{t("loadingWorkspace")}</p>
             </div>
           ))}
         {bulkStep === 3 &&
@@ -82,7 +82,7 @@ export function BulkOnboardingWizard(_props: { userId?: string }) {
           ) : (
             <div className="flex flex-col items-center justify-center space-y-3 py-16 text-muted-foreground">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <p className="text-sm">Đang tải thông tin Workspace...</p>
+              <p className="text-sm">{t("loadingWorkspace")}</p>
             </div>
           ))}
         {bulkStep === 4 && <Step4CompletionReport />}

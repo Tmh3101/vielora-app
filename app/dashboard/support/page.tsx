@@ -5,6 +5,7 @@ import { getSubscriptionByWorkspaceId } from "@/lib/services/subscription.servic
 import { getPlanByIdServer } from "@/lib/services/plan.service";
 import SupportClient from "@/components/dashboard/support/SupportClient";
 import type { ServiceClient } from "@/lib/services/types";
+import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/constants/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function SupportPage() {
   }
 
   const cookieStore = await cookies();
-  const workspaceId = cookieStore.get("active_workspace_id")?.value;
+  const workspaceId = cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value;
 
   const subscription = workspaceId
     ? await getSubscriptionByWorkspaceId(dbClient, workspaceId)

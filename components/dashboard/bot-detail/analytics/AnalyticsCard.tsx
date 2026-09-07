@@ -4,11 +4,12 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 export interface AnalyticsCardProps {
   title: string;
   value: string;
-  description: string;
+  description?: string;
   icon: LucideIcon;
   deltaPercent: number | null;
   tone?: "default" | "danger";
@@ -24,11 +25,15 @@ export interface AnalyticsCardProps {
  *  - `label`: a localized label (`"- Không có dữ liệu"` when `deltaPercent` is null, `"Không đổi"` when `deltaPercent` is 0, otherwise `"+{n}%"` for positive or `"{n}%"` for negative where `n` is the absolute percentage),
  *  - `className`: CSS classes describing the pill's background and text color appropriate to the interpreted positivity.
  */
-function getTrendMeta(deltaPercent: number | null, tone: "default" | "danger") {
+function getTrendMeta(
+  deltaPercent: number | null,
+  tone: "default" | "danger",
+  t: (key: string) => string
+) {
   if (deltaPercent === null || deltaPercent === undefined) {
     return {
       icon: Minus,
-      label: "Không có dữ liệu",
+      label: t("dashboard.botDetail.analytics.card.noData"),
       className: "bg-muted text-muted-foreground",
     };
   }
@@ -36,7 +41,7 @@ function getTrendMeta(deltaPercent: number | null, tone: "default" | "danger") {
   if (deltaPercent === 0) {
     return {
       icon: Minus,
-      label: "Không đổi",
+      label: t("dashboard.botDetail.analytics.card.unchanged"),
       className: "bg-muted text-muted-foreground",
     };
   }
@@ -62,12 +67,13 @@ function getTrendMeta(deltaPercent: number | null, tone: "default" | "danger") {
 export function AnalyticsCard({
   title,
   value,
-  description,
+  // description,
   icon: Icon,
   deltaPercent,
   tone = "default",
 }: AnalyticsCardProps) {
-  const trend = getTrendMeta(deltaPercent, tone);
+  const t = useTranslations();
+  const trend = getTrendMeta(deltaPercent, tone, t);
   const TrendIcon = trend.icon;
 
   return (
@@ -82,7 +88,7 @@ export function AnalyticsCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        <p className="text-sm text-muted-foreground">{description}</p>
+        {/* <p className="text-sm text-muted-foreground">{description}</p> */}
         <div
           className={cn(
             "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium",

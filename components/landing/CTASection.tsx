@@ -11,8 +11,11 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 const CTASection = () => {
+  const t = useTranslations("cta");
+
   return (
     <section className="relative -mb-4 pt-16 lg:pt-24">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -37,14 +40,14 @@ const CTASection = () => {
               className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-primary-foreground/90 backdrop-blur-sm"
             >
               <Sparkles className="h-4 w-4" />
-              <span>Bắt đầu trong 5 phút</span>
+              <span>{t("badge")}</span>
             </motion.div>
 
             <h2 className="mb-4 text-3xl font-bold text-primary-foreground sm:text-4xl lg:text-5xl">
-              Sẵn sàng tạo Trợ lý AI 24/7 ngay!
+              {t("heading")}
             </h2>
             <p className="mx-auto mb-6 max-w-2xl text-lg text-primary-foreground/80">
-              Bắt đầu miễn phí ngay hôm nay. Không cần thẻ tín dụng, không cần code.
+              {t("subheading")}
             </p>
             <Button
               size="lg"
@@ -53,7 +56,7 @@ const CTASection = () => {
               className="h-12 bg-white px-8 text-base text-primary shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/90 hover:shadow-xl"
             >
               <Link href="/auth?mode=signup">
-                Tạo chatbot miễn phí
+                {t("button")}
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>

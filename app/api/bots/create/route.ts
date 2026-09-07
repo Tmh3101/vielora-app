@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { corsHeaders } from "@/lib/constants";
+import { corsHeaders, ACTIVE_WORKSPACE_COOKIE } from "@/lib/constants";
 import { createServerClient } from "@/lib/supabase/server";
 import { authenticateRequest, isAuthError } from "@/lib/helpers/auth-helpers";
 import { createBot } from "@/lib/services/bot.service";
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     const activeWorkspaceId =
       bodyWorkspaceId ||
       req.headers.get("x-workspace-id") ||
-      cookieStore.get("active_workspace_id")?.value;
+      cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value;
 
     if (!activeWorkspaceId) {
       return NextResponse.json(

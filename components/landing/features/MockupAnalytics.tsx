@@ -15,24 +15,28 @@ const DAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 const CHART_W = 240;
 const CHART_H = 100;
 
+import { useTranslations } from "next-intl";
+
 export function MockupAnalytics() {
+  const t = useTranslations("features.mockups.analytics");
+
   const metrics = [
     {
-      label: "Cuộc hội thoại",
+      label: t("conversations"),
       value: "12,847",
       change: "+23.5%",
       positive: true,
       icon: MessagesSquare,
     },
     {
-      label: "Tin nhắn người dùng",
+      label: t("userMessages"),
       value: "89,472",
       change: "+12.1%",
       positive: true,
       icon: MessageCircle,
     },
-    { label: "Liên hệ", value: "847", change: "+5.2%", positive: true, icon: UserPlus },
-    { label: "Credits đã dùng", value: "2,480", change: "-3.1%", positive: false, icon: Coins },
+    { label: t("leads"), value: "847", change: "+5.2%", positive: true, icon: UserPlus },
+    { label: t("usedCredits"), value: "2,480", change: "-3.1%", positive: false, icon: Coins },
   ];
 
   return (
@@ -41,7 +45,7 @@ export function MockupAnalytics() {
         className="mb-3 text-xs font-medium text-muted-foreground"
         style={{ transform: "translateZ(8px)" }}
       >
-        Dashboard Hiệu suất
+        {t("dashboardTitle")}
       </p>
 
       <div className="mb-4 grid grid-cols-4 gap-2" style={{ transform: "translateZ(14px)" }}>
@@ -49,7 +53,7 @@ export function MockupAnalytics() {
           const Icon = m.icon;
           return (
             <motion.div
-              key={m.label}
+              key={i}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
@@ -78,7 +82,7 @@ export function MockupAnalytics() {
         className="rounded-lg border border-border/50 bg-background/50 p-3"
         style={{ transform: "translateZ(18px)" }}
       >
-        <p className="mb-2 text-[10px] font-medium text-foreground">Biểu đồ tương tác</p>
+        <p className="mb-2 text-[10px] font-medium text-foreground">{t("chartTitle")}</p>
 
         <div className="flex items-start gap-3">
           <div

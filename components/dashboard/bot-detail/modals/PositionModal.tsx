@@ -15,6 +15,7 @@ import { MapPin } from "lucide-react";
 import { parsePosition, getIconSVG, type DragPosition } from "@/lib/helpers";
 import { WIDGET_POSITION } from "@/config/widget";
 import { EWidgetIconType } from "@/types";
+import { useTranslations } from "next-intl";
 
 interface PositionModalProps {
   open: boolean;
@@ -43,6 +44,7 @@ export function PositionModal({
   onPositionChange,
   onClose,
 }: PositionModalProps) {
+  const t = useTranslations();
   const frameRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -187,17 +189,19 @@ export function PositionModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5" />
-            Chỉnh sửa vị trí icon chatbot
+            {t("dashboard.botDetail.modals.position.title")}
           </DialogTitle>
           <DialogDescription>
-            Kéo icon chatbot xung quanh để chọn vị trí hiển thị trên website
+            {t("dashboard.botDetail.modals.position.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Website Frame with Draggable Icon */}
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-foreground">Kéo để thay đổi vị trí</h3>
+            <h3 className="text-sm font-medium text-foreground">
+              {t("dashboard.botDetail.modals.position.dragToChange")}
+            </h3>
             <div className="relative overflow-hidden rounded-xl border-2 border-border/50">
               <div
                 ref={frameRef}
@@ -236,7 +240,7 @@ export function PositionModal({
                     pointerEvents: "auto",
                   }}
                   onMouseDown={handleMouseDown}
-                  title="Kéo để di chuyển"
+                  title={t("dashboard.botDetail.modals.position.dragToMove")}
                 >
                   {chatIconType === EWidgetIconType.Custom && chatIconUrl ? (
                     <Image
@@ -267,7 +271,7 @@ export function PositionModal({
             </div>
 
             <p className="text-xs text-muted-foreground">
-              💡 Kéo icon tự do bên trong khung website. Icon không thể kéo ra ngoài khung.
+              {t("dashboard.botDetail.modals.position.hint")}
             </p>
           </div>
         </div>
@@ -278,13 +282,13 @@ export function PositionModal({
             onClick={onClose}
             className="border-2 hover:border-primary hover:bg-white hover:text-primary"
           >
-            Hủy
+            {t("dashboard.botDetail.modals.position.cancel")}
           </Button>
           <Button
             onClick={handleConfirm}
             className="border-2 border-primary bg-primary text-white hover:border-primary/90 hover:bg-primary/90"
           >
-            Lưu vị trí
+            {t("dashboard.botDetail.modals.position.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

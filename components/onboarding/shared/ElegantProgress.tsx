@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
@@ -17,7 +18,8 @@ export function ElegantProgress({
   crawledCount,
   progress,
 }: ElegantProgressProps) {
-  const message = currentAction || "Đang xử lý, vui lòng đợi...";
+  const t = useTranslations("onboarding.shared.elegantProgress");
+  const message = currentAction || t("defaultAction");
   const isUrl = message.includes("://") || message.startsWith("/");
 
   return (
@@ -70,7 +72,7 @@ export function ElegantProgress({
                 {crawledCount}
               </motion.span>
             </AnimatePresence>
-            <span>{"  trang"}</span>
+            <span>{` ${t("pagesUnit")}`}</span>
           </span>
         )}
       </div>

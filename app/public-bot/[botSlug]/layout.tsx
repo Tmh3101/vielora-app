@@ -5,6 +5,9 @@ import { createServerClient } from "@/lib/supabase/server";
 import { getPublicBotAppleTouchIconPath } from "@/lib/public-bot/apple-touch-icon";
 import { getPublicBotThemeColor, getPublicBotPwaVersion } from "@/lib/helpers/pwa-helpers";
 import { getPublicBotBranding } from "@/lib/services/bot.service";
+import { NextIntlClientProvider } from "next-intl";
+import { getMessages } from "next-intl/server";
+import { getDashboardLocale } from "@/lib/i18n/dashboard-locale";
 
 export const dynamic = "force-dynamic";
 
@@ -105,9 +108,12 @@ export async function generateMetadata({
   }
 }
 
-export default function PublicBotLayout({ children }: { children: React.ReactNode }) {
+export default async function PublicBotLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getDashboardLocale();
+  const messages = await getMessages({ locale });
+
   return (
-    <>
+    <NextIntlClientProvider locale={locale} messages={messages}>
       {children}
       <Script id="public-bot-service-worker" strategy="afterInteractive">
         {`
@@ -120,6 +126,6 @@ export default function PublicBotLayout({ children }: { children: React.ReactNod
           }
         `}
       </Script>
-    </>
+    </NextIntlClientProvider>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { AlertCircle, BrainCircuit, CheckCircle } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useJobTracker } from "@/hooks/onboarding/useJobTracker";
@@ -22,6 +23,7 @@ export interface Step3IndexingProps {
 }
 
 export function Step3Indexing({ botId, onDone }: Step3IndexingProps) {
+  const t = useTranslations("onboarding.steps.step3Indexing");
   const router = useRouter();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [totalPages, setTotalPages] = useState<number | undefined>(undefined);
@@ -85,26 +87,26 @@ export function Step3Indexing({ botId, onDone }: Step3IndexingProps) {
         <CardTitle className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <BrainCircuit className="h-5 w-5 text-primary" />
-            Đang học dữ liệu
+            {t("title")}
           </span>
           <Badge className={getPhaseBadgeClass(EBotStatus.Indexing)}>
             {getPhaseLabel(EBotStatus.Indexing)}
           </Badge>
         </CardTitle>
-        <CardDescription>Đang xử lý nội dung, chunking và tạo embeddings.</CardDescription>
+        <CardDescription>{t("description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         {pipelineError && (
           <Alert variant="destructive">
-            <AlertTitle>Indexing lỗi</AlertTitle>
+            <AlertTitle>{t("errorTitle")}</AlertTitle>
             <AlertDescription>{pipelineError}</AlertDescription>
           </Alert>
         )}
 
         <div className="space-y-3 rounded-lg border p-4">
           <ElegantProgress
-            title="Đang index dữ liệu..."
-            currentAction={"Đang xử lý dữ liệu..."}
+            title={t("progressTitle")}
+            currentAction={t("currentAction")}
             progress={trackerCounts.percent}
             crawledCount={trackerCounts.completed}
           />
@@ -116,13 +118,16 @@ export function Step3Indexing({ botId, onDone }: Step3IndexingProps) {
           <div className="flex items-center gap-2">
             <CheckCircle className="h-4 w-4 text-green-500" />
             <span>
-              {trackerCounts.completed} / {trackerCounts.total} nguồn hoàn tất
+              {t("completedSources", {
+                completed: trackerCounts.completed,
+                total: trackerCounts.total,
+              })}
             </span>
           </div>
           {trackerCounts.failed > 0 && (
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="h-4 w-4" />
-              <span>{trackerCounts.failed} nguồn lỗi</span>
+              <span>{t("failedSources", { count: trackerCounts.failed })}</span>
             </div>
           )}
         </div>

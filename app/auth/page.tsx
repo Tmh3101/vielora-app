@@ -4,18 +4,19 @@ import { useState, useEffect, Suspense, useCallback, useMemo, useRef } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
 import {
   Eye,
   EyeOff,
   ArrowLeft,
   Loader2,
-  Sparkles,
   CheckCircle2,
   XCircle,
   MailCheck,
@@ -44,64 +45,74 @@ import { getRootDomain } from "@/config";
 import { getMainAppUrl } from "@/lib/utils/standalone-chat-url";
 
 const PASSWORD_RULES = [
-  { key: "minLength", label: "Tối thiểu 8 ký tự", test: (v: string) => v.length >= 8 },
-  { key: "uppercase", label: "Có chữ hoa (A-Z)", test: (v: string) => /[A-Z]/.test(v) },
-  { key: "lowercase", label: "Có chữ thường (a-z)", test: (v: string) => /[a-z]/.test(v) },
-  { key: "digit", label: "Có chữ số (0-9)", test: (v: string) => /[0-9]/.test(v) },
+  { key: "minLength", labelKey: "strength.minLength", test: (v: string) => v.length >= 8 },
+  { key: "uppercase", labelKey: "strength.uppercase", test: (v: string) => /[A-Z]/.test(v) },
+  { key: "lowercase", labelKey: "strength.lowercase", test: (v: string) => /[a-z]/.test(v) },
+  { key: "digit", labelKey: "strength.digit", test: (v: string) => /[0-9]/.test(v) },
   {
     key: "special",
-    label: "Có ký tự đặc biệt (!@#$...)",
+    labelKey: "strength.special",
     test: (v: string) => /[^A-Za-z0-9]/.test(v),
   },
 ] as const;
 
-const signUpSchema = z
-  .object({
+function createSignUpSchema(t: (key: string) => string) {
+  return z
+    .object({
+      email: z
+        .string()
+        .email(t("auth.validation.emailInvalid"))
+        .max(255, { message: t("auth.validation.emailMaxLength") }),
+      password: z
+        .string()
+        .min(8, t("auth.validation.passwordMinLength"))
+        .regex(/[A-Z]/, t("auth.validation.passwordUppercase"))
+        .regex(/[a-z]/, t("auth.validation.passwordLowercase"))
+        .regex(/[0-9]/, t("auth.validation.passwordDigit"))
+        .regex(/[^A-Za-z0-9]/, t("auth.validation.passwordSpecial"))
+        .max(128, { message: t("auth.validation.passwordMaxLength") }),
+      confirmPassword: z
+        .string()
+        .max(128, { message: t("auth.validation.confirmPasswordMaxLength") }),
+      fullName: z
+        .string()
+        .min(2, t("auth.validation.fullNameMinLength"))
+        .max(100, { message: t("auth.validation.fullNameMaxLength") }),
+    })
+    .refine((d) => d.password === d.confirmPassword, {
+      message: t("auth.validation.confirmPasswordMismatch"),
+      path: ["confirmPassword"],
+    });
+}
+
+function createSignInSchema(t: (key: string) => string) {
+  return z.object({
     email: z
       .string()
-      .email("Email không hợp lệ")
-      .max(255, { message: "Email không được vượt quá 255 ký tự" }),
+      .email(t("auth.validation.emailInvalid"))
+      .max(255, { message: t("auth.validation.emailMaxLength") }),
     password: z
       .string()
-      .min(8, "Tối thiểu 8 ký tự")
-      .regex(/[A-Z]/, "Cần ít nhất 1 chữ hoa")
-      .regex(/[a-z]/, "Cần ít nhất 1 chữ thường")
-      .regex(/[0-9]/, "Cần ít nhất 1 chữ số")
-      .regex(/[^A-Za-z0-9]/, "Cần ít nhất 1 ký tự đặc biệt")
-      .max(128, { message: "Mật khẩu không được vượt quá 128 ký tự" }),
-    confirmPassword: z
-      .string()
-      .max(128, { message: "Mật khẩu xác nhận không được vượt quá 128 ký tự" }),
-    fullName: z
-      .string()
-      .min(2, "Tên phải có ít nhất 2 ký tự")
-      .max(100, { message: "Họ và tên không được vượt quá 100 ký tự" }),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: "Mật khẩu xác nhận không khớp",
-    path: ["confirmPassword"],
+      .min(1, t("auth.validation.passwordRequired"))
+      .max(128, { message: t("auth.validation.passwordMaxLength") }),
   });
+}
 
-const signInSchema = z.object({
-  email: z
-    .string()
-    .email("Email không hợp lệ")
-    .max(255, { message: "Email không được vượt quá 255 ký tự" }),
-  password: z
-    .string()
-    .min(1, "Vui lòng nhập mật khẩu")
-    .max(128, { message: "Mật khẩu không được vượt quá 128 ký tự" }),
-});
+function createForgotSchema(t: (key: string) => string) {
+  return z.object({
+    email: z
+      .string()
+      .email(t("auth.validation.emailInvalid"))
+      .max(255, { message: t("auth.validation.emailMaxLength") }),
+  });
+}
 
-const forgotSchema = z.object({
-  email: z
-    .string()
-    .email("Email không hợp lệ")
-    .max(255, { message: "Email không được vượt quá 255 ký tự" }),
-});
-
-function PasswordStrength({ password }: { password: string }) {
-  const results = PASSWORD_RULES.map((r) => ({ ...r, passed: r.test(password) }));
+function PasswordStrength({ password, t }: { password: string; t: (key: string) => string }) {
+  const results = PASSWORD_RULES.map((r) => ({
+    ...r,
+    passed: r.test(password),
+    label: t(`auth.${r.labelKey}`),
+  }));
   const passedCount = results.filter((r) => r.passed).length;
 
   const barColor =
@@ -185,11 +196,22 @@ function formatCooldown(seconds: number) {
 
 function getSafeRedirect(rawRedirect: string | null): string {
   if (!rawRedirect) return "/dashboard";
+  const lower = rawRedirect.toLowerCase();
+  if (
+    lower === "/auth" ||
+    lower.startsWith("/auth?") ||
+    lower.startsWith("/auth#") ||
+    lower.startsWith("/auth/")
+  ) {
+    return "/dashboard";
+  }
   if (rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") && !rawRedirect.includes("\\")) {
     return rawRedirect;
   }
   try {
     const parsed = new URL(rawRedirect);
+    const p = parsed.pathname.toLowerCase();
+    if (p === "/auth" || p.startsWith("/auth/")) return "/dashboard";
     const rootDomain = getRootDomain().toLowerCase().split(":")[0];
     const host = parsed.hostname.toLowerCase();
     if (
@@ -212,6 +234,7 @@ function AuthPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
+  const t = useTranslations();
 
   const initialView: AuthViewType =
     searchParams.get("mode") === "signup" ? AuthView.SIGNUP : AuthView.LOGIN;
@@ -272,8 +295,8 @@ function AuthPageContent() {
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
         goToApp(targetRedirect);
       }
     });
@@ -301,11 +324,11 @@ function AuthPageContent() {
 
     const oauthErrorMessage =
       hashParams.get("error") === ERROR_CODE_ACCESS_DENIED
-        ? "Bạn đã hủy đăng nhập OAuth hoặc quyền truy cập bị từ chối."
-        : "Không thể đăng nhập bằng OAuth. Vui lòng thử lại.";
+        ? t("auth.errors.oauthCancelled")
+        : t("auth.errors.oauthFailed");
 
     toast({
-      title: "Lỗi",
+      title: t("auth.errors.generic"),
       description: oauthErrorMessage,
       variant: "destructive",
     });
@@ -314,7 +337,7 @@ function AuthPageContent() {
     url.searchParams.delete("error");
     url.hash = "";
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [searchParams, toast]);
+  }, [searchParams, toast, t]);
 
   /* ---- helpers ---- */
   const resetForm = useCallback(() => {
@@ -360,11 +383,11 @@ function AuthPageContent() {
   const validate = useCallback(() => {
     try {
       if (view === AuthView.SIGNUP) {
-        signUpSchema.parse({ email, password, confirmPassword, fullName });
+        createSignUpSchema(t).parse({ email, password, confirmPassword, fullName });
       } else if (view === AuthView.LOGIN) {
-        signInSchema.parse({ email, password });
+        createSignInSchema(t).parse({ email, password });
       } else {
-        forgotSchema.parse({ email });
+        createForgotSchema(t).parse({ email });
       }
       setErrors({});
       return true;
@@ -379,7 +402,7 @@ function AuthPageContent() {
       }
       return false;
     }
-  }, [view, email, password, confirmPassword, fullName]);
+  }, [view, email, password, confirmPassword, fullName, t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -387,8 +410,8 @@ function AuthPageContent() {
 
     if (isLoginCooldownActive) {
       toast({
-        title: "Tạm khóa đăng nhập",
-        description: `Bạn đã nhập sai mật khẩu quá nhiều lần.`,
+        title: t("auth.loginLocked"),
+        description: t("auth.errors.loginCooldown"),
         variant: "destructive",
       });
       return;
@@ -404,8 +427,8 @@ function AuthPageContent() {
           const raw = err instanceof Error ? err.message : String(err);
           if (raw === "User already registered") {
             toast({
-              title: "Cảnh báo",
-              description: "Email này đã được đăng ký",
+              title: t("auth.success.emailExists"),
+              description: t("auth.success.emailExistsDesc"),
             });
             throw new Error("User already registered");
           }
@@ -436,8 +459,8 @@ function AuthPageContent() {
         setCooldownRemaining(0);
         setCooldownEmail(null);
         toast({
-          title: "Đăng nhập thành công",
-          description: "Chào mừng bạn quay trở lại!",
+          title: t("auth.success.loginTitle"),
+          description: t("auth.success.loginDesc"),
         });
       } else if (view === AuthView.FORGOT) {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -450,7 +473,7 @@ function AuthPageContent() {
       console.error("Auth error:", error);
       const raw = error instanceof Error ? error.message : "";
 
-      let msg = "Có lỗi xảy ra. Vui lòng thử lại.";
+      let msg = t("auth.errors.generic");
       if (
         error instanceof LoginWithPasswordError &&
         error.code === LoginWithPasswordErrorCode.LOGIN_COOLDOWN
@@ -466,24 +489,24 @@ function AuthPageContent() {
         setCooldownEmail(email.trim().toLowerCase());
         setCooldownUntil(nextCooldownUntil);
         setCooldownRemaining(retryAfter);
-        msg = `Bạn đã nhập sai mật khẩu quá nhiều lần.`;
+        msg = t("auth.errors.loginCooldown");
       } else if (
         error instanceof LoginWithPasswordError &&
         error.code === LoginWithPasswordErrorCode.INVALID_CREDENTIALS
       ) {
         msg =
           typeof error.attemptsRemaining === "number"
-            ? `Mật khẩu không chính xác. Còn ${error.attemptsRemaining} lần thử.`
-            : "Email hoặc mật khẩu không đúng.";
+            ? t("auth.errors.invalidCredentialsAttempts", { count: error.attemptsRemaining })
+            : t("auth.errors.invalidCredentials");
       } else if (raw === "Invalid login credentials") {
-        msg = "Email hoặc mật khẩu không đúng.";
+        msg = t("auth.errors.invalidCredentials");
       } else if (raw === "User already registered") {
-        msg = "Email này đã được đăng ký. Vui lòng đăng nhập.";
+        msg = t("auth.errors.userAlreadyRegistered");
       } else if (raw.includes("Email not confirmed")) {
-        msg = "Vui lòng xác nhận email trước khi đăng nhập.";
+        msg = t("auth.errors.emailNotConfirmed");
       }
 
-      toast({ title: "Lỗi", description: msg, variant: "destructive" });
+      toast({ title: t("auth.errors.generic"), description: msg, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -544,8 +567,8 @@ function AuthPageContent() {
           if (event.data?.type === OAUTH_COMPLETE_EVENT) {
             window.removeEventListener("message", handlePopupMessage);
             if (checkPopupClosed) clearInterval(checkPopupClosed);
-            supabase.auth.getSession().then(({ data: { session } }) => {
-              if (session?.user) {
+            supabase.auth.getUser().then(({ data: { user } }) => {
+              if (user) {
                 if (isPwaAuth) {
                   window.location.replace(targetRedirect);
                 } else {
@@ -578,8 +601,10 @@ function AuthPageContent() {
     } catch (error: unknown) {
       console.error("OAuth error:", error);
       toast({
-        title: "Lỗi",
-        description: `Không thể đăng nhập với ${provider === OauthProvider.GOOGLE ? "Google" : "GitHub"}. Vui lòng thử lại.`,
+        title: t("auth.errors.generic"),
+        description: t("auth.errors.oauthProviderFailed", {
+          provider: provider === OauthProvider.GOOGLE ? "Google" : "GitHub",
+        }),
         variant: "destructive",
       });
       setIsOAuthLoading(null);
@@ -589,20 +614,18 @@ function AuthPageContent() {
   const heading = useMemo(() => {
     switch (view) {
       case AuthView.SIGNUP:
-        return { title: "Tạo tài khoản", desc: "Bắt đầu tạo chatbot AI cho website của bạn" };
+        return { title: t("auth.createAccount"), desc: t("auth.createAccountDesc") };
       case AuthView.FORGOT:
-        return { title: "Quên mật khẩu", desc: "Nhập email để nhận link đặt lại mật khẩu" };
+        return { title: t("auth.forgotPassword"), desc: t("auth.forgotPasswordDesc") };
       case AuthView.SIGNUP_SUCCESS:
-        return { title: "Đăng ký thành công!", desc: "Kiểm tra email để xác nhận tài khoản" };
+        return { title: t("auth.signupSuccess"), desc: t("auth.signupSuccessDesc") };
       default:
         return {
-          title: "Đăng nhập",
-          desc: isPwaAuth
-            ? "Đăng nhập để tham gia nhóm chat trên ứng dụng"
-            : "Đăng nhập để quản lý chatbot của bạn",
+          title: t("auth.login"),
+          desc: isPwaAuth ? t("auth.loginPwaDesc") : t("auth.loginDesc"),
         };
     }
-  }, [view, isPwaAuth]);
+  }, [view, isPwaAuth, t]);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-12">
@@ -614,13 +637,16 @@ function AuthPageContent() {
       <div className="orb orb-primary animate-float right-1/4 top-1/4 h-48 w-48 opacity-50" />
 
       <div className="relative z-10 w-full max-w-md">
-        <Link
-          href={isPwaAuth ? targetRedirect.split("?")[0] || "/" : "/"}
-          className="group mb-4 inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-          {isPwaAuth ? "Quay lại nhóm chat" : "Quay lại trang chủ"}
-        </Link>
+        <div className="mb-4 flex items-center justify-between">
+          <Link
+            href={isPwaAuth ? targetRedirect.split("?")[0] || "/" : "/"}
+            className="group inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+            {isPwaAuth ? t("auth.backToChat") : t("auth.backToHome")}
+          </Link>
+          <LanguageSwitcher mode="cookie" />
+        </div>
 
         <Card className="glass-lg shadow-glow-soft">
           <div className="bg-gradient-primary absolute left-0 right-0 top-0 h-1 rounded-t-lg" />
@@ -653,13 +679,16 @@ function AuthPageContent() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
                     <MailCheck className="h-6 w-6 text-green-500" />
                   </div>
-                  <h2 className="text-xl font-semibold text-foreground">Đăng ký thành công!</h2>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    {t("auth.signupSuccessTitle")}
+                  </h2>
                 </div>
 
                 <div className="max-w-sm px-4">
                   <p className="text-md text-center leading-relaxed text-muted-foreground">
-                    Chúng tôi đã gửi xác nhận đến{" "}
-                    <strong className="text-foreground">{email}</strong>. Vui lòng kiểm tra email.
+                    {t("auth.signupSuccessEmailSent")}{" "}
+                    <strong className="text-foreground">{email}</strong>.{" "}
+                    {t("auth.signupSuccessCheckEmail")}
                   </p>
                 </div>
 
@@ -668,7 +697,7 @@ function AuthPageContent() {
                   className="hover:border-primary/50 hover:bg-white hover:text-primary hover:shadow-sm hover:shadow-primary/20"
                   onClick={() => switchView(AuthView.LOGIN)}
                 >
-                  Quay lại đăng nhập
+                  {t("auth.backToLogin")}
                 </Button>
               </div>
             )}
@@ -691,14 +720,14 @@ function AuthPageContent() {
                     <Mail className="h-6 w-6 text-blue-500" />
                   </div>
                   <h2 className="text-xl font-semibold text-foreground">
-                    Email đã gửi thành công!
+                    {t("auth.emailSentTitle")}
                   </h2>
                 </div>
 
                 <div className="max-w-sm px-4">
                   <p className="text-md text-center leading-relaxed text-muted-foreground">
-                    Nếu email <strong className="text-foreground">{email}</strong> đã được đăng ký,
-                    bạn sẽ nhận được yêu cầu đặt lại mật khẩu.
+                    {t("auth.emailSentDesc")} <strong className="text-foreground">{email}</strong>{" "}
+                    {t("auth.emailSentRegistered")}
                   </p>
                 </div>
 
@@ -707,7 +736,7 @@ function AuthPageContent() {
                   className="hover:border-primary/50 hover:bg-white hover:text-primary hover:shadow-sm hover:shadow-primary/20"
                   onClick={() => switchView(AuthView.LOGIN)}
                 >
-                  Quay lại đăng nhập
+                  {t("auth.backToLogin")}
                 </Button>
               </div>
             )}
@@ -717,12 +746,12 @@ function AuthPageContent() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {view === AuthView.SIGNUP && (
                     <div className="space-y-2">
-                      <Label htmlFor="fullName">Họ và tên</Label>
+                      <Label htmlFor="fullName">{t("auth.fullName")}</Label>
                       <div>
                         <Input
                           id="fullName"
                           type="text"
-                          placeholder="Nguyễn Văn A"
+                          placeholder={t("auth.fullNamePlaceholder")}
                           value={fullName}
                           onChange={(e) => setFullName(e.target.value)}
                           disabled={isLoading}
@@ -736,7 +765,7 @@ function AuthPageContent() {
                   )}
 
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">{t("auth.email")}</Label>
                     <div>
                       <Input
                         id="email"
@@ -756,7 +785,7 @@ function AuthPageContent() {
                   {view !== AuthView.FORGOT && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="password">Mật khẩu</Label>
+                        <Label htmlFor="password">{t("auth.password")}</Label>
                         {view === AuthView.LOGIN && (
                           <button
                             type="button"
@@ -764,7 +793,7 @@ function AuthPageContent() {
                             onClick={() => switchView(AuthView.FORGOT)}
                             className="text-xs font-medium text-primary hover:underline"
                           >
-                            Quên mật khẩu?
+                            {t("auth.forgotPasswordLink")}
                           </button>
                         )}
                       </div>
@@ -797,20 +826,22 @@ function AuthPageContent() {
                         )}
                         {isLoginCooldownActive && (
                           <p className="pt-1 text-xs text-destructive">
-                            Vui lòng thử lại sau {formatCooldown(cooldownRemaining)}
+                            {t("auth.cooldownRetryAfter", {
+                              time: formatCooldown(cooldownRemaining),
+                            })}
                           </p>
                         )}
                       </div>
 
                       {view === AuthView.SIGNUP && password.length > 0 && (
-                        <PasswordStrength password={password} />
+                        <PasswordStrength password={password} t={(key) => t(key)} />
                       )}
                     </div>
                   )}
 
                   {view === AuthView.SIGNUP && (
                     <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">Xác nhận mật khẩu</Label>
+                      <Label htmlFor="confirmPassword">{t("auth.confirmPassword")}</Label>
                       <div>
                         <div className="relative">
                           <Input
@@ -849,20 +880,17 @@ function AuthPageContent() {
                   >
                     {isLoading ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Đang xử lý...
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {t("auth.processing")}
                       </>
                     ) : isLoginCooldownActive ? (
-                      "Tạm khóa đăng nhập"
+                      t("auth.loginLocked")
                     ) : view === AuthView.SIGNUP ? (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Tạo tài khoản
-                      </>
+                      <>{t("auth.createAccountBtn")}</>
                     ) : view === AuthView.FORGOT ? (
-                      "Gửi link đặt lại"
+                      t("auth.sendResetLink")
                     ) : (
-                      "Đăng nhập"
+                      t("auth.loginBtn")
                     )}
                   </Button>
                 </form>
@@ -875,7 +903,7 @@ function AuthPageContent() {
                       </div>
                       <div className="relative flex justify-center text-xs uppercase">
                         <span className="bg-card px-2 text-muted-foreground">
-                          hoặc tiếp tục với
+                          {t("auth.orContinueWith")}
                         </span>
                       </div>
                     </div>
@@ -916,35 +944,35 @@ function AuthPageContent() {
                 <div className="mt-6 text-center text-sm">
                   {view === AuthView.SIGNUP ? (
                     <p className="text-muted-foreground">
-                      Đã có tài khoản?{" "}
+                      {t("auth.alreadyHaveAccount")}{" "}
                       <button
                         type="button"
                         onClick={() => switchView(AuthView.LOGIN)}
                         className="font-medium text-primary hover:underline"
                       >
-                        Đăng nhập
+                        {t("auth.loginLink")}
                       </button>
                     </p>
                   ) : view === AuthView.LOGIN ? (
                     <p className="text-muted-foreground">
-                      Chưa có tài khoản?{" "}
+                      {t("auth.noAccount")}{" "}
                       <button
                         type="button"
                         onClick={() => switchView(AuthView.SIGNUP)}
                         className="font-medium text-primary hover:underline"
                       >
-                        Đăng ký ngay
+                        {t("auth.signupLink")}
                       </button>
                     </p>
                   ) : (
                     <p className="text-muted-foreground">
-                      Nhớ mật khẩu?{" "}
+                      {t("auth.rememberPassword")}{" "}
                       <button
                         type="button"
                         onClick={() => switchView(AuthView.LOGIN)}
                         className="font-medium text-primary hover:underline"
                       >
-                        Đăng nhập
+                        {t("auth.loginLink")}
                       </button>
                     </p>
                   )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import type { DataSource } from "./data";
 
 interface DataNodeProps {
@@ -16,6 +17,9 @@ export default function DataNode({
   onHover,
   reducedMotion: _reducedMotion,
 }: DataNodeProps) {
+  const t = useTranslations("dataSources.sources");
+  const label = t.has(`${source.id}.label`) ? t(`${source.id}.label`) : source.label;
+
   return (
     <motion.div
       data-node-id={source.id}
@@ -43,7 +47,7 @@ export default function DataNode({
               <source.icon style={{ color: source.color }} size={14} strokeWidth={1.5} />
             </div>
 
-            <span className="text-xs font-bold text-foreground sm:text-sm">{source.label}</span>
+            <span className="text-xs font-bold text-foreground sm:text-sm">{label}</span>
           </div>
         </div>
       </div>

@@ -13,6 +13,8 @@ import { transcribeVoiceAudioApi } from "@/lib/services/widget.service";
 import { EGroupSenderType } from "@/types";
 
 import { MAX_GROUP_CHAT_INPUT } from "@/config/rag";
+import { ELanguage } from "@/types/enums";
+import { getWidgetTranslations } from "@/lib/i18n/widget-translations";
 
 interface MessageComposerProps {
   botId?: string;
@@ -29,6 +31,7 @@ interface MessageComposerProps {
   members?: GroupMember[];
   onCancelReply?: () => void;
   isBotOutOfCredits?: boolean;
+  locale?: ELanguage | string;
 }
 
 export function MessageComposer({
@@ -43,12 +46,14 @@ export function MessageComposer({
   members = [],
   onCancelReply,
   isBotOutOfCredits = false,
+  locale = ELanguage.Vi,
 }: MessageComposerProps) {
   const [content, setContent] = useState("");
   const [shouldBotReply, setShouldBotReply] = useState(true);
   const [isSttLoading, setIsSttLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const t = getWidgetTranslations(locale);
 
   const {
     isRecording,
@@ -62,12 +67,12 @@ export function MessageComposer({
   useEffect(() => {
     if (recordError) {
       toast({
-        title: "Lỗi thiết bị",
+        title: t.deviceError,
         description: recordError,
         variant: "destructive",
       });
     }
-  }, [recordError, toast]);
+  }, [recordError, toast, t.deviceError]);
 
   const processedAudioBlobRef = useRef<Blob | null>(null);
 
@@ -93,16 +98,13 @@ export function MessageComposer({
             await onSend(recognizedText, { replyToId, shouldBotReply });
           }
         } else {
-          throw new Error(data.message || "Lỗi xử lý âm thanh");
+          throw new Error(data.message || t.voiceRecognitionFallback);
         }
       } catch (err: unknown) {
         console.error("STT error:", err);
         toast({
-          title: "Lỗi chuyển giọng nói",
-          description:
-            err instanceof Error
-              ? err.message
-              : "Không thể nhận diện giọng nói của bạn, vui lòng thử lại.",
+          title: t.voiceRecognitionError,
+          description: err instanceof Error ? err.message : t.voiceRecognitionFallback,
           variant: "destructive",
         });
       } finally {
@@ -114,7 +116,18 @@ export function MessageComposer({
       processedAudioBlobRef.current = audioBlob;
       void handleSendAudio(audioBlob);
     }
-  }, [audioBlob, botId, userId, replyingToMessage, shouldBotReply, onSend, onCancelReply, toast]);
+  }, [
+    audioBlob,
+    botId,
+    userId,
+    replyingToMessage,
+    shouldBotReply,
+    onSend,
+    onCancelReply,
+    toast,
+    t.voiceRecognitionError,
+    t.voiceRecognitionFallback,
+  ]);
 
   // Determine sender name for replyingToMessage
   const replyingToSenderMember =
@@ -172,7 +185,7 @@ export function MessageComposer({
             <div className="flex items-center gap-2 truncate text-muted-foreground">
               <Reply className="h-3.5 w-3.5 shrink-0 text-primary" />
               <span className="truncate">
-                Đang trả lời <strong>{replyingToSenderName}</strong>: &quot;
+                {t.replyingTo} <strong>{replyingToSenderName}</strong>: &quot;
                 {replyingToMessage.content}&quot;
               </span>
             </div>
@@ -182,6 +195,8 @@ export function MessageComposer({
               size="icon"
               className="h-5 w-5 shrink-0 rounded-full"
               onClick={onCancelReply}
+              title={t.cancelReply}
+              aria-label={t.cancelReply}
             >
               <X className="h-3 w-3" />
             </Button>
@@ -196,9 +211,8 @@ export function MessageComposer({
             onClick={() => {
               if (isBotOutOfCredits) {
                 toast({
-                  title: "Bot tạm dừng do hết credits",
-                  description:
-                    "Bot hiện đã hết credits để trả lời tự động trong nhóm. Quản trị viên vui lòng nạp thêm credits cho workspace.",
+                  title: t.outOfCredits,
+                  description: t.botCreditWarning,
                   variant: "destructive",
                 });
                 return;
@@ -223,10 +237,10 @@ export function MessageComposer({
             }
             title={
               isBotOutOfCredits
-                ? "Bot hiện đang hết credits"
+                ? t.outOfCredits
                 : shouldBotReply
-                  ? "Tắt AI trả lời tự động"
-                  : "Bật AI trả lời tự động"
+                  ? t.disableAiReply
+                  : t.enableAiReply
             }
           >
             <Bot className="h-4 w-4 shrink-0" />
@@ -299,7 +313,8 @@ export function MessageComposer({
                 onClick={stopRecording}
                 style={{ backgroundColor: primaryColor }}
                 className="shadow-xs flex h-10 w-10 shrink-0 items-center justify-center rounded-full p-0 text-white"
-                title="Dừng ghi âm"
+                title={t.stopRecording}
+                aria-label={t.stopRecording}
               >
                 <Square className="h-4 w-4 fill-white text-white" />
               </Button>
@@ -311,7 +326,7 @@ export function MessageComposer({
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={isSttLoading ? "Đang nhận diện giọng nói..." : "Nhập tin nhắn..."}
+                placeholder={isSttLoading ? t.listening : t.messageComposerPlaceholder}
                 disabled={disabled || isSending || isSttLoading}
                 maxLength={MAX_GROUP_CHAT_INPUT}
                 className="flex-1 rounded-full border-border bg-slate-50 text-sm focus-visible:ring-primary dark:bg-slate-900"
@@ -326,7 +341,8 @@ export function MessageComposer({
                   variant="outline"
                   size="icon"
                   className="h-10 w-10 shrink-0 rounded-full border-border text-muted-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                  title="Thu âm tin nhắn thoại"
+                  title={t.sendVoice}
+                  aria-label={t.sendVoice}
                 >
                   {isSttLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -342,6 +358,8 @@ export function MessageComposer({
                 size="icon"
                 style={{ backgroundColor: primaryColor }}
                 className="shadow-xs h-10 w-10 shrink-0 rounded-full text-white hover:opacity-90"
+                title={t.sendMessage}
+                aria-label={t.sendMessage}
               >
                 <Send className="h-4 w-4" />
               </Button>

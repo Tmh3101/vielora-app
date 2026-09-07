@@ -3,9 +3,12 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bot, Compass, Zap, Check, Lock } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Mockup3DWrapper } from "./Mockup3DWrapper";
 
 export function MockupSmartHomepage() {
+  const t = useTranslations("features.mockups.smartHomepage");
+
   // 0: User asking on homepage
   // 1: Bot responding + Countdown banner showing
   // 2: Page navigated to /pricing + widget reopened with continuity
@@ -59,7 +62,7 @@ export function MockupSmartHomepage() {
 
         <div className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold text-primary">
           <Compass className="h-3 w-3" />
-          <span>Intent Navigation</span>
+          <span>{t("intentNav")}</span>
         </div>
       </div>
 
@@ -96,42 +99,42 @@ export function MockupSmartHomepage() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] font-bold text-foreground">
-                    Bảng giá dịch vụ 2026
-                  </span>
-                  <p className="text-[8px] text-muted-foreground">
-                    Tự động chuyển hướng bởi Vielora AI
-                  </p>
+                  <span className="text-[11px] font-bold text-foreground">{t("pricingTitle")}</span>
+                  <p className="text-[8px] text-muted-foreground">{t("pricingSub")}</p>
                 </div>
                 <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-600 dark:text-emerald-400">
-                  Target Reached
+                  {t("targetReached")}
                 </span>
               </div>
 
               {/* Pricing Cards Mock */}
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <div className="rounded-lg border border-border/60 bg-card p-2">
-                  <span className="text-[9px] font-bold text-foreground">Gói Standard</span>
-                  <div className="my-1 text-[11px] font-extrabold text-primary">799k/tháng</div>
+                  <span className="text-[9px] font-bold text-foreground">{t("standardPlan")}</span>
+                  <div className="my-1 text-[11px] font-extrabold text-primary">
+                    {t("standardPrice")}
+                  </div>
                   <div className="space-y-0.5 text-[7px] text-muted-foreground">
                     <p className="flex items-center gap-1">
-                      <Check className="h-2 w-2 text-emerald-500" /> 1 Chatbot AI
+                      <Check className="h-2 w-2 text-emerald-500" /> {t("standardFeat1")}
                     </p>
                     <p className="flex items-center gap-1">
-                      <Check className="h-2 w-2 text-emerald-500" /> Smart Homepage
+                      <Check className="h-2 w-2 text-emerald-500" /> {t("standardFeat2")}
                     </p>
                   </div>
                 </div>
 
                 <div className="shadow-xs rounded-lg border border-primary/40 bg-primary/5 p-2">
-                  <span className="text-[9px] font-bold text-primary">Gói Pro (Khuyên dùng)</span>
-                  <div className="my-1 text-[11px] font-extrabold text-primary">1.499k/tháng</div>
+                  <span className="text-[9px] font-bold text-primary">{t("proPlan")}</span>
+                  <div className="my-1 text-[11px] font-extrabold text-primary">
+                    {t("proPrice")}
+                  </div>
                   <div className="space-y-0.5 text-[7px] text-muted-foreground">
                     <p className="flex items-center gap-1">
-                      <Check className="h-2 w-2 text-emerald-500" /> Không giới hạn Lead
+                      <Check className="h-2 w-2 text-emerald-500" /> {t("proFeat1")}
                     </p>
                     <p className="flex items-center gap-1">
-                      <Check className="h-2 w-2 text-emerald-500" /> Group Chat & PWA
+                      <Check className="h-2 w-2 text-emerald-500" /> {t("proFeat2")}
                     </p>
                   </div>
                 </div>
@@ -152,7 +155,7 @@ export function MockupSmartHomepage() {
                 <div className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20">
                   <Bot className="h-2.5 w-2.5" />
                 </div>
-                <span className="text-[9px] font-bold">Vielora Assistant</span>
+                <span className="text-[9px] font-bold">{t("assistantName")}</span>
               </div>
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
             </div>
@@ -162,7 +165,7 @@ export function MockupSmartHomepage() {
               {/* User Question */}
               <div className="flex justify-end">
                 <div className="rounded-tr-xs rounded-lg bg-primary px-2 py-1 text-white">
-                  Cho mình xem bảng giá các gói nhé!
+                  {t("userQuestion")}
                 </div>
               </div>
 
@@ -173,20 +176,14 @@ export function MockupSmartHomepage() {
                 className="flex justify-start"
               >
                 <div className="rounded-tl-xs rounded-lg bg-muted/80 px-2 py-1 text-foreground/90">
-                  {step >= 2 ? (
-                    <span>
-                      Đây là trang bảng giá chi tiết. Bạn cần mình tư vấn thêm gói nào không?
-                    </span>
-                  ) : (
-                    <span>Tôi đang đưa bạn đến trang Bảng giá ngay nhé!</span>
-                  )}
+                  {step >= 2 ? <span>{t("botLanded")}</span> : <span>{t("botRedirecting")}</span>}
                 </div>
               </motion.div>
             </div>
           </div>
         </div>
 
-        {/* Real Smart Homepage Navigation Countdown Banner (matches widget.js implementation) */}
+        {/* Real Smart Homepage Navigation Countdown Banner */}
         <AnimatePresence>
           {step === 1 && (
             <motion.div
@@ -199,10 +196,10 @@ export function MockupSmartHomepage() {
             >
               <Zap className="h-3 w-3 animate-bounce text-amber-400" />
               <span>
-                Đang chuyển hướng tới <b>/pricing</b> (2s)
+                {t("redirectingTo")} <b>/pricing</b> (2s)
               </span>
               <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[8px] font-medium text-slate-300">
-                Hủy
+                {t("cancel")}
               </span>
             </motion.div>
           )}
@@ -215,10 +212,10 @@ export function MockupSmartHomepage() {
         style={{ transform: "translateZ(10px)" }}
       >
         <span className="flex items-center gap-1">
-          <Check className="h-3 w-3 text-emerald-500" /> Tự động nhận diện ý định
+          <Check className="h-3 w-3 text-emerald-500" /> {t("intentRecognized")}
         </span>
         <span className="flex items-center gap-1">
-          <Check className="h-3 w-3 text-emerald-500" /> Giữ liền mạch cuộc chat
+          <Check className="h-3 w-3 text-emerald-500" /> {t("seamlessChat")}
         </span>
       </div>
     </Mockup3DWrapper>

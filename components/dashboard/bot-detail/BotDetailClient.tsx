@@ -64,6 +64,8 @@ import { GroupTab } from "@/components/dashboard/bot-detail/tabs/GroupTab";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { getEmbededScript } from "@/lib/helpers";
 import type { Tables } from "@/lib/supabase/types";
+import { useTranslations } from "next-intl";
+import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
 
 type BotType = Tables<"bots">;
 
@@ -238,6 +240,9 @@ export function BotDetailClient({
     onRequireUpgrade: () => openUpgradeModal(),
   });
 
+  const tTabs = useTranslations("dashboard.botDetail.tabs");
+  const tHeader = useTranslations("dashboard.botDetail.header");
+  const tClient = useTranslations("dashboard.botDetail.client");
   const { activeWorkspace } = useWorkspace();
   const effectivePlan =
     planCode ||
@@ -251,17 +256,17 @@ export function BotDetailClient({
     (typeof window !== "undefined" ? window.location.origin : "");
 
   const sidebarItems = [
-    { id: BotDetailDashboardTabs.OVERVIEW, label: "Tổng quan", icon: BarChart3 },
+    { id: BotDetailDashboardTabs.OVERVIEW, label: tTabs("overview"), icon: BarChart3 },
     { id: BotDetailDashboardTabs.PLAYGROUND, label: "Playground", icon: MessageSquare },
-    { id: BotDetailDashboardTabs.KNOWLEDGE, label: "Kiến thức", icon: FileText },
-    { id: BotDetailDashboardTabs.APPEARANCE, label: "Giao diện", icon: Palette },
-    { id: BotDetailDashboardTabs.AI, label: "Tùy chỉnh", icon: Sparkles },
-    { id: BotDetailDashboardTabs.LEADS, label: "Liên hệ", icon: UserPlus },
-    { id: BotDetailDashboardTabs.INSTALL, label: "Cài đặt Widget", icon: Code },
+    { id: BotDetailDashboardTabs.KNOWLEDGE, label: tTabs("knowledge"), icon: FileText },
+    { id: BotDetailDashboardTabs.APPEARANCE, label: tTabs("appearance"), icon: Palette },
+    { id: BotDetailDashboardTabs.AI, label: tTabs("aiConfig"), icon: Sparkles },
+    { id: BotDetailDashboardTabs.LEADS, label: tTabs("leads"), icon: UserPlus },
+    { id: BotDetailDashboardTabs.INSTALL, label: tTabs("integration"), icon: Code },
     ...(isProOrEnterprise
-      ? [{ id: BotDetailDashboardTabs.GROUP, label: "Nhóm chat", icon: Users }]
+      ? [{ id: BotDetailDashboardTabs.GROUP, label: tTabs("group"), icon: Users }]
       : []),
-    { id: BotDetailDashboardTabs.SETTINGS, label: "Cài đặt", icon: Settings },
+    { id: BotDetailDashboardTabs.SETTINGS, label: tTabs("settings"), icon: Settings },
   ];
 
   const first4Items = sidebarItems.slice(0, 4);
@@ -275,21 +280,21 @@ export function BotDetailClient({
         return (
           <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
             <Plus className="mr-1 h-3 w-3" />
-            Chưa index
+            {tClient("statusNotIndexed")}
           </Badge>
         );
       case EPageStatus.Completed:
         return (
           <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
             <Plus className="mr-1 h-3 w-3" />
-            Đã index
+            {tClient("statusIndexed")}
           </Badge>
         );
       case EPageStatus.Failed:
         return (
           <Badge variant="secondary" className="bg-red-100 text-red-700">
             <MinusCircle className="mr-1 h-3 w-3" />
-            Discover lỗi
+            {tClient("statusDiscoverError")}
           </Badge>
         );
     }
@@ -316,7 +321,7 @@ export function BotDetailClient({
           <Link
             href="/dashboard"
             className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50 transition-colors hover:bg-muted"
-            title="Về Dashboard"
+            title="Dashboard"
           >
             <ArrowLeft className="h-4 w-4 text-muted-foreground" />
           </Link>
@@ -356,12 +361,12 @@ export function BotDetailClient({
                   }`}
                 />
                 {bot.is_stopped
-                  ? "Đã dừng"
+                  ? tHeader("statusStopped")
                   : bot.status === EBotStatus.Ready
-                    ? "Hoạt động"
+                    ? tHeader("statusReady")
                     : bot.status === EBotStatus.Failed
-                      ? "Lỗi"
-                      : "Đang xử lý"}
+                      ? tHeader("statusFailed")
+                      : tHeader("statusPending")}
               </div>
             </div>
           </div>
@@ -387,6 +392,16 @@ export function BotDetailClient({
             );
           })}
         </nav>
+
+        {/* Language Switcher */}
+        <div className="border-t border-border/50 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {tClient("language")}
+            </span>
+            <LanguageSwitcher />
+          </div>
+        </div>
       </aside>
 
       {/* Mobile Header */}
@@ -397,7 +412,7 @@ export function BotDetailClient({
           asChild
           className="h-9 w-9 rounded-xl border border-border/50 text-muted-foreground transition-all duration-200 hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:scale-95"
         >
-          <Link href="/dashboard" aria-label="Quay lại">
+          <Link href="/dashboard" aria-label={tClient("backAriaLabel")}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -442,7 +457,7 @@ export function BotDetailClient({
                   ? "font-semibold text-primary"
                   : "text-muted-foreground hover:text-foreground"
               }`}
-              aria-label="Mục khác"
+              aria-label={tClient("moreMenuAriaLabel")}
             >
               <Menu className="h-5 w-5" />
               {isRemainingActive && (
@@ -480,7 +495,7 @@ export function BotDetailClient({
           {/* Page Header */}
           <div className="mb-8">
             <h1 className="mb-1 text-2xl font-bold text-foreground">
-              {sidebarItems.find((i) => i.id === activeTab)?.label || "Tổng quan"}
+              {sidebarItems.find((i) => i.id === activeTab)?.label || tClient("overviewFallback")}
             </h1>
             <p className="flex items-center gap-2 text-muted-foreground">
               <Globe className="h-4 w-4" />
@@ -532,8 +547,10 @@ export function BotDetailClient({
                 const script = getEmbededScript(bot.id, appUrl, framework);
                 navigator.clipboard.writeText(script);
                 toast({
-                  title: "Đã copy!",
-                  description: `${copiedLabel || "Code"} đã được copy vào clipboard.`,
+                  title: tClient("copiedTitle"),
+                  description: tClient("copiedDescription", {
+                    label: copiedLabel || "Code",
+                  }),
                 });
               }}
             />

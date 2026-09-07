@@ -27,10 +27,11 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { calculateRemainingMonths, formatPaymentDate } from "@/lib/helpers/payment-helpers";
 import { toast } from "sonner";
 import type { Tables } from "@/lib/supabase/types";
+import { persistActiveWorkspaceId } from "@/hooks/useWorkspace";
 
 function setWorkspaceCookie(wsId: string) {
   if (typeof document !== "undefined") {
-    document.cookie = `active_workspace_id=${wsId}; path=/; max-age=2592000; SameSite=Lax`;
+    persistActiveWorkspaceId(wsId);
   }
 }
 

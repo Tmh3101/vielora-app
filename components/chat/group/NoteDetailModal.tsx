@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import type { GroupNoteRow } from "@/types/group-chat";
 import { parseMarkdown } from "@/lib/helpers/chat-helpers";
+import { ELanguage } from "@/types/enums";
+import { getWidgetTranslations, getLocaleDateTag } from "@/lib/i18n/widget-translations";
 
 export interface NoteDetailModalProps {
   isOpen: boolean;
@@ -24,6 +26,7 @@ export interface NoteDetailModalProps {
   onUnpin?: (note: GroupNoteRow) => void;
   onEdit?: (note: GroupNoteRow) => void;
   onDelete?: (note: GroupNoteRow) => void;
+  locale?: ELanguage | string;
 }
 
 export function NoteDetailModal({
@@ -37,7 +40,9 @@ export function NoteDetailModal({
   onUnpin,
   onEdit,
   onDelete,
+  locale = ELanguage.Vi,
 }: NoteDetailModalProps) {
+  const t = getWidgetTranslations(locale);
   useEffect(() => {
     if (isOpen && note?.id) {
       try {
@@ -73,13 +78,16 @@ export function NoteDetailModal({
   const isCurrentlyActive = note.is_active || note.id === activeNoteId;
   const canPinThisNote = canManageNote && !isCurrentlyActive && !activeNoteId && onPin;
 
-  const formattedDate = new Date(note.updated_at || note.created_at).toLocaleDateString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  const formattedDate = new Date(note.updated_at || note.created_at).toLocaleDateString(
+    getLocaleDateTag(locale),
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -98,12 +106,12 @@ export function NoteDetailModal({
                     }}
                   >
                     <Pin className="h-3 w-3" />
-                    Đang ghim
+                    {t.pinned}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 rounded-md bg-muted/80 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                     <StickyNote className="h-3 w-3" />
-                    Lịch sử ghi chú
+                    {t.notesHistory}
                   </span>
                 )}
                 <div className="flex items-center gap-1 text-[11px] text-muted-foreground/80">
@@ -146,7 +154,7 @@ export function NoteDetailModal({
                 }}
               >
                 <Pin className="h-3.5 w-3.5" />
-                <span>Ghim lại</span>
+                <span>{t.repin}</span>
               </Button>
             )}
 
@@ -162,7 +170,7 @@ export function NoteDetailModal({
                 }}
               >
                 <PinOff className="h-3.5 w-3.5" />
-                <span>Bỏ ghim</span>
+                <span>{t.unpin}</span>
               </Button>
             )}
 
@@ -178,7 +186,7 @@ export function NoteDetailModal({
                 }}
               >
                 <Edit3 className="h-3.5 w-3.5" />
-                <span>Chỉnh sửa</span>
+                <span>{t.edit}</span>
               </Button>
             )}
           </div>
@@ -195,7 +203,7 @@ export function NoteDetailModal({
                 }}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                <span>Xóa</span>
+                <span>{t.delete}</span>
               </Button>
             )}
           </div>

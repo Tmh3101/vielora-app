@@ -81,6 +81,7 @@ export interface CreateNoteFromMessageInput {
   userId: string;
   userName: string;
   isActive?: boolean;
+  locale?: string;
 }
 
 export interface CreateGroupNoteInput {
@@ -91,6 +92,7 @@ export interface CreateGroupNoteInput {
   contentHtml: string;
   contentText: string;
   userName?: string;
+  locale?: string;
 }
 
 export interface UpdateGroupNoteInput {
@@ -102,6 +104,7 @@ export interface UpdateGroupNoteInput {
   contentHtml?: string;
   contentText?: string;
   userName?: string;
+  locale?: string;
 }
 
 export interface GroupNotesPaginatedResponse {

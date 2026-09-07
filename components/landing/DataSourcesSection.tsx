@@ -6,8 +6,10 @@ import DataNode from "./data-sources/DataNode";
 import AIChatbotCore from "./data-sources/AIChatbotCore";
 import ConnectionLines from "./data-sources/ConnectionLines";
 import { ALL_SOURCES } from "./data-sources/data";
+import { useTranslations } from "next-intl";
 
 export default function DataSourcesSection() {
+  const t = useTranslations("dataSources");
   const sectionRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const coreRef = useRef<HTMLDivElement>(null);
@@ -107,7 +109,7 @@ export default function DataSourcesSection() {
             transition={{ duration: 0.5 }}
             className="heading-premium mb-4 text-3xl font-bold text-foreground sm:text-4xl"
           >
-            Kho dữ liệu <span className="text-gradient-animated text-balance">da dạng</span>
+            {t("heading")}
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 20 }}
@@ -116,8 +118,7 @@ export default function DataSourcesSection() {
             transition={{ duration: 0.5, delay: 0.05 }}
             className="text-lg text-muted-foreground"
           >
-            Thu thập và xử lý dữ liệu từ website, blog, tin tức đến tài liệu, bảng tính một cách tự
-            động để làm kho tri thức cho trợ lý AI của bạn.
+            {t("subheading")}
           </motion.p>
         </div>
 

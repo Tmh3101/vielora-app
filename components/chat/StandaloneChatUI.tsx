@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, Bot, Share2, Copy, Check, QrCode, Mic, Square } from "lucide-react";
 import type { PublicBotData } from "@/lib/services/bot.service";
-import type { Json } from "@/lib/supabase/types";
+import type { WidgetSettings } from "@/types/widget-api";
 import {
   parseMarkdown,
   getUserMessageTextColor,
@@ -28,6 +28,7 @@ import { BOT_RATE_LIMIT_ERROR_CODES } from "@/lib/bot-rate-limit";
 import type { BotRateLimitErrorCode } from "@/lib/bot-rate-limit";
 import { EMessageRole, EWidgetBackgroundType } from "@/types/enums";
 import type { ChatResponse, ChatMessage, ChatData } from "@/types/widget-api";
+import { getWidgetTranslations } from "@/lib/i18n/widget-translations";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { useOfflineMessageQueue } from "@/hooks/useOfflineMessageQueue";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
@@ -67,17 +68,6 @@ const PWAInstallHeaderButton = dynamic(
   { ssr: false }
 );
 
-interface WidgetSettings {
-  primaryColor?: string;
-  welcomeMessage?: string;
-  suggestedQuestions?: string[];
-  chatBackgroundType?: EWidgetBackgroundType;
-  chatBackgroundValue?: string;
-  chatBackgroundOpacity?: number;
-  subscriptionPlan?: string;
-  isVoiceEnabled?: boolean;
-}
-
 declare global {
   interface Window {
     FingerprintJS?: {
@@ -100,6 +90,10 @@ export function StandaloneChatUI({
   planCode?: string | null;
 }) {
   useIOSAuthSync();
+  const widgetSettings = bot.widget_settings as unknown as WidgetSettings | null;
+  const locale = widgetSettings?.ui_language || "vi";
+  const t = getWidgetTranslations(locale);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -187,12 +181,12 @@ export function StandaloneChatUI({
   useEffect(() => {
     if (recordError) {
       toast({
-        title: "Lỗi thiết bị",
+        title: t.deviceError,
         description: recordError,
         variant: "destructive",
       });
     }
-  }, [recordError, toast]);
+  }, [recordError, toast, t.deviceError]);
 
   const processedAudioBlobRef = useRef<Blob | null>(null);
   const conversationIdRef = useRef<string | null>(conversationId);
@@ -273,18 +267,15 @@ export function StandaloneChatUI({
             if (chatData.data.conversationId) setConversationId(chatData.data.conversationId);
           }
         } else {
-          throw new Error(data.message || "Lỗi xử lý âm thanh");
+          throw new Error(data.message || t.voiceRecognitionFallback);
         }
       } catch (err: unknown) {
         console.error("Lỗi chuyển dịch giọng nói:", err);
         // Remove the processing indicator on error
         setMessages((prev) => prev.filter((msg) => msg.id !== tempMessageId));
         toast({
-          title: "Lỗi chuyển giọng nói",
-          description:
-            err instanceof Error
-              ? err.message
-              : "Không thể nhận diện giọng nói của bạn, vui lòng thử lại.",
+          title: t.voiceRecognitionError,
+          description: err instanceof Error ? err.message : t.voiceRecognitionFallback,
           variant: "destructive",
         });
       } finally {
@@ -297,7 +288,7 @@ export function StandaloneChatUI({
       processedAudioBlobRef.current = audioBlob;
       void handleSendAudio(audioBlob);
     }
-  }, [audioBlob, bot.id, visitorId, toast]);
+  }, [audioBlob, bot.id, visitorId, toast, t.voiceRecognitionError, t.voiceRecognitionFallback]);
 
   const handleCopy = async () => {
     try {
@@ -320,15 +311,15 @@ export function StandaloneChatUI({
       }
       setCopied(true);
       toast({
-        title: "Đã sao chép liên kết!",
-        description: "Đường dẫn trang chat đã được lưu vào bộ nhớ tạm.",
+        title: t.linkCopied,
+        description: t.linkCopiedDesc,
       });
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy link:", err);
       toast({
-        title: "Không thể sao chép!",
-        description: "Vui lòng sao chép liên kết thủ công.",
+        title: t.copyFailed,
+        description: t.copyFailedDesc,
         variant: "destructive",
       });
     }
@@ -357,9 +348,8 @@ export function StandaloneChatUI({
   };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const widgetSettings = (bot.widget_settings as Json as WidgetSettings | null) || {};
   const primaryColor = widgetSettings?.primaryColor || "#3B82F6";
-  const welcomeMessage = widgetSettings?.welcomeMessage || "Hello! How can I help you?";
+  const welcomeMessage = widgetSettings?.welcomeMessage || t.welcome;
   const bgType = widgetSettings?.chatBackgroundType || EWidgetBackgroundType.Solid;
   const bgValue = widgetSettings?.chatBackgroundValue || "#ffffff";
   const bgOpacity = (widgetSettings?.chatBackgroundOpacity || 100) / 100;
@@ -405,7 +395,8 @@ export function StandaloneChatUI({
           variant="ghost"
           size="icon"
           className="h-9 w-9 shrink-0 rounded-xl text-current transition-colors hover:bg-white/10"
-          aria-label="Chia sẻ trang chat"
+          aria-label={t.shareChat}
+          title={t.shareChat}
         >
           <Share2 className="h-5 w-5" />
         </Button>
@@ -413,17 +404,17 @@ export function StandaloneChatUI({
       <DialogContent className="max-h-[85vh] w-[92vw] max-w-[400px] overflow-y-auto rounded-2xl border-none bg-white p-4 shadow-xl sm:p-6">
         <DialogHeader className="space-y-1">
           <DialogTitle className="text-lg font-bold text-slate-900 sm:text-xl">
-            Chia sẻ trang chat
+            {t.shareChat}
           </DialogTitle>
           <p className="text-xs text-slate-500 sm:text-sm">
-            Chia sẻ bot {bot.name} với khách hàng của bạn
+            {t.shareBotWithCustomers.replace("{name}", bot.name)}
           </p>
         </DialogHeader>
         <div className="space-y-3">
           {/* Option 1: Copy Link */}
           <div className="space-y-2">
             <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">
-              Đường dẫn trang chat
+              {t.copyLink}
             </label>
             <div className="flex items-center gap-2">
               <Input
@@ -458,7 +449,7 @@ export function StandaloneChatUI({
                 style={{ "--primary-color": primaryColor } as React.CSSProperties}
               >
                 <QrCode className="h-3 w-3" />
-                Tạo QR Code
+                {t.createQrCode}
               </Button>
             </div>
           ) : (
@@ -474,7 +465,7 @@ export function StandaloneChatUI({
                 className="mt-2 text-xs text-slate-400 hover:bg-transparent hover:text-slate-600"
                 onClick={() => setShowQr(false)}
               >
-                Ẩn QR Code
+                {t.hideQrCode}
               </Button>
             </div>
           )}
@@ -505,10 +496,10 @@ export function StandaloneChatUI({
         </div>
         <p className="truncate text-sm opacity-90">
           {insufficientCredits
-            ? "Tạm dừng do hết credits"
+            ? t.outOfCredits
             : isAvailable
-              ? "Luôn sẵn sàng hỗ trợ"
-              : statusMessage || "Chưa sẵn sàng"}
+              ? t.alwaysAvailable
+              : statusMessage || t.notReady}
         </p>
       </div>
     </>
@@ -691,21 +682,19 @@ export function StandaloneChatUI({
     if (!messageToSend || isLoading || !visitorId) return;
 
     if (messageToSend.length > MAX_CHAT_INPUT) {
-      appendAssistantMessage(
-        `Tin nhắn quá dài (tối đa ${MAX_CHAT_INPUT} ký tự). Vui lòng rút gọn nội dung.`
-      );
+      appendAssistantMessage(t.messageTooLong.replace("{max}", String(MAX_CHAT_INPUT)));
       return;
     }
 
     if (quotaExceeded) {
-      appendAssistantMessage("Hệ thống đang bảo trì. Vui lòng quay lại sau.");
+      appendAssistantMessage(t.maintenance);
       return;
     }
 
     if (rateLimitExceeded) {
       setInput("");
       appendAssistantMessage(
-        rateLimitMessage || `${bot.name} đã đạt giới hạn tin nhắn trong ngày.`
+        rateLimitMessage || t.dailyLimitBot.replace("{name}", bot.name || "Bot")
       );
       return;
     }
@@ -717,9 +706,7 @@ export function StandaloneChatUI({
     }
 
     if (!isAvailable) {
-      appendAssistantMessage(
-        statusMessage || `${bot.name} chưa sẵn sàng. Vui lòng đợi trong giây lát.`
-      );
+      appendAssistantMessage(statusMessage || `${bot.name} ${t.notReady.toLowerCase()}.`);
       return;
     }
 
@@ -785,7 +772,7 @@ export function StandaloneChatUI({
             ...prev,
             {
               role: EMessageRole.Assistant,
-              content: chatData.message || "Sorry, something went wrong.",
+              content: chatData.message || t.error,
             },
           ]);
           setLeadFormQuestion(chatData.originalQuestion || messageToSend);
@@ -798,12 +785,12 @@ export function StandaloneChatUI({
           ...prev,
           {
             role: EMessageRole.Assistant,
-            content: chatData.message || "Sorry, something went wrong.",
+            content: chatData.message || t.error,
           },
         ]);
         if (chatData.conversationId) setConversationId(chatData.conversationId);
       } else {
-        const message = data.message || "Sorry, something went wrong.";
+        const message = data.message || t.error;
         appendAssistantMessage(message);
       }
     } catch {
@@ -824,12 +811,12 @@ export function StandaloneChatUI({
               visitorId,
             })
           );
-          appendAssistantMessage("Tin nhắn đã được lưu và sẽ gửi khi có kết nối trở lại.");
+          appendAssistantMessage(t.offlineQueued);
         } catch {
-          appendAssistantMessage("Sorry, I'm having trouble connecting right now.");
+          appendAssistantMessage(t.connectionTrouble);
         }
       } else {
-        appendAssistantMessage("Sorry, I'm having trouble connecting right now.");
+        appendAssistantMessage(t.connectionTrouble);
       }
     } finally {
       setIsLoading(false);
@@ -912,7 +899,7 @@ export function StandaloneChatUI({
                 <div className="flex items-center gap-4 py-4 opacity-50">
                   <div className="h-px flex-1 bg-slate-300" />
                   <span className="text-[10px] font-medium uppercase tracking-widest text-slate-500">
-                    Lịch sử trò chuyện
+                    {t.chatHistory}
                   </span>
                   <div className="h-px flex-1 bg-slate-300" />
                 </div>
@@ -963,7 +950,7 @@ export function StandaloneChatUI({
                     {msg.role === EMessageRole.User && msg.isVoice && !msg.isProcessing && (
                       <span
                         className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-sm"
-                        title="Tin nhắn bằng giọng nói"
+                        title={t.voiceMessage}
                       >
                         <Mic className="h-3 w-3 text-white" />
                       </span>
@@ -977,7 +964,8 @@ export function StandaloneChatUI({
                     className={`absolute -bottom-6 z-10 flex items-center rounded-md border border-slate-200 bg-white p-1.5 text-slate-400 opacity-0 shadow-sm transition-all duration-200 hover:text-slate-600 group-hover:opacity-100 ${
                       msg.role === EMessageRole.User ? "right-0" : "left-0"
                     }`}
-                    title="Sao chép tin nhắn"
+                    title={t.copyMessage}
+                    aria-label={t.copyMessage}
                   >
                     {copiedMessageId === `${idx}` ? (
                       <Check className="h-3.5 w-3.5 text-green-500" />
@@ -1025,6 +1013,7 @@ export function StandaloneChatUI({
               originalQuestion={leadFormQuestion}
               primaryColor={primaryColor}
               headerTextColor={headerTextColor}
+              locale={locale}
               onSuccess={handleLeadFormSuccess}
               onClose={() => setShowLeadForm(false)}
             />
@@ -1150,7 +1139,8 @@ export function StandaloneChatUI({
                 onClick={stopRecording}
                 style={{ backgroundColor: primaryColor }}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full p-0 shadow-none transition-transform hover:scale-105"
-                title="Dừng ghi âm"
+                title={t.stopRecording}
+                aria-label={t.stopRecording}
               >
                 <Square className="h-4 w-4 fill-white text-white" />
               </Button>
@@ -1161,7 +1151,7 @@ export function StandaloneChatUI({
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={insufficientCredits ? "Bot đã hết credits" : "Nhập tin nhắn..."}
+                placeholder={insufficientCredits ? t.botOutOfCredits : t.typeMessage}
                 disabled={isLoading || isChatBlocked || showLeadForm || isSttLoading}
                 maxLength={MAX_CHAT_INPUT}
                 className="flex-1 rounded-2xl"
@@ -1175,6 +1165,8 @@ export function StandaloneChatUI({
                     type="button"
                     onClick={startRecording}
                     disabled={isSttLoading || isLoading}
+                    title={t.sendVoice}
+                    aria-label={t.sendVoice}
                     className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 p-0 text-slate-700 shadow-none hover:bg-slate-200"
                   >
                     {isSttLoading ? (
@@ -1189,6 +1181,8 @@ export function StandaloneChatUI({
                 disabled={
                   isLoading || !input.trim() || isChatBlocked || isRecording || isSttLoading
                 }
+                title={t.send}
+                aria-label={t.send}
                 className="flex h-10 w-10 items-center justify-center rounded-full p-0 shadow-sm transition-shadow hover:shadow-md"
                 style={{ backgroundColor: primaryColor }}
               >

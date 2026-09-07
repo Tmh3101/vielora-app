@@ -10,6 +10,7 @@ import { getWalletByWorkspaceId } from "@/lib/services/wallet.service";
 import { createServerClient } from "@/lib/supabase/server";
 import type { Tables } from "@/lib/supabase/types";
 import { ESubscriptionCycle } from "@/types";
+import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/constants/workspace";
 
 interface UpgradePageProps {
   searchParams?: {
@@ -33,7 +34,7 @@ export default async function UpgradePage({ searchParams }: UpgradePageProps) {
   }
 
   const cookieStore = await cookies();
-  let workspaceId = cookieStore.get("active_workspace_id")?.value;
+  let workspaceId = cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value;
 
   const [userWorkspaces, activePlans, { data: rawCreditPackages }] = await Promise.all([
     WorkspaceService.getUserWorkspaces(user.id),

@@ -9,6 +9,7 @@ import {
 } from "@/lib/services/payment-history.service";
 import { createServerClient } from "@/lib/supabase/server";
 import { UPGRADE_HISTORY_PAGE_SIZE } from "@/lib/constants/pagination";
+import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/constants/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function UpgradeHistoryPage({ searchParams }: UpgradeHistor
   }
 
   const cookieStore = await cookies();
-  const workspaceId = cookieStore.get("active_workspace_id")?.value;
+  const workspaceId = cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value;
 
   const resolvedSearchParams = await searchParams;
   const requestedPage = Number(resolvedSearchParams?.page ?? "1");

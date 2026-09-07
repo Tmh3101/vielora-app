@@ -23,6 +23,8 @@ import { SubscriptionBanner } from "@/components/dashboard/overview/Subscription
 import { StatsGrid } from "@/components/dashboard/overview/StatsGrid";
 import { BotsSection } from "@/components/dashboard/overview/BotsSection";
 
+import { useTranslations } from "next-intl";
+
 const BotLimitDialog = dynamic(
   () => import("@/components/dashboard/shared/BotLimitDialog").then((m) => m.BotLimitDialog),
   { ssr: false }
@@ -37,6 +39,7 @@ export interface DashboardClientProps {
 }
 
 export function DashboardClient({ initialData }: DashboardClientProps) {
+  const t = useTranslations("dashboard.overview.botsSection");
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const authLoading = useAuthStore((s) => s.isLoading);
@@ -98,7 +101,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || "Không thể xóa chatbot.");
+        throw new Error(data.message || t("deleteError"));
       }
 
       setBots((prev) => prev.filter((bot) => bot.id !== botId));
@@ -107,12 +110,10 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
         delete next[botId];
         return next;
       });
-      toast.success(`Đã xóa chatbot "${botName}"`);
+      toast.success(t("deleteSuccess", { name: botName }));
     } catch (error) {
       console.error("Error deleting bot:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Không thể xóa chatbot. Vui lòng thử lại."
-      );
+      toast.error(error instanceof Error ? error.message : t("deleteError"));
     }
   };
 

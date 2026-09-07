@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CREDIT_PER_PAGE, MAX_MANUAL_CONTENT_LENGTH, MAX_MANUAL_TITLE_LENGTH } from "@/config";
 import { FileText, Link, Loader2, Pencil, Plus, Upload } from "lucide-react";
 import { VoiceInputButton } from "@/components/dashboard/shared/VoiceInputButton";
+import { useTranslations } from "next-intl";
 
 export interface WorkspaceKnowledgeModalProps {
   open: boolean;
@@ -48,6 +49,8 @@ export function WorkspaceKnowledgeModal({
   onConfirmFile,
   onConfirmUrl,
 }: WorkspaceKnowledgeModalProps) {
+  const t = useTranslations("dashboard.workspaceKnowledge");
+  const tCommon = useTranslations("dashboard.common");
   const [inputMode, setInputMode] = useState<"manual" | "file" | "url">("manual");
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
@@ -70,16 +73,16 @@ export function WorkspaceKnowledgeModal({
 
   const validateUrl = (value: string) => {
     const trimmed = value.trim();
-    if (!trimmed) return "Vui lòng nhập URL.";
+    if (!trimmed) return t("urlErrorRequired");
 
     try {
       const parsed = new URL(trimmed);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        return "URL phải bắt đầu bằng http:// hoặc https://.";
+        return t("urlErrorProtocol");
       }
       return null;
     } catch {
-      return "URL không hợp lệ.";
+      return t("urlErrorInvalid");
     }
   };
 
@@ -114,20 +117,16 @@ export function WorkspaceKnowledgeModal({
             {isEdit ? (
               <>
                 <Pencil className="h-5 w-5 text-primary" />
-                Chỉnh sửa kiến thức
+                {t("knowledgeTitle")}
               </>
             ) : (
               <>
                 <Plus className="h-5 w-5 text-primary" />
-                Thêm kiến thức
+                {t("addKnowledge")}
               </>
             )}
           </DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? "Cập nhật tiêu đề và nội dung kiến thức dùng chung."
-              : "Thêm văn bản, tệp hoặc đường dẫn cho kiến thức dùng chung của workspace."}
-          </DialogDescription>
+          <DialogDescription>{t("addDescription")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -139,15 +138,15 @@ export function WorkspaceKnowledgeModal({
               <TabsList className="grid w-full grid-cols-3 bg-muted/60">
                 <TabsTrigger value="manual" disabled={isSaving} className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  Văn bản
+                  {t("sourceText")}
                 </TabsTrigger>
                 <TabsTrigger value="file" disabled={isSaving} className="flex items-center gap-2">
                   <Upload className="h-4 w-4" />
-                  Tệp
+                  {t("sourceFile")}
                 </TabsTrigger>
                 <TabsTrigger value="url" disabled={isSaving} className="flex items-center gap-2">
                   <Link className="h-4 w-4" />
-                  Đường dẫn
+                  URL
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -157,11 +156,11 @@ export function WorkspaceKnowledgeModal({
             <>
               <div className="space-y-2">
                 <Label htmlFor="ws-knowledge-title">
-                  Tiêu đề <span className="font-normal text-destructive">*</span>
+                  {t("titleLabel")} <span className="font-normal text-destructive">*</span>
                 </Label>
                 <Input
                   id="ws-knowledge-title"
-                  placeholder="VD: Hướng dẫn sử dụng sản phẩm"
+                  placeholder={t("titlePlaceholder")}
                   value={title}
                   onChange={(e) => {
                     if (e.target.value.length <= MAX_MANUAL_TITLE_LENGTH) {
@@ -183,7 +182,7 @@ export function WorkspaceKnowledgeModal({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="ws-knowledge-content">
-                    Nội dung <span className="font-normal text-destructive">*</span>
+                    {t("contentLabel")} <span className="font-normal text-destructive">*</span>
                   </Label>
                   {workspaceId && (
                     <VoiceInputButton
@@ -202,7 +201,7 @@ export function WorkspaceKnowledgeModal({
                 </div>
                 <Textarea
                   id="ws-knowledge-content"
-                  placeholder="Nhập nội dung chi tiết..."
+                  placeholder={t("contentPlaceholder")}
                   value={content}
                   onChange={(e) => {
                     if (e.target.value.length <= MAX_MANUAL_CONTENT_LENGTH) {
@@ -215,7 +214,7 @@ export function WorkspaceKnowledgeModal({
                   className="resize-none"
                 />
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Hỗ trợ định dạng Markdown.</p>
+                  <p className="text-xs text-muted-foreground">{t("markdownSupported")}</p>
                   <p
                     className={`text-xs ${content.length >= MAX_MANUAL_CONTENT_LENGTH ? "text-destructive" : "text-muted-foreground"}`}
                   >
@@ -227,7 +226,7 @@ export function WorkspaceKnowledgeModal({
           ) : inputMode === "file" ? (
             <div className="space-y-2">
               <Label>
-                Tệp <span className="font-normal text-destructive">*</span>
+                {t("filesLabel")} <span className="font-normal text-destructive">*</span>
               </Label>
               <KnowledgeFileDropzone
                 files={selectedFiles}
@@ -239,13 +238,13 @@ export function WorkspaceKnowledgeModal({
           ) : (
             <div className="space-y-2">
               <Label htmlFor="ws-knowledge-url">
-                URL bài viết/tài liệu <span className="font-normal text-destructive">*</span>
+                {t("urlLabel")} <span className="font-normal text-destructive">*</span>
               </Label>
 
               <Input
                 id="ws-knowledge-url"
                 type="url"
-                placeholder="https://example.com/blog/article"
+                placeholder={t("urlPlaceholder")}
                 value={url}
                 onChange={(e) => {
                   setUrl(e.target.value);
@@ -257,9 +256,7 @@ export function WorkspaceKnowledgeModal({
               {urlError ? (
                 <p className="text-xs font-medium text-destructive">{urlError}</p>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  Dùng cho một trang cụ thể như bài viết, blog hoặc tài liệu online.
-                </p>
+                <p className="text-xs text-muted-foreground">{t("urlHint")}</p>
               )}
             </div>
           )}
@@ -269,13 +266,13 @@ export function WorkspaceKnowledgeModal({
           {!isEdit && (
             <div className="space-y-2">
               {!hasEnoughCredits && totalCredits !== undefined && (
-                <p className="text-xs font-medium text-amber-600">
-                  Không đủ credits để thêm dữ liệu mới.
-                </p>
+                <p className="text-xs font-medium text-amber-600">{t("notEnoughCredits")}</p>
               )}
               <div className="inline-flex min-w-[250px] items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
                 <div>
-                  <p className="text-[11px] tracking-wide text-muted-foreground">Credits hiện có</p>
+                  <p className="text-[11px] tracking-wide text-muted-foreground">
+                    {t("currentCredits")}
+                  </p>
                   <p className="text-xs font-medium text-foreground">
                     {(totalCredits ?? 0).toLocaleString()} credits
                   </p>
@@ -283,8 +280,11 @@ export function WorkspaceKnowledgeModal({
                 <div className="h-8 w-px bg-border" />
                 <p className="text-xs text-muted-foreground">
                   {inputMode === "file" && selectedFiles.length > 1
-                    ? `Cần ${fileCreditsCost} credits cho ${selectedFiles.length} tệp`
-                    : `Cần ${CREDIT_PER_PAGE} credit để thêm`}
+                    ? t("costMultipleFiles", {
+                        cost: fileCreditsCost,
+                        count: selectedFiles.length,
+                      })
+                    : t("costSingleFile", { cost: CREDIT_PER_PAGE })}
                 </p>
               </div>
             </div>
@@ -296,7 +296,7 @@ export function WorkspaceKnowledgeModal({
               disabled={isSaving}
               className="hover:border-red-600 hover:bg-white hover:text-red-600"
             >
-              Hủy
+              {tCommon("cancel")}
             </Button>
             <Button
               onClick={handleSubmit}
@@ -315,24 +315,24 @@ export function WorkspaceKnowledgeModal({
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang lưu...
+                  {tCommon("loading")}
                 </>
               ) : isEdit ? (
-                "Lưu thay đổi"
+                tCommon("save")
               ) : inputMode === "file" ? (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  Thêm tệp
+                  {t("sourceFile")}
                 </>
               ) : inputMode === "url" ? (
                 <>
                   <Link className="mr-2 h-4 w-4" />
-                  Thêm URL
+                  URL
                 </>
               ) : (
                 <>
                   <Plus className="mr-2 h-4 w-4" />
-                  Thêm kiến thức
+                  {t("addKnowledge")}
                 </>
               )}
             </Button>

@@ -31,6 +31,7 @@ import {
   Share2,
   ShieldCheck,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export interface ReportExportDetail {
   id: string;
@@ -87,6 +88,8 @@ export function ReviewExportModal({
   exportId,
   onSuccess,
 }: ReviewExportModalProps) {
+  const t = useTranslations("dashboard.reports");
+  const tCommon = useTranslations("dashboard.common");
   const [report, setReport] = useState<ReportExportDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -503,7 +506,7 @@ export function ReviewExportModal({
                         download
                       >
                         <Download className="mr-1.5 h-3.5 w-3.5" />
-                        Tải về PDF để xem
+                        {t("download")}
                       </a>
                     </Button>
                   )}
@@ -575,7 +578,7 @@ export function ReviewExportModal({
               onClick={() => onOpenChange(false)}
               className="rounded-xl text-xs font-semibold"
             >
-              Đóng
+              {tCommon("close")}
             </Button>
           ) : (
             <div className="flex w-full items-center justify-between gap-2">
@@ -587,7 +590,7 @@ export function ReviewExportModal({
                 disabled={isApproving || isRejecting}
                 className="rounded-xl text-xs"
               >
-                Đóng
+                {tCommon("close")}
               </Button>
 
               {isAwaitingReview && !showRejectForm && (
@@ -614,7 +617,7 @@ export function ReviewExportModal({
                     {isApproving ? (
                       <>
                         <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        Đang phê duyệt...
+                        {tCommon("loading")}
                       </>
                     ) : (
                       <>

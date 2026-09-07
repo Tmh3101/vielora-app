@@ -19,7 +19,16 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const resolvedParams = await params;
   const bot = await getStandaloneChatBot(resolvedParams.slug);
-  const title = bot?.name ? `Chat with ${bot.name.trim()}` : FALLBACK_CHAT_TITLE;
+  const botLocale =
+    (bot?.widget_settings as { ui_language?: string; locale?: string } | undefined)?.ui_language ===
+    "en"
+      ? "en"
+      : "vi";
+  const title = bot?.name
+    ? botLocale === "vi"
+      ? `Chat với ${bot.name.trim()}`
+      : `Chat with ${bot.name.trim()}`
+    : FALLBACK_CHAT_TITLE;
 
   return {
     title: {

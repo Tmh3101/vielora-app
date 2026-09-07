@@ -2,28 +2,33 @@
 
 import { motion } from "framer-motion";
 import { Bot, User, Mail, Phone, FileText, CheckCircle2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Mockup3DWrapper } from "./Mockup3DWrapper";
 
-const fields = [
-  { label: "Họ và tên", icon: User, required: true, placeholder: "Nguyễn Văn A" },
-  { label: "Email", icon: Mail, required: true, placeholder: "email@example.com" },
-  { label: "Số điện thoại", icon: Phone, required: false, placeholder: "090 123 45 67" },
-  {
-    label: "Nhu cầu của bạn",
-    icon: FileText,
-    required: false,
-    placeholder: "Tôi muốn được tư vấn về...",
-  },
-];
-
 export function MockupLeadForm() {
+  const t = useTranslations("features.mockups.leadForm");
+
+  const fields = [
+    { label: t("fullName"), icon: User, required: true, placeholder: t("fullNamePlaceholder") },
+    { label: t("email"), icon: Mail, required: true, placeholder: "email@example.com" },
+    { label: t("phone"), icon: Phone, required: false, placeholder: "090 123 45 67" },
+    {
+      label: t("need"),
+      icon: FileText,
+      required: false,
+      placeholder: t("needPlaceholder"),
+    },
+  ];
+
   return (
     <div className="pb-8">
       <Mockup3DWrapper overflowVisible>
         <div className="relative">
           <div className="mb-3 flex items-center gap-2" style={{ transform: "translateZ(8px)" }}>
             <span className="flex h-2 w-2 rounded-full bg-green-500" />
-            <span className="text-[13px] font-extrabold uppercase text-foreground">Lead Form</span>
+            <span className="text-[13px] font-extrabold uppercase text-foreground">
+              {t("title")}
+            </span>
           </div>
 
           <div
@@ -36,8 +41,8 @@ export function MockupLeadForm() {
                   <Bot className="h-2.5 w-2.5 text-white" />
                 </div>
                 <div className="leading-tight">
-                  <p className="text-[9px] font-semibold text-white">Trợ lý AI của bạn</p>
-                  <p className="text-[7px] text-white/70">Trực tuyến</p>
+                  <p className="text-[9px] font-semibold text-white">{t("botName")}</p>
+                  <p className="text-[7px] text-white/70">{t("online")}</p>
                 </div>
               </div>
             </div>
@@ -50,9 +55,7 @@ export function MockupLeadForm() {
                 className="w-fit max-w-[85%] rounded-xl rounded-bl-sm bg-muted px-3 py-2"
                 style={{ transform: "translateZ(4px)" }}
               >
-                <p className="text-[10px] leading-relaxed text-foreground/80">
-                  Để nhận báo giá ưu đãi, bạn vui lòng để lại thông tin nhé!
-                </p>
+                <p className="text-[10px] leading-relaxed text-foreground/80">{t("prompt")}</p>
               </motion.div>
 
               <div className="space-y-1.5">
@@ -60,7 +63,7 @@ export function MockupLeadForm() {
                   const Icon = field.icon;
                   return (
                     <motion.div
-                      key={field.label}
+                      key={i}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{
@@ -76,7 +79,7 @@ export function MockupLeadForm() {
                         {field.placeholder}
                       </span>
                       {field.required && (
-                        <span className="ml-auto text-[8px] text-red-400/60">*Bắt buộc</span>
+                        <span className="ml-auto text-[8px] text-red-400/60">{t("required")}</span>
                       )}
                     </motion.div>
                   );
@@ -94,7 +97,7 @@ export function MockupLeadForm() {
                   whileTap={{ scale: 0.97 }}
                   className="w-full rounded-lg bg-primary py-2 text-[11px] font-semibold tracking-wide text-white"
                 >
-                  Gửi thông tin
+                  {t("submit")}
                 </motion.button>
               </motion.div>
             </div>
@@ -116,10 +119,10 @@ export function MockupLeadForm() {
               <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-500" />
               <div>
                 <p className="text-[11px] font-semibold text-green-700 dark:text-green-300">
-                  Đã gửi thành công!
+                  {t("successTitle")}
                 </p>
                 <p className="text-[9px] leading-relaxed text-green-600/80 dark:text-green-400/80">
-                  Chúng tôi sẽ liên hệ với bạn trong thời gian sớm nhất.
+                  {t("successDesc")}
                 </p>
               </div>
             </div>

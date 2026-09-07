@@ -85,6 +85,10 @@ export const RESERVED_SUBDOMAINS = [
   "terms",
   "public-bot",
   "onboarding",
+
+  // --- Locale Prefixes ---
+  "en",
+  "vi",
 ] as const;
 
 export type ReservedSubdomain = (typeof RESERVED_SUBDOMAINS)[number];

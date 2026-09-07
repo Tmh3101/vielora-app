@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -23,6 +24,7 @@ interface Step1CSVUploadProps {
 }
 
 export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
+  const t = useTranslations("onboarding.bulkSteps.step1");
   const router = useRouter();
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -38,12 +40,12 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
     setFileError(null);
 
     if (!file.name.endsWith(".csv")) {
-      setFileError("Vui lòng tải lên file đúng định dạng .csv");
+      setFileError(t("errorFormat"));
       return;
     }
 
     if (file.size > BULK_IMPORT_MAX_FILE_SIZE) {
-      setFileError("Dung lượng file vượt quá giới hạn 10MB");
+      setFileError(t("errorSize"));
       return;
     }
 
@@ -52,15 +54,13 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
     reader.onload = (e) => {
       const text = e.target?.result as string;
       if (!text) {
-        setFileError("File CSV rỗng hoặc không thể đọc nội dung");
+        setFileError(t("errorEmpty"));
         return;
       }
 
       const parsedRows = parseCSVString(text);
       if (parsedRows.length === 0) {
-        setFileError(
-          "File CSV không hợp lệ hoặc thiếu dòng dữ liệu (cần ít nhất 1 dòng tiêu đề và 1 dòng bot)"
-        );
+        setFileError(t("errorMissingRows"));
         return;
       }
 
@@ -107,16 +107,16 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <FileSpreadsheet className="h-5 w-5 text-primary" />
-          Tải lên file CSV
+          {t("title")}
         </CardTitle>
-        <CardDescription>Chọn file CSV (tối đa 10MB) theo đúng định dạng mẫu.</CardDescription>
+        <CardDescription>{t("description")}</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
         {/* CSV Spec Guidelines */}
         <div className="space-y-3 rounded-xl border border-primary/20 bg-muted/20 p-4">
           <div className="flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">Định dạng bắt buộc:</h3>
+            <h3 className="flex items-center gap-2 text-sm font-semibold">{t("requiredFormat")}</h3>
             <Button
               asChild
               variant="outline"
@@ -128,7 +128,7 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
                 download="bulk-bot-import-template.csv"
               >
                 <Download className="h-3.5 w-3.5" />
-                File mẫu .CSV
+                {t("templateBtn")}
               </a>
             </Button>
           </div>
@@ -137,29 +137,29 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
               <span className="font-mono text-[11px] font-bold text-foreground">
                 name<span className="font-normal text-destructive">*</span>
               </span>
-              <p className="text-[10px] text-muted-foreground">Tên bot</p>
+              <p className="text-[10px] text-muted-foreground">{t("colName")}</p>
             </div>
             <div className="rounded-lg border bg-background p-2">
               <span className="font-mono text-[11px] font-bold text-foreground">
                 slug<span className="font-normal text-destructive">*</span>
               </span>
-              <p className="text-[10px] text-muted-foreground">Slug URL</p>
+              <p className="text-[10px] text-muted-foreground">{t("colSlug")}</p>
             </div>
             <div className="rounded-lg border bg-background p-2">
               <span className="font-mono text-[11px] font-bold text-foreground">avatar_url</span>
-              <p className="text-[10px] text-muted-foreground">URL Avatar</p>
+              <p className="text-[10px] text-muted-foreground">{t("colAvatar")}</p>
             </div>
             <div className="rounded-lg border bg-background p-2">
               <span className="font-mono text-[11px] font-bold text-foreground">
                 knowledge_title<span className="font-normal text-destructive">*</span>
               </span>
-              <p className="text-[10px] text-muted-foreground">Tiêu đề</p>
+              <p className="text-[10px] text-muted-foreground">{t("colKnowledgeTitle")}</p>
             </div>
             <div className="rounded-lg border bg-background p-2">
               <span className="font-mono text-[11px] font-bold text-foreground">
                 knowledge_content<span className="font-normal text-destructive">*</span>
               </span>
-              <p className="text-[10px] text-muted-foreground">Nội dung (≥10 ký tự)</p>
+              <p className="text-[10px] text-muted-foreground">{t("colKnowledgeContent")}</p>
             </div>
           </div>
         </div>
@@ -181,9 +181,9 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
             </div>
             <div>
               <p className="text-sm font-semibold">
-                Kéo thả file CSV hoặc <span className="text-primary">click để chọn</span>
+                {t("dragDropText")} <span className="text-primary">{t("clickToSelect")}</span>
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">File .CSV ≤ 10MB</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t("maxFileSize")}</p>
             </div>
             {fileName && (
               <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
@@ -205,23 +205,23 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
           <div className="space-y-4 rounded-xl border p-4">
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
-                <span className="font-semibold">Kết quả kiểm tra:</span>
+                <span className="font-semibold">{t("checkResults")}</span>
                 {isCheckingDb && (
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Đang kiểm tra trùng lặp trên hệ thống...
+                    {t("checkingDb")}
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-4 text-xs">
                 <span className="inline-flex items-center gap-1 font-medium text-emerald-600">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  {validCount} hợp lệ
+                  {t("validCount", { count: validCount })}
                 </span>
                 {invalidCount > 0 && (
                   <span className="inline-flex items-center gap-1 font-medium text-destructive">
                     <AlertCircle className="h-3.5 w-3.5" />
-                    {invalidCount} lỗi
+                    {t("errorCount", { count: invalidCount })}
                   </span>
                 )}
               </div>
@@ -231,10 +231,10 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
               <table className="w-full text-left">
                 <thead className="sticky top-0 bg-muted px-2 py-1 font-medium">
                   <tr>
-                    <th className="p-2">#</th>
-                    <th className="p-2">Tên Bot</th>
-                    <th className="p-2">Slug</th>
-                    <th className="p-2">Trạng thái</th>
+                    <th className="p-2">{t("colIndex")}</th>
+                    <th className="p-2">{t("colBotName")}</th>
+                    <th className="p-2">{t("colSlug")}</th>
+                    <th className="p-2">{t("colStatus")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -245,7 +245,7 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
                       <td className="p-2 font-mono text-muted-foreground">{row.slug || "—"}</td>
                       <td className="p-2">
                         {row.isValid ? (
-                          <span className="font-medium text-emerald-600">Hợp lệ</span>
+                          <span className="font-medium text-emerald-600">{t("statusValid")}</span>
                         ) : (
                           <span className="font-medium text-destructive">{row.errorReason}</span>
                         )}
@@ -265,7 +265,7 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
             onClick={() => router.push("/dashboard")}
             className="hover:border-primary hover:bg-white hover:text-primary sm:min-w-[160px]"
           >
-            Về Dashboard
+            {t("backToDashboard")}
           </Button>
           <Button
             disabled={validCount === 0 || isCheckingDb}
@@ -275,11 +275,11 @@ export function Step1CSVUpload({ workspaceId }: Step1CSVUploadProps) {
             {isCheckingDb ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang kiểm tra...
+                {t("checking")}
               </>
             ) : (
               <>
-                Tiếp tục
+                {t("continue")}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </>
             )}

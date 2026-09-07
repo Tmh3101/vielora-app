@@ -17,6 +17,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/dashboard/shared/WorkspaceSwitcher";
+import { LanguageToggle } from "@/components/dashboard/LanguageToggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useTranslations } from "next-intl";
 
 export interface DashboardSidebarProps {
   fullName?: string;
@@ -39,6 +41,7 @@ export function DashboardSidebar({
   // currentPlanLabel,
   onSignOut,
 }: DashboardSidebarProps) {
+  const t = useTranslations("dashboardSidebar");
   const pathname = usePathname();
   const { activeWorkspace } = useWorkspace();
 
@@ -128,7 +131,7 @@ export function DashboardSidebar({
         <Link
           href="/"
           className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50 transition-colors hover:bg-muted"
-          title="Về trang chủ"
+          title={t("backToHome")}
         >
           <ArrowLeft className="h-4 w-4 text-muted-foreground" />
         </Link>
@@ -147,37 +150,40 @@ export function DashboardSidebar({
       <nav className="flex-1 space-y-1 p-4">
         <Link href={overviewHref} className={getLinkClass("overview")}>
           <Home className="h-4 w-4" />
-          Tổng quan
+          {t("overview")}
         </Link>
         <Link href={knowledgeHref} className={getLinkClass("knowledge")}>
           <Book className="h-4 w-4" />
-          Kiến thức chung
+          {t("knowledge")}
         </Link>
         {isProOrEnterprise && (
           <Link href={reportsHref} className={getLinkClass("reports")}>
             <FileBarChart className="h-4 w-4" />
-            Báo cáo
+            {t("reports")}
           </Link>
         )}
         <Link href={membersHref} className={getLinkClass("members")}>
           <Users className="h-4 w-4" />
-          Thành viên
+          {t("members")}
         </Link>
         <Link href={upgradeHref} className={getLinkClass("upgrade")}>
           <CreditCard className="h-4 w-4" />
-          Thanh toán
+          {t("upgrade")}
         </Link>
         <Link href={supportHref} className={getLinkClass("support")}>
           <HelpCircle className="h-4 w-4" />
-          Hỗ trợ
+          {t("support")}
         </Link>
       </nav>
 
       <div className="space-y-2.5 border-t border-border/50 p-4">
         <div>
-          <p className="mb-1.5 px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Workspace
-          </p>
+          <div className="mb-1.5 flex items-center justify-between px-1">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {t("workspace")}
+            </p>
+            <LanguageToggle />
+          </div>
           <WorkspaceSwitcher />
         </div>
 
@@ -198,7 +204,7 @@ export function DashboardSidebar({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
-                title="Tùy chọn tài khoản"
+                title={t("accountOptions")}
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>
@@ -212,7 +218,7 @@ export function DashboardSidebar({
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-destructive hover:bg-destructive/10 focus:bg-destructive/10 focus:text-destructive"
               >
                 <LogOut className="h-3.5 w-3.5" />
-                Đăng xuất
+                {t("logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

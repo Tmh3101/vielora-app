@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { EPageSourceType, EPageStatus } from "@/types";
 import { FileText, Globe, Link, Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type { PageListItem } from "@/lib/services/page.service";
+import { useTranslations } from "next-intl";
 
 export interface KnowledgeBaseTabProps {
   pages: PageListItem[];
@@ -24,13 +25,16 @@ export function KnowledgeBaseTab({
   onOpenEditKnowledge,
   onOpenDeleteKnowledge,
 }: KnowledgeBaseTabProps) {
+  const t = useTranslations("dashboard.botDetail.knowledgeTab");
+  const tCommon = useTranslations("dashboard.common");
+
   return (
     <div className="space-y-6">
       <Card className="glass">
         <CardHeader className="flex flex-col gap-4 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1">
-            <CardTitle> Kiến thức hiện tại</CardTitle>
-            <CardDescription>Quản lý nguồn dữ liệu cho chatbot của bạn</CardDescription>
+            <CardTitle>{t("title")}</CardTitle>
+            <CardDescription>{t("subtitle")}</CardDescription>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             {onReindex && (
@@ -43,19 +47,19 @@ export function KnowledgeBaseTab({
                 {isReindexing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Đang reindex...
+                    {t("reindexing")}
                   </>
                 ) : (
                   <>
                     <RefreshCw className="h-4 w-4" />
-                    Reindex
+                    {t("reindex")}
                   </>
                 )}
               </Button>
             )}
             <Button onClick={onOpenAddDataSource} className="w-full sm:w-auto">
               <Plus className="h-4 w-4" />
-              Thêm dữ liệu
+              {t("addSource")}
             </Button>
           </div>
         </CardHeader>
@@ -63,7 +67,8 @@ export function KnowledgeBaseTab({
           {pages.length === 0 ? (
             <div className="pb-8 pt-12 text-center text-muted-foreground">
               <FileText className="mx-auto mb-4 h-12 w-12 opacity-50" />
-              <p className="mb-2">Chưa có nguồn dữ liệu nào được thêm.</p>
+              <p className="mb-1 text-sm font-semibold text-foreground">{t("emptyTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t("emptyDesc")}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -85,7 +90,7 @@ export function KnowledgeBaseTab({
                             ).length
                           }
                         </p>
-                        <p className="-mt-1 text-xs text-muted-foreground">Tài liệu</p>
+                        <p className="-mt-1 text-xs text-muted-foreground">Document</p>
                       </div>
                     </div>
                     <div className="hidden h-8 w-px bg-border sm:block" />
@@ -122,10 +127,8 @@ export function KnowledgeBaseTab({
                     </div>
                   </div>
                   <div className="text-left sm:text-right">
-                    <p className="text-xs text-muted-foreground">Tổng cộng</p>
-                    <p className="text-sm font-medium text-muted-foreground">
-                      {pages.length} nguồn
-                    </p>
+                    <p className="text-xs text-muted-foreground">{tCommon("all")}</p>
+                    <p className="text-sm font-medium text-muted-foreground">{pages.length}</p>
                   </div>
                 </div>
               </div>
@@ -188,36 +191,32 @@ export function KnowledgeBaseTab({
                               }`}
                             >
                               {isManual
-                                ? "Văn bản"
+                                ? "Text"
                                 : isFile
-                                  ? "Tệp"
+                                  ? "File"
                                   : isSingleUrl
                                     ? "URL"
                                     : "Website"}
                             </Badge>
                           </div>
                           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {isManual ? "Đã thêm thủ công" : isFile ? "Tệp đã tải lên" : page.url}
+                            {isManual ? "Text" : isFile ? "File" : page.url}
                           </p>
                         </div>
 
                         <div className="flex shrink-0 flex-col gap-1 text-left sm:items-end sm:text-right">
                           <span className="text-xs font-medium text-muted-foreground">
-                            {new Date(page.crawled_at).toLocaleDateString("vi-VN", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                            })}
+                            {new Date(page.crawled_at).toLocaleDateString()}
                           </span>
                           {isProcessing ? (
                             <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                               <Loader2 className="h-3 w-3 animate-spin" />
-                              Đang xử lý
+                              {tCommon("loading")}
                             </span>
                           ) : (
                             <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                               <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                              Đã index
+                              Indexed
                             </span>
                           )}
                         </div>
@@ -228,7 +227,7 @@ export function KnowledgeBaseTab({
                             size="icon"
                             className="h-8 w-8 text-muted-foreground hover:bg-primary/10 hover:text-primary"
                             onClick={() => onOpenEditKnowledge(page)}
-                            title="Chỉnh sửa"
+                            title={t("editKnowledge")}
                             disabled={isProcessing}
                           >
                             <Pencil className="h-4 w-4" />
@@ -238,7 +237,7 @@ export function KnowledgeBaseTab({
                             size="icon"
                             className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => onOpenDeleteKnowledge(page)}
-                            title="Xóa"
+                            title={tCommon("delete")}
                             disabled={isProcessing}
                           >
                             <Trash2 className="h-4 w-4" />

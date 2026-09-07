@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Pin, Trash2, HelpCircle, CheckCircle, Search, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ interface PinnedKnowledgeListProps {
 }
 
 export function PinnedKnowledgeList({ botId }: PinnedKnowledgeListProps) {
+  const t = useTranslations("dashboard.group.pinnedList");
   const [items, setItems] = useState<ChatKnowledgeRow[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -46,15 +48,15 @@ export function PinnedKnowledgeList({ botId }: PinnedKnowledgeListProps) {
       if (ok) {
         setItems((prev) => prev.filter((item) => item.id !== id));
         toast({
-          title: "Đã gỡ ghim",
-          description: "Đã xóa bản ghi khỏi kho kiến thức RAG.",
+          title: t("unpinnedTitle"),
+          description: t("unpinnedDesc"),
         });
       }
     } catch (err) {
       console.error("Error unpinning item:", err);
       toast({
-        title: "Lỗi",
-        description: "Không thể gỡ ghim mục này.",
+        title: t("errorTitle"),
+        description: t("unpinFailed"),
         variant: "destructive",
       });
     } finally {
@@ -74,7 +76,7 @@ export function PinnedKnowledgeList({ botId }: PinnedKnowledgeListProps) {
     return (
       <div className="flex min-h-[180px] flex-col items-center justify-center gap-2 p-6 text-center text-xs text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin text-primary" />
-        <span>Đang tải danh sách kiến thức đã ghim...</span>
+        <span>{t("loading")}</span>
       </div>
     );
   }
@@ -85,10 +87,9 @@ export function PinnedKnowledgeList({ botId }: PinnedKnowledgeListProps) {
         <div className="mx-auto mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <Pin className="h-5 w-5 opacity-80" />
         </div>
-        <p className="text-xs font-semibold text-foreground">Chưa có kiến thức được ghim</p>
+        <p className="text-xs font-semibold text-foreground">{t("emptyTitle")}</p>
         <p className="mx-auto mt-1 max-w-sm text-[11px] leading-relaxed text-muted-foreground">
-          Các tin nhắn được ghim từ nhóm chat sẽ xuất hiện ở đây và tự động nạp vào kho kiến thức
-          RAG của bot.
+          {t("emptyDesc")}
         </p>
       </div>
     );
@@ -104,7 +105,7 @@ export function PinnedKnowledgeList({ botId }: PinnedKnowledgeListProps) {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm kiếm theo câu hỏi hoặc câu trả lời..."
+            placeholder={t("searchPlaceholder")}
             className="h-8 bg-background/50 pl-8 pr-7 text-xs focus-visible:bg-background"
           />
           {searchQuery && (
@@ -124,8 +125,8 @@ export function PinnedKnowledgeList({ botId }: PinnedKnowledgeListProps) {
             className="shadow-2xs h-6 shrink-0 border-primary/25 bg-primary/10 px-2.5 text-[11px] font-medium text-primary"
           >
             {searchQuery
-              ? `${filteredItems.length} / ${items.length} mục`
-              : `${items.length} mục đã ghim`}
+              ? t("badgeFiltered", { filtered: filteredItems.length, total: items.length })
+              : t("badgePinned", { count: items.length })}
           </Badge>
         </div>
       </div>
@@ -133,14 +134,14 @@ export function PinnedKnowledgeList({ botId }: PinnedKnowledgeListProps) {
       {/* Pinned Items Scrollable Container */}
       {filteredItems.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 p-6 text-center text-xs text-muted-foreground">
-          <p>Không tìm thấy kiến thức ghim nào phù hợp với &quot;{searchQuery}&quot;</p>
+          <p>{t("noResults", { query: searchQuery })}</p>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setSearchQuery("")}
             className="mt-2 h-7 text-xs text-primary"
           >
-            Xóa bộ lọc tìm kiếm
+            {t("clearFilter")}
           </Button>
         </div>
       ) : (
@@ -155,7 +156,9 @@ export function PinnedKnowledgeList({ botId }: PinnedKnowledgeListProps) {
                   <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                   <div
                     className="prose prose-sm max-w-none break-words text-xs font-semibold leading-snug text-foreground dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: parseMarkdown(`**Hỏi:** ${item.question}`) }}
+                    dangerouslySetInnerHTML={{
+                      __html: parseMarkdown(`**${t("questionLabel")}** ${item.question}`),
+                    }}
                   />
                 </div>
                 {item.answer && (
@@ -168,13 +171,14 @@ export function PinnedKnowledgeList({ botId }: PinnedKnowledgeListProps) {
                   </div>
                 )}
                 <p className="pt-0.5 text-[11px] text-muted-foreground">
-                  Đã ghim:{" "}
-                  {new Date(item.created_at).toLocaleString("vi-VN", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
+                  {t("pinnedAt", {
+                    date: new Date(item.created_at).toLocaleString("vi-VN", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }),
                   })}
                 </p>
               </div>
@@ -185,7 +189,7 @@ export function PinnedKnowledgeList({ botId }: PinnedKnowledgeListProps) {
                 className="h-7 w-7 shrink-0 text-muted-foreground opacity-60 transition-opacity hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
                 disabled={unpinningId === item.id}
                 onClick={() => handleUnpin(item.id)}
-                title="Gỡ ghim khỏi kho kiến thức"
+                title={t("unpinTitle")}
               >
                 {unpinningId === item.id ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-destructive" />

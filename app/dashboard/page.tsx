@@ -4,6 +4,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { WorkspaceService } from "@/lib/services/workspace.service";
 import { DashboardClient } from "@/components/dashboard/overview/DashboardClient";
 import type { DashboardInitialData } from "@/hooks/dashboard/main/useDashboardData";
+import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/constants/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function DashboardPage() {
   }
 
   const cookieStore = await cookies();
-  const workspaceId = cookieStore.get("active_workspace_id")?.value;
+  const workspaceId = cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value;
 
   if (!workspaceId) {
     let redirectUrl: string | null = null;

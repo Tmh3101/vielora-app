@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useTranslations, useLocale } from "next-intl";
 
 export interface RecentQuestionsCardProps {
   questions: RecentQuestionInsight[];
@@ -26,8 +27,8 @@ export interface RecentQuestionsCardProps {
  * @param value - A timestamp string parseable by the JavaScript Date constructor (for example an ISO 8601 string)
  * @returns A `vi-VN` locale string with two-digit hour, minute, day, and month (e.g., "08:30, 01/02")
  */
-function formatTimestamp(value: string) {
-  return new Date(value).toLocaleString("vi-VN", {
+function formatTimestamp(value: string, locale: string) {
+  return new Date(value).toLocaleString(locale === "en" ? "en-US" : "vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
     day: "2-digit",
@@ -42,6 +43,8 @@ function formatTimestamp(value: string) {
  * @returns A JSX element containing a styled card that displays either an empty state or a list of recent questions with status badges and a footer note.
  */
 export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
+  const t = useTranslations();
+  const locale = useLocale();
   const [showAllOpen, setShowAllOpen] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<RecentQuestionInsight | null>(null);
   const [keyword, setKeyword] = useState("");
@@ -66,9 +69,9 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
     <>
       <Card className="glass border-border/60">
         <CardHeader className="pb-4">
-          <CardTitle>Câu hỏi gần đây</CardTitle>
+          <CardTitle>{t("dashboard.botDetail.analytics.recentQuestions.title")}</CardTitle>
           <CardDescription>
-            Nhấn vào từng câu hỏi để xem câu trả lời tương ứng của bot.
+            {t("dashboard.botDetail.analytics.recentQuestions.description")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -76,7 +79,9 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
             <div className="flex h-[360px] items-center justify-center text-muted-foreground">
               <div className="text-center">
                 <MessageSquareQuote className="mx-auto mb-3 h-8 w-8 opacity-50" />
-                <p className="text-sm">Chưa có câu hỏi nào trong khoảng thời gian này</p>
+                <p className="text-sm">
+                  {t("dashboard.botDetail.analytics.recentQuestions.empty")}
+                </p>
               </div>
             </div>
           ) : (
@@ -110,18 +115,18 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
                               variant="outline"
                               className="shrink-0 border-0 bg-rose-100 text-[10px] font-medium uppercase tracking-wide text-rose-700"
                             >
-                              Fallback
+                              {t("dashboard.botDetail.analytics.recentQuestions.fallback")}
                             </Badge>
                           )}
                         </div>
                         {/* <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          Nhấn để xem phản hồi chi tiết của bot
+                          {t("dashboard.botDetail.analytics.recentQuestions.viewDetailHint")}
                         </p> */}
                       </div>
 
                       <div className="flex shrink-0 flex-col items-end gap-1">
                         <span className="text-xs font-medium text-muted-foreground">
-                          {formatTimestamp(question.createdAt)}
+                          {formatTimestamp(question.createdAt, locale)}
                         </span>
                         <span
                           className={`flex items-center gap-1 text-xs ${
@@ -133,7 +138,9 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
                               question.hasFallback ? "bg-rose-500" : "bg-green-500"
                             }`}
                           />
-                          {question.hasFallback ? "Cần rà soát" : "Đã phản hồi"}
+                          {question.hasFallback
+                            ? t("dashboard.botDetail.analytics.recentQuestions.needsReview")
+                            : t("dashboard.botDetail.analytics.recentQuestions.responded")}
                         </span>
                       </div>
                     </div>
@@ -146,7 +153,9 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
                     className="w-full py-2 text-sm font-medium text-primary underline underline-offset-4 transition-colors hover:text-primary/80"
                     onClick={() => setShowAllOpen(true)}
                   >
-                    Xem thêm {questions.length - 10} câu hỏi
+                    {t("dashboard.botDetail.analytics.recentQuestions.viewMore", {
+                      count: questions.length - 10,
+                    })}
                   </button>
                 )}
               </div>
@@ -158,23 +167,31 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
       <Dialog open={showAllOpen} onOpenChange={setShowAllOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Tất cả câu hỏi gần đây</DialogTitle>
+            <DialogTitle>
+              {t("dashboard.botDetail.analytics.recentQuestions.dialogAllTitle")}
+            </DialogTitle>
             <DialogDescription>
-              Có tổng cộng {questions.length} câu hỏi trong khoảng thời gian đã chọn.
+              {t("dashboard.botDetail.analytics.recentQuestions.dialogAllDesc", {
+                count: questions.length,
+              })}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 rounded-lg border border-border/50 bg-muted/20 p-3 sm:grid-cols-3">
             <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">Từ khóa câu hỏi</p>
+              <p className="text-xs font-medium text-muted-foreground">
+                {t("dashboard.botDetail.analytics.recentQuestions.keywordLabel")}
+              </p>
               <Input
                 value={keyword}
                 onChange={(event) => setKeyword(event.target.value)}
-                placeholder="Nhập từ khóa..."
+                placeholder={t("dashboard.botDetail.analytics.recentQuestions.keywordPlaceholder")}
                 className="h-9"
               />
             </div>
             <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">Từ ngày</p>
+              <p className="text-xs font-medium text-muted-foreground">
+                {t("dashboard.botDetail.analytics.recentQuestions.fromDate")}
+              </p>
               <Input
                 type="date"
                 value={fromDate}
@@ -183,7 +200,9 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
               />
             </div>
             <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">Đến ngày</p>
+              <p className="text-xs font-medium text-muted-foreground">
+                {t("dashboard.botDetail.analytics.recentQuestions.toDate")}
+              </p>
               <Input
                 type="date"
                 value={toDate}
@@ -222,18 +241,18 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
                             variant="outline"
                             className="shrink-0 border-0 bg-rose-100 text-[10px] font-medium uppercase tracking-wide text-rose-700"
                           >
-                            Fallback
+                            {t("dashboard.botDetail.analytics.recentQuestions.fallback")}
                           </Badge>
                         )}
                       </div>
                       {/* <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        Nhấn để xem phản hồi chi tiết của bot
+                        {t("dashboard.botDetail.analytics.recentQuestions.viewDetailHint")}
                       </p> */}
                     </div>
 
                     <div className="flex shrink-0 flex-col items-end gap-1">
                       <span className="text-xs font-medium text-muted-foreground">
-                        {formatTimestamp(question.createdAt)}
+                        {formatTimestamp(question.createdAt, locale)}
                       </span>
                     </div>
                   </div>
@@ -241,7 +260,7 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
               ))}
               {filteredQuestions.length === 0 && (
                 <div className="rounded-xl border border-dashed border-border/60 bg-card/40 p-6 text-center text-sm text-muted-foreground">
-                  Không có câu hỏi nào phù hợp với bộ lọc hiện tại.
+                  {t("dashboard.botDetail.analytics.recentQuestions.noMatch")}
                 </div>
               )}
             </div>
@@ -252,9 +271,11 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
       <Dialog open={!!selectedQuestion} onOpenChange={(open) => !open && setSelectedQuestion(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Câu hỏi và phản hồi của bot</DialogTitle>
+            <DialogTitle>
+              {t("dashboard.botDetail.analytics.recentQuestions.dialogDetailTitle")}
+            </DialogTitle>
             <DialogDescription>
-              {selectedQuestion ? formatTimestamp(selectedQuestion.createdAt) : ""}
+              {selectedQuestion ? formatTimestamp(selectedQuestion.createdAt, locale) : ""}
             </DialogDescription>
           </DialogHeader>
           {selectedQuestion && (
@@ -271,7 +292,7 @@ export function RecentQuestionsCard({ questions }: RecentQuestionsCardProps) {
                           variant="outline"
                           className="border-0 bg-rose-100 text-[10px] font-medium uppercase tracking-wide text-rose-700"
                         >
-                          Fallback
+                          {t("dashboard.botDetail.analytics.recentQuestions.fallback")}
                         </Badge>
                       )}
                     </div>

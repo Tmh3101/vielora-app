@@ -16,6 +16,7 @@ import { ReportExportList } from "./ReportExportList";
 import { TemplateEditorTab } from "@/components/dashboard/workspace-settings/TemplateEditorTab";
 import { BrandingTab } from "@/components/dashboard/workspace-settings/BrandingTab";
 import { EWorkspaceRole } from "@/types/enums";
+import { useTranslations } from "next-intl";
 
 export type ReportDashboardTab = "exports" | "templates" | "branding";
 
@@ -24,6 +25,8 @@ export interface ReportsDashboardClientProps {
 }
 
 export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardClientProps) {
+  const t = useTranslations("dashboard.reports");
+  const tCommon = useTranslations("dashboard.common");
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
@@ -56,10 +59,10 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
     switch (activeTab) {
       case "templates":
         return {
-          title: "Mẫu báo cáo",
+          title: "Template Editor",
           description: (
             <>
-              Tùy biến cấu trúc và các phần trong mẫu báo cáo xuất PDF cho không gian làm việc{" "}
+              Customize report templates for{" "}
               <span className="font-semibold text-foreground">
                 {activeWorkspace?.name || "workspace"}
               </span>
@@ -68,10 +71,10 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
         };
       case "branding":
         return {
-          title: "Nhận diện thương hiệu",
+          title: "Branding",
           description: (
             <>
-              Tùy chỉnh thông tin thương hiệu, logo và giao diện báo cáo cho không gian làm việc{" "}
+              Customize branding for{" "}
               <span className="font-semibold text-foreground">
                 {activeWorkspace?.name || "workspace"}
               </span>
@@ -81,10 +84,10 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
       case "exports":
       default:
         return {
-          title: "Báo cáo",
+          title: t("title"),
           description: (
             <>
-              Quản lý danh sách, xem trước và phê duyệt báo cáo PDF của không gian làm việc{" "}
+              {t("subtitle")}{" "}
               <span className="font-semibold text-foreground">
                 {activeWorkspace?.name || "workspace"}
               </span>
@@ -117,7 +120,7 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
           <PageHeader title={title} description={description}>
             {!workspaceId && (
               <Button variant="outline" onClick={() => router.push("/dashboard")}>
-                Chọn workspace
+                {tCommon("cancel")}
               </Button>
             )}
           </PageHeader>
@@ -135,7 +138,7 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
                 }`}
               >
                 <FileBarChart className="h-4 w-4" />
-                Danh sách báo cáo
+                {t("exportHistory")}
               </button>
               <button
                 type="button"
@@ -147,7 +150,7 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
                 }`}
               >
                 <LayoutTemplate className="h-4 w-4" />
-                Mẫu báo cáo
+                Templates
               </button>
               <button
                 type="button"
@@ -159,7 +162,7 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
                 }`}
               >
                 <Palette className="h-4 w-4" />
-                Thương hiệu
+                Branding
               </button>
             </nav>
           </div>
@@ -169,17 +172,14 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
             <Card className="border border-border/50 bg-card/50 p-12 text-center shadow-md backdrop-blur-sm">
               <div className="flex flex-col items-center justify-center gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm font-medium text-muted-foreground">Đang tải workspace...</p>
+                <p className="text-sm font-medium text-muted-foreground">{tCommon("loading")}</p>
               </div>
             </Card>
           ) : !workspaceId ? (
             <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 bg-muted/20 p-8 text-center">
               <Building2 className="h-10 w-10 text-muted-foreground opacity-50" />
               <div className="space-y-1">
-                <p className="font-semibold text-foreground">Chưa chọn Workspace</p>
-                <p className="text-xs text-muted-foreground">
-                  Vui lòng chọn không gian làm việc để quản lý và xem danh sách báo cáo PDF.
-                </p>
+                <p className="font-semibold text-foreground">{tCommon("error")}</p>
               </div>
               <Button
                 variant="outline"
@@ -187,7 +187,7 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
                 onClick={() => router.push("/dashboard")}
                 className="mt-2 rounded-xl text-xs"
               >
-                Về trang tổng quan
+                {tCommon("back")}
               </Button>
             </div>
           ) : !isProOrEnterprise ? (
@@ -197,18 +197,11 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
               </div>
               <div className="mt-4 space-y-2">
                 <div className="flex items-center justify-center gap-2">
-                  <h3 className="text-base font-bold text-foreground">
-                    Tính năng dành riêng cho gói Pro và Enterprise
-                  </h3>
+                  <h3 className="text-base font-bold text-foreground">Pro & Enterprise Feature</h3>
                   <span className="rounded-md border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-300">
                     PRO
                   </span>
                 </div>
-                <p className="mx-auto max-w-md text-xs text-muted-foreground">
-                  Không gian làm việc của bạn hiện đang ở gói{" "}
-                  {activeWorkspace?.plans?.name || "miễn phí"}. Vui lòng nâng cấp lên gói Pro hoặc
-                  Enterprise để quản lý, cấu hình mẫu và xuất báo cáo PDF.
-                </p>
                 <div className="pt-4">
                   <Button
                     asChild
@@ -218,7 +211,7 @@ export function ReportsDashboardClient({ initialWorkspaceId }: ReportsDashboardC
                       href={`/${encodeURIComponent(activeWorkspace?.slug || "")}/dashboard/settings/billing`}
                     >
                       <Crown className="mr-1.5 h-4 w-4" />
-                      Nâng cấp gói ngay
+                      Upgrade
                     </a>
                   </Button>
                 </div>

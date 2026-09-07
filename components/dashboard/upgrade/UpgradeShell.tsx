@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useTranslations } from "next-intl";
 
 interface UpgradeShellProps {
   children: ReactNode;
@@ -17,6 +18,7 @@ interface UpgradeShellProps {
 export function UpgradeShell({ children }: UpgradeShellProps) {
   const pathname = usePathname();
   const { activeWorkspace } = useWorkspace();
+  const t = useTranslations("dashboard.upgrade");
 
   const getSubPath = () => {
     if (!pathname) return "/";
@@ -45,13 +47,13 @@ export function UpgradeShell({ children }: UpgradeShellProps) {
   const navItems = [
     {
       href: plansHref,
-      label: "Gói dịch vụ & Credit",
+      label: t("plansAndCredits"),
       icon: CreditCard,
       isActive: subPath === "/upgrade" || subPath === "/upgrade/",
     },
     {
       href: historyHref,
-      label: "Lịch sử thanh toán",
+      label: t("paymentHistory"),
       icon: History,
       isActive: subPath === "/upgrade/history" || subPath.startsWith("/upgrade/history"),
     },

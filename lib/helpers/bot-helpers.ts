@@ -7,30 +7,30 @@ import { EBotStatus } from "@/types";
  * @param bot - The bot record used to determine status and stopped state
  * @returns An object with `label` (display text) and `className` (CSS classes for badge styling)
  */
-export const getBotStatusLabel = (bot: Tables<"bots">) => {
+export const getBotStatusLabel = (bot: Tables<"bots">, t?: (key: string) => string) => {
   if (bot.is_stopped) {
     return {
-      label: "Đã dừng",
+      label: t ? t("statusStopped") : "Đã dừng",
       className: "bg-slate-100 text-slate-700 hover:bg-slate-100",
     };
   }
 
   if (bot.status === EBotStatus.Ready) {
     return {
-      label: "Hoạt động",
+      label: t ? t("statusReady") : "Hoạt động",
       className: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100",
     };
   }
 
   if (bot.status === EBotStatus.Failed) {
     return {
-      label: "Lỗi",
+      label: t ? t("statusFailed") : "Lỗi",
       className: "bg-rose-100 text-rose-700 hover:bg-rose-100",
     };
   }
 
   return {
-    label: "Đang xử lý",
+    label: t ? t("statusPending") : "Đang xử lý",
     className: "bg-amber-100 text-amber-700 hover:bg-amber-100",
   };
 };
@@ -51,21 +51,20 @@ export const getStatusColor = (status: string, isStopped: boolean) => {
   }
 };
 
-export const getStatusText = (status: string, isStopped: boolean) => {
-  if (isStopped) return "Đã dừng";
+export const getStatusText = (status: string, isStopped: boolean, t?: (key: string) => string) => {
+  if (isStopped) return t ? t("statusStopped") : "Đã dừng";
   switch (status) {
     case EBotStatus.Ready:
-      return "Sẵn sàng";
+      return t ? t("statusReady") : "Sẵn sàng";
     case EBotStatus.Discovering:
-      return "Đang khám phá";
     case EBotStatus.Discovered:
-      return "Đã khám phá";
+      return t ? t("statusDiscovering") : "Đang khám phá";
     case EBotStatus.Indexing:
-      return "Đang index";
+      return t ? t("statusIndexing") : "Đang index";
     case EBotStatus.Failed:
-      return "Lỗi";
+      return t ? t("statusFailed") : "Lỗi";
     default:
-      return "Chờ xử lý";
+      return t ? t("statusPending") : "Chờ xử lý";
   }
 };
 

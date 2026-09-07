@@ -207,10 +207,25 @@ export enum EGroupSenderType {
   System = "system",
 }
 
-export enum ELanguage {
+/**
+ * Ngôn ngữ hệ thống Vielora (UI, Dashboard, Chat Widget) - 2 ngôn ngữ
+ */
+export enum ESystemLanguage {
+  Vi = "vi",
+  En = "en",
+}
+
+/**
+ * Ngôn ngữ hỗ trợ xuất báo cáo & mẫu template (Report Module) - 3 ngôn ngữ
+ */
+export enum EReportLanguage {
   Vi = "vi",
   En = "en",
   Ar = "ar",
 }
 
-export { ELanguage as ESupportedLanguage };
+/**
+ * @deprecated Dùng ESystemLanguage cho hệ thống/UI/Widget (2 ngôn ngữ) hoặc EReportLanguage cho xuất báo cáo (3 ngôn ngữ)
+ */
+export { EReportLanguage as ELanguage };
+export { EReportLanguage as ESupportedLanguage };

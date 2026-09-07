@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Check, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { BillingCycle, PricingVariant } from "@/config/pricing";
@@ -39,8 +40,14 @@ export function PricingCard({
   isHighlighted = false,
   animationDelay = 0,
 }: PricingCardProps) {
+  const t = useTranslations("pricing");
   const isEnterprise = plan.code === "enterprise";
   const price = getPriceFromPlan(plan, billingCycle);
+
+  // If description translation exists for this plan code, use it; otherwise fallback to plan.description
+  const planDescription = t.has(`planDescriptions.${plan.code}`)
+    ? t(`planDescriptions.${plan.code}`)
+    : plan.description;
 
   if (variant === "landing") {
     return (
@@ -61,17 +68,17 @@ export function PricingCard({
         {isPopular && !isDisabled && !isEnterprise && (
           <div className="absolute -top-4 left-1/2 z-10 -translate-x-1/2">
             <span className="bg-gradient-primary whitespace-nowrap rounded-full px-3.5 py-1 text-xs font-semibold text-primary-foreground shadow-md shadow-primary/30">
-              Phổ biến nhất
+              {t("popularBadge")}
             </span>
           </div>
         )}
 
         <div className="mb-4 text-center">
           <h3 className="mb-1 text-lg font-bold text-foreground">{plan.name}</h3>
-          <p className="mb-3 text-xs text-muted-foreground">{plan.description}</p>
+          <p className="mb-3 text-xs text-muted-foreground">{planDescription}</p>
           <div className="flex items-baseline justify-center gap-1">
             {isEnterprise ? (
-              <span className="text-2xl font-bold text-foreground">Tùy chỉnh</span>
+              <span className="text-2xl font-bold text-foreground">{t("customPrice")}</span>
             ) : (
               <>
                 <span className="text-3xl font-bold text-foreground">{formatVND(price)}</span>
@@ -79,15 +86,16 @@ export function PricingCard({
                   {price === 0
                     ? ""
                     : billingCycle === ESubscriptionCycle.Monthly
-                      ? "đ/tháng"
-                      : "đ/năm"}
+                      ? t("perMonth")
+                      : t("perYear")}
                 </span>
               </>
             )}
           </div>
           {billingCycle === ESubscriptionCycle.Yearly && price > 0 && !isEnterprise && (
             <p className="mt-1 text-xs text-muted-foreground">
-              ~ {formatVND(Math.round(price / 12))}đ/tháng
+              ~ {formatVND(Math.round(price / 12))}
+              {t("perMonth")}
             </p>
           )}
         </div>
@@ -140,7 +148,7 @@ export function PricingCard({
       {isPopular && !isCurrentPlan && !isEnterprise && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <span className="rounded-full bg-primary px-3 py-0.5 text-xs font-semibold text-primary-foreground shadow-md shadow-primary/20">
-            Phổ biến nhất
+            {t("popularBadge")}
           </span>
         </div>
       )}
@@ -148,17 +156,17 @@ export function PricingCard({
       {isCurrentPlan && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <span className="rounded-full bg-primary px-3 py-0.5 text-xs font-semibold text-primary-foreground shadow-md">
-            Đang sử dụng
+            {t("currentPlanBadge")}
           </span>
         </div>
       )}
 
       <CardHeader className="p-2 pb-3 text-center">
         <CardTitle className="text-lg font-bold">{plan.name}</CardTitle>
-        <CardDescription className="text-xs">{plan.description}</CardDescription>
+        <CardDescription className="text-xs">{planDescription}</CardDescription>
         <div className="mt-3 flex items-baseline justify-center gap-1">
           {isEnterprise ? (
-            <span className="text-2xl font-bold text-foreground">Tùy chỉnh</span>
+            <span className="text-2xl font-bold text-foreground">{t("customPrice")}</span>
           ) : (
             <>
               <span className="text-3xl font-bold text-foreground">{formatVND(price)}</span>
@@ -166,15 +174,16 @@ export function PricingCard({
                 {price === 0
                   ? ""
                   : billingCycle === ESubscriptionCycle.Monthly
-                    ? "đ/tháng"
-                    : "đ/năm"}
+                    ? t("perMonth")
+                    : t("perYear")}
               </span>
             </>
           )}
         </div>
         {billingCycle === ESubscriptionCycle.Yearly && price > 0 && !isEnterprise && (
           <p className="mt-0.5 text-xs text-muted-foreground">
-            ~ {formatVND(Math.round(price / 12))}đ/tháng
+            ~ {formatVND(Math.round(price / 12))}
+            {t("perMonth")}
           </p>
         )}
       </CardHeader>

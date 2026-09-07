@@ -7,12 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { getBotStandaloneChatPath, getBotAuthUrl } from "@/lib/utils/standalone-chat-url";
+import { ELanguage } from "@/types/enums";
+import { getWidgetTranslations } from "@/lib/i18n/widget-translations";
 
 interface GroupInvitePromptProps {
   userEmail?: string;
   botName?: string;
   botSlug?: string;
   onSwitchToAuth?: () => void;
+  locale?: ELanguage | string;
 }
 
 export function GroupInvitePrompt({
@@ -20,7 +23,9 @@ export function GroupInvitePrompt({
   botName = "Bot",
   botSlug,
   onSwitchToAuth,
+  locale = ELanguage.Vi,
 }: GroupInvitePromptProps) {
+  const t = getWidgetTranslations(locale);
   const supabase = createBrowserSupabaseClient();
 
   const handleSignOut = async () => {
@@ -60,27 +65,23 @@ export function GroupInvitePrompt({
               <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-500/10 dark:bg-amber-500/20">
                 <ShieldAlert className="h-7 w-7 text-amber-500" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground">Yêu cầu Lời mời Tham gia</h2>
+              <h2 className="text-xl font-semibold text-foreground">{t.inviteRequiredTitle}</h2>
             </div>
 
             {/* Content info */}
             <div className="space-y-3 text-center">
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Nhóm chat trực tuyến của <strong>{botName}</strong> là nhóm riêng tư chỉ dành cho
-                các thành viên được mời.
+                {t.inviteRequiredDesc.replace("{name}", botName)}
               </p>
               {userEmail ? (
                 <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Tài khoản hiện tại của bạn:</p>
+                  <p className="text-xs text-muted-foreground">{t.currentAccount}</p>
                   <p className="mt-0.5 break-all font-mono text-xs font-semibold text-foreground">
                     {userEmail}
                   </p>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  Vui lòng đăng nhập tài khoản đã được mời hoặc liên hệ quản trị viên để nhận quyền
-                  truy cập.
-                </p>
+                <p className="text-xs text-muted-foreground">{t.inviteLoginPrompt}</p>
               )}
             </div>
 
@@ -93,7 +94,7 @@ export function GroupInvitePrompt({
                   className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border-border/70 text-xs font-semibold text-muted-foreground transition-all duration-200 hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:scale-[0.98] sm:flex-1"
                 >
                   <LogOut className="h-4 w-4" />
-                  Chuyển đổi tài khoản
+                  {t.switchAccount}
                 </Button>
               ) : (
                 <Button
@@ -103,7 +104,7 @@ export function GroupInvitePrompt({
                 >
                   <Link href={authUrl}>
                     <LogIn className="h-4 w-4" />
-                    Đăng nhập tài khoản
+                    {t.loginAccount}
                   </Link>
                 </Button>
               )}
@@ -114,7 +115,7 @@ export function GroupInvitePrompt({
               >
                 <Link href={standaloneChatUrl}>
                   <MessageSquare className="h-4 w-4" />
-                  Về trang Chat AI
+                  {t.backToChat}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -123,12 +124,12 @@ export function GroupInvitePrompt({
             {/* Support footer */}
             <div className="w-full border-t border-border/60 pt-4 text-center">
               <p className="text-xs text-muted-foreground">
-                Cần hỗ trợ?{" "}
+                {t.needHelp}{" "}
                 <a
                   href="mailto:contact@vielora.vn"
                   className="font-medium text-primary hover:underline"
                 >
-                  Liên hệ support
+                  {t.contactSupport}
                 </a>
               </p>
             </div>

@@ -42,12 +42,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import type { BotLeadRow } from "@/lib/services/lead.service";
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Chờ liên hệ",
-  contacted: "Đã liên hệ",
-  closed: "Đã đóng",
-};
+import { useTranslations } from "next-intl";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800 hover:bg-amber-100",
@@ -72,12 +67,16 @@ function LeadDetailSheet({
   onOpenChange,
   onStatusUpdate,
   isUpdating,
+  t,
+  tCommon,
 }: {
   lead: BotLeadRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStatusUpdate: (leadId: string, status: string) => void;
   isUpdating: boolean;
+  t: (key: string) => string;
+  tCommon: (key: string) => string;
 }) {
   if (!lead) return null;
 
@@ -87,15 +86,15 @@ function LeadDetailSheet({
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
-            Chi tiết liên hệ
+            {t("title")}
           </SheetTitle>
-          <SheetDescription>Gửi lúc {formatDate(lead.created_at)}</SheetDescription>
+          <SheetDescription>{formatDate(lead.created_at)}</SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 space-y-4">
           <div>
             <h4 className="mb-1 text-sm font-medium text-muted-foreground">
-              Câu hỏi chưa được trả lời
+              {t("tableColQuestion")}
             </h4>
             <p className="rounded-lg bg-muted p-3 text-sm font-medium">
               {lead.unanswered_question}
@@ -104,34 +103,40 @@ function LeadDetailSheet({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Tên</h4>
+              <h4 className="text-sm font-medium text-muted-foreground">{t("tableColName")}</h4>
               <p className="text-sm">{lead.customer_name}</p>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Email</h4>
+              <h4 className="text-sm font-medium text-muted-foreground">{t("tableColEmail")}</h4>
               <p className="text-sm">{lead.customer_email}</p>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground">SĐT</h4>
+              <h4 className="text-sm font-medium text-muted-foreground">{t("tableColPhone")}</h4>
               <p className="text-sm">{lead.customer_phone || "—"}</p>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Trạng thái</h4>
+              <h4 className="text-sm font-medium text-muted-foreground">{t("tableColStatus")}</h4>
               <Badge className={STATUS_COLORS[lead.status] || ""}>
-                {STATUS_LABELS[lead.status] || lead.status}
+                {lead.status === "contacted"
+                  ? t("statusContacted")
+                  : lead.status === "closed"
+                    ? t("statusClosed")
+                    : t("statusPending")}
               </Badge>
             </div>
           </div>
 
           {lead.note && (
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Ghi chú</h4>
+              <h4 className="text-sm font-medium text-muted-foreground">Note</h4>
               <p className="text-sm">{lead.note}</p>
             </div>
           )}
 
           <div>
-            <h4 className="mb-1 text-sm font-medium text-muted-foreground">Cập nhật trạng thái</h4>
+            <h4 className="mb-1 text-sm font-medium text-muted-foreground">
+              {t("tableColStatus")}
+            </h4>
             <div className="flex gap-2">
               {lead.status !== "contacted" && (
                 <Button
@@ -142,12 +147,12 @@ function LeadDetailSheet({
                   {isUpdating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Đang cập nhật...
+                      {tCommon("loading")}
                     </>
                   ) : (
                     <>
                       <UserCheck className="mr-2 h-4 w-4" />
-                      Đã liên hệ
+                      {t("statusContacted")}
                     </>
                   )}
                 </Button>
@@ -160,7 +165,7 @@ function LeadDetailSheet({
                   disabled={isUpdating}
                   onClick={() => onStatusUpdate(lead.id, "closed")}
                 >
-                  Đóng
+                  {t("statusClosed")}
                 </Button>
               )}
             </div>
@@ -170,9 +175,7 @@ function LeadDetailSheet({
             Array.isArray(lead.chat_history) &&
             lead.chat_history.length > 0 && (
               <div>
-                <h4 className="mb-1 text-sm font-medium text-muted-foreground">
-                  Lịch sử trò chuyện
-                </h4>
+                <h4 className="mb-1 text-sm font-medium text-muted-foreground">History</h4>
                 <ScrollArea className="h-60 rounded-lg border p-3">
                   {(lead.chat_history as Array<{ role: string; content: string }>).map((msg, i) => (
                     <div
@@ -182,7 +185,7 @@ function LeadDetailSheet({
                       }`}
                     >
                       <span className="text-[10px] font-medium uppercase text-muted-foreground">
-                        {msg.role === "user" ? "Khách" : "Bot"}
+                        {msg.role === "user" ? "User" : "Bot"}
                       </span>
                       <p className="mt-0.5">{msg.content}</p>
                     </div>
@@ -197,6 +200,8 @@ function LeadDetailSheet({
 }
 
 export function LeadsTab({ botId }: { botId: string }) {
+  const t = useTranslations("dashboard.botDetail.leadsTab");
+  const tCommon = useTranslations("dashboard.common");
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
@@ -217,7 +222,7 @@ export function LeadsTab({ botId }: { botId: string }) {
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
-      if (!token) throw new Error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
+      if (!token) throw new Error("Session expired. Please log in again.");
 
       const response = await fetch(`/api/bots/${botId}/leads?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -233,7 +238,7 @@ export function LeadsTab({ botId }: { botId: string }) {
     mutationFn: async ({ leadId, status }: { leadId: string; status: string }) => {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
-      if (!token) throw new Error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
+      if (!token) throw new Error("Session expired. Please log in again.");
 
       const response = await fetch(`/api/bots/${botId}/leads`, {
         method: "PATCH",
@@ -281,12 +286,12 @@ export function LeadsTab({ botId }: { botId: string }) {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-left text-lg font-semibold">Liên hệ khách hàng</CardTitle>
+            <CardTitle className="text-left text-lg font-semibold">{t("title")}</CardTitle>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Tìm kiếm..."
+                  placeholder={tCommon("search")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="h-9 w-48 rounded-lg pl-9 text-sm"
@@ -300,28 +305,28 @@ export function LeadsTab({ botId }: { botId: string }) {
                 }}
               >
                 <SelectTrigger className="h-9 w-36 rounded-lg text-sm">
-                  <SelectValue placeholder="Trạng thái" />
+                  <SelectValue placeholder={t("tableColStatus")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all" className="focus:bg-muted focus:text-foreground">
-                    Tất cả
+                    {tCommon("all")}
                   </SelectItem>
                   <SelectItem value="pending" className="focus:bg-muted focus:text-foreground">
                     <span className="flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-amber-500" />
-                      Chờ liên hệ
+                      {t("statusPending")}
                     </span>
                   </SelectItem>
                   <SelectItem value="contacted" className="focus:bg-muted focus:text-foreground">
                     <span className="flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-blue-500" />
-                      Đã liên hệ
+                      {t("statusContacted")}
                     </span>
                   </SelectItem>
                   <SelectItem value="closed" className="focus:bg-muted focus:text-foreground">
                     <span className="flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-gray-400" />
-                      Đã đóng
+                      {t("statusClosed")}
                     </span>
                   </SelectItem>
                 </SelectContent>
@@ -339,10 +344,7 @@ export function LeadsTab({ botId }: { botId: string }) {
           ) : filteredLeads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <UserPlus className="mb-2 h-10 w-10 opacity-30" />
-              <p className="text-sm">Chưa có phản hồi khách hàng nào</p>
-              <p className="text-xs opacity-60">
-                Leads sẽ xuất hiện khi khách hàng để lại thông tin qua form trong chat
-              </p>
+              <p className="text-sm">{t("noLeadsFound")}</p>
             </div>
           ) : (
             <>
@@ -350,12 +352,12 @@ export function LeadsTab({ botId }: { botId: string }) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Tên</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>SĐT</TableHead>
-                      <TableHead className="max-w-[200px]">Câu hỏi</TableHead>
-                      <TableHead>Trạng thái</TableHead>
-                      <TableHead>Ngày gửi</TableHead>
+                      <TableHead>{t("tableColName")}</TableHead>
+                      <TableHead>{t("tableColEmail")}</TableHead>
+                      <TableHead>{t("tableColPhone")}</TableHead>
+                      <TableHead className="max-w-[200px]">{t("tableColQuestion")}</TableHead>
+                      <TableHead>{t("tableColStatus")}</TableHead>
+                      <TableHead>{t("tableColDate")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -373,7 +375,11 @@ export function LeadsTab({ botId }: { botId: string }) {
                         </TableCell>
                         <TableCell>
                           <Badge className={STATUS_COLORS[lead.status] || ""}>
-                            {STATUS_LABELS[lead.status] || lead.status}
+                            {lead.status === "contacted"
+                              ? t("statusContacted")
+                              : lead.status === "closed"
+                                ? t("statusClosed")
+                                : t("statusPending")}
                           </Badge>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
@@ -387,7 +393,9 @@ export function LeadsTab({ botId }: { botId: string }) {
 
               {totalPages > 1 && (
                 <div className="flex items-center justify-between pt-4">
-                  <p className="text-sm text-muted-foreground">Tổng số: {data?.total ?? 0}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {tCommon("all")}: {data?.total ?? 0}
+                  </p>
                   <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
@@ -442,6 +450,8 @@ export function LeadsTab({ botId }: { botId: string }) {
         onOpenChange={setSheetOpen}
         onStatusUpdate={handleStatusUpdate}
         isUpdating={statusMutation.isPending}
+        t={t}
+        tCommon={tCommon}
       />
     </div>
   );

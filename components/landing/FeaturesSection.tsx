@@ -12,6 +12,18 @@ import { MockupIntegration } from "./features/MockupIntegration";
 import { MockupPWA } from "./features/MockupPWA";
 import { MockupLeadForm } from "./features/MockupLeadForm";
 import { MockupAnalytics } from "./features/MockupAnalytics";
+import { useTranslations } from "next-intl";
+
+const FEATURE_KEYS = [
+  "crawl",
+  "customize",
+  "smartHomepage",
+  "groupChat",
+  "share",
+  "pwa",
+  "leadForm",
+  "analytics",
+] as const;
 
 const MOCKUPS: Record<number, React.ComponentType> = {
   0: MockupCrawl,
@@ -27,6 +39,7 @@ const MOCKUPS: Record<number, React.ComponentType> = {
 const STEP_DURATION_MS = 3200; // 3.2 seconds per feature for snappy, engaging showcase
 
 export default function FeaturesSection() {
+  const t = useTranslations("features");
   const [currentStep, setCurrentStep] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const shouldReduceMotion = useReducedMotion();
@@ -84,7 +97,7 @@ export default function FeaturesSection() {
             className="mb-2.5 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-0.5 text-xs font-semibold text-primary"
           >
             <Sparkles className="h-3.5 w-3.5" />
-            <span>TÍNH NĂNG ĐỘT PHÁ</span>
+            <span>{t("badge")}</span>
           </motion.div>
 
           <motion.h2
@@ -94,7 +107,7 @@ export default function FeaturesSection() {
             transition={{ duration: 0.35, delay: 0.05 }}
             className="heading-premium mb-2.5 text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl"
           >
-            Giải pháp <span className="text-gradient-animated text-balance">chatbot</span> toàn diện
+            {t("heading")}
           </motion.h2>
 
           <motion.p
@@ -104,8 +117,7 @@ export default function FeaturesSection() {
             transition={{ duration: 0.35, delay: 0.1 }}
             className="text-balance text-xs text-muted-foreground sm:text-sm"
           >
-            Từ việc tự động học kiến thức đến mở rộng điểm chạm và tối ưu chuyển đổi, tất cả đã sẵn
-            sàng
+            {t("subheading")}
           </motion.p>
         </div>
 
@@ -190,7 +202,7 @@ export default function FeaturesSection() {
                     key={i}
                     type="button"
                     onClick={() => jumpToStep(i)}
-                    aria-label={`Chuyển đến tính năng ${i + 1}`}
+                    aria-label={`Step ${i + 1}`}
                     className={`relative z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full border transition-all duration-300 hover:scale-125 active:scale-95 ${
                       isActive
                         ? "border-primary bg-primary ring-4 ring-primary/20"
@@ -215,6 +227,12 @@ export default function FeaturesSection() {
             {FEATURES.map((feature, index) => {
               const Icon = feature.icon;
               const isCurrent = index === currentStep;
+              const featureKey = FEATURE_KEYS[index];
+              const tag = featureKey ? t(`items.${featureKey}.tag`) : feature.tag;
+              const headline = featureKey ? t(`items.${featureKey}.headline`) : feature.headline;
+              const description = featureKey
+                ? t(`items.${featureKey}.description`)
+                : feature.description;
 
               return (
                 <div
@@ -252,7 +270,7 @@ export default function FeaturesSection() {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        {feature.tag && (
+                        {tag && (
                           <span
                             className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-colors ${
                               isCurrent
@@ -260,7 +278,7 @@ export default function FeaturesSection() {
                                 : "bg-muted/60 text-muted-foreground/80"
                             }`}
                           >
-                            {feature.tag}
+                            {tag}
                           </span>
                         )}
                         <h3
@@ -270,7 +288,7 @@ export default function FeaturesSection() {
                               : "font-medium text-muted-foreground group-hover:text-foreground"
                           }`}
                         >
-                          {feature.headline}
+                          {headline}
                         </h3>
                       </div>
 
@@ -284,7 +302,7 @@ export default function FeaturesSection() {
                             className="overflow-hidden"
                           >
                             <p className="pt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                              {feature.description}
+                              {description}
                             </p>
                           </motion.div>
                         )}
@@ -325,7 +343,7 @@ export default function FeaturesSection() {
                   key={i}
                   type="button"
                   onClick={() => jumpToStep(i)}
-                  aria-label={`Tính năng ${i + 1}`}
+                  aria-label={`Step ${i + 1}`}
                   className="relative z-10 flex h-6 w-6 items-center justify-center"
                 >
                   <span
@@ -374,23 +392,30 @@ export default function FeaturesSection() {
                   {(() => {
                     const feature = FEATURES[currentStep];
                     const Icon = feature.icon;
+                    const featureKey = FEATURE_KEYS[currentStep];
+                    const tag = featureKey ? t(`items.${featureKey}.tag`) : feature.tag;
+                    const headline = featureKey
+                      ? t(`items.${featureKey}.headline`)
+                      : feature.headline;
+                    const description = featureKey
+                      ? t(`items.${featureKey}.description`)
+                      : feature.description;
+
                     return (
                       <>
                         <div className="mb-2 flex items-center gap-2">
                           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                             <Icon className="h-3.5 w-3.5" />
                           </div>
-                          {feature.tag && (
+                          {tag && (
                             <span className="rounded bg-primary/10 px-2 py-0.5 text-[9px] font-bold text-primary">
-                              {feature.tag}
+                              {tag}
                             </span>
                           )}
                         </div>
-                        <h3 className="mb-1 text-sm font-bold text-foreground">
-                          {feature.headline}
-                        </h3>
+                        <h3 className="mb-1 text-sm font-bold text-foreground">{headline}</h3>
                         <p className="text-xs leading-relaxed text-muted-foreground">
-                          {feature.description}
+                          {description}
                         </p>
                       </>
                     );

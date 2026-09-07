@@ -7,12 +7,14 @@ export interface GroupNoteWritePermissionResult {
   botId: string | null;
   groupTitle: string | null;
   userName: string;
+  botLocale?: string;
 }
 
 export interface GroupNoteReadPermissionResult {
   allowed: boolean;
   botId: string | null;
   groupTitle: string | null;
+  botLocale?: string;
 }
 
 /**
@@ -39,7 +41,7 @@ export async function checkGroupNoteWritePermission(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: group, error: groupErr } = await (adminClient as any)
     .from("group_chats")
-    .select("id, bot_id")
+    .select("id, bot_id, bots(id, widget_settings)")
     .eq("id", groupId)
     .single();
 
@@ -49,9 +51,13 @@ export async function checkGroupNoteWritePermission(
 
   const botId = group.bot_id || providedBotId || null;
   const groupTitle = null;
+  const botSettings = (
+    group?.bots as { widget_settings?: { ui_language?: string; locale?: string } } | null
+  )?.widget_settings;
+  const botLocale = botSettings?.ui_language || botSettings?.locale || "vi";
 
   if (!botId) {
-    return { allowed: false, botId: null, groupTitle, userName: "" };
+    return { allowed: false, botId: null, groupTitle, userName: "", botLocale };
   }
 
   // Fetch member info by userId or email
@@ -88,7 +94,8 @@ export async function checkGroupNoteWritePermission(
       allowed: true,
       botId,
       groupTitle,
-      userName: resolvedName || "Quản trị viên",
+      userName: resolvedName || (botLocale === "en" ? "Administrator" : "Quản trị viên"),
+      botLocale,
     };
   }
 
@@ -98,11 +105,12 @@ export async function checkGroupNoteWritePermission(
       allowed: true,
       botId,
       groupTitle,
-      userName: resolvedName || "Thành viên",
+      userName: resolvedName || (botLocale === "en" ? "Member" : "Thành viên"),
+      botLocale,
     };
   }
 
-  return { allowed: false, botId, groupTitle, userName: "" };
+  return { allowed: false, botId, groupTitle, userName: "", botLocale };
 }
 
 /**
@@ -120,21 +128,25 @@ export async function checkGroupNoteReadPermission(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: group, error: groupErr } = await (adminClient as any)
     .from("group_chats")
-    .select("id, bot_id")
+    .select("id, bot_id, bots(id, widget_settings)")
     .eq("id", groupId)
     .single();
 
   if (groupErr || !group) {
-    return { allowed: false, botId: null, groupTitle: null };
+    return { allowed: false, botId: null, groupTitle: null, botLocale: "vi" };
   }
 
   const botId = group.bot_id;
+  const botSettings = (
+    group?.bots as { widget_settings?: { ui_language?: string; locale?: string } } | null
+  )?.widget_settings;
+  const botLocale = botSettings?.ui_language || botSettings?.locale || "vi";
 
   // 1. Check if user is bot manager
   if (botId) {
     const isManager = await isBotManager(adminClient, botId, userId);
     if (isManager) {
-      return { allowed: true, botId, groupTitle: null };
+      return { allowed: true, botId, groupTitle: null, botLocale };
     }
   }
 
@@ -161,8 +173,8 @@ export async function checkGroupNoteReadPermission(
         .update({ user_id: userId })
         .eq("id", member.id);
     }
-    return { allowed: true, botId, groupTitle: null };
+    return { allowed: true, botId, groupTitle: null, botLocale };
   }
 
-  return { allowed: false, botId, groupTitle: null };
+  return { allowed: false, botId, groupTitle: null, botLocale };
 }

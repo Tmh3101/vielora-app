@@ -26,6 +26,7 @@ import { BackgroundType } from "@/lib/constants/widget-appearance";
 import { ESubscriptionPlan, EWidgetBackgroundType, EWidgetIconType } from "@/types";
 import { isHexColor, getIconSVGWithSize } from "@/lib/helpers";
 import { useAppearanceStore } from "@/store/useAppearanceStore";
+import { useTranslations } from "next-intl";
 
 interface AppearanceSettingsCardProps {
   botId: string;
@@ -81,6 +82,8 @@ export function AppearanceSettingsCard({
   handleDeleteIcon,
   onSaveAppearance,
 }: AppearanceSettingsCardProps) {
+  const t = useTranslations("dashboard.botDetail.appearanceTab");
+  const tCommon = useTranslations("dashboard.common");
   const editBotName = useAppearanceStore((s) => s.editBotName);
   const avatarUrl = useAppearanceStore((s) => s.avatarUrl);
   const primaryColor = useAppearanceStore((s) => s.primaryColor);
@@ -105,14 +108,14 @@ export function AppearanceSettingsCard({
 
   const canUseSuggestedQuestions =
     !!currentPlan && SUGGESTED_QUESTIONS_ALLOWED_PLANS.includes(currentPlan);
-  const botNameError = editBotName.trim().length === 0 ? "Tên Bot không được để trống" : null;
-  const primaryColorError = isHexColor(primaryColor.trim()) ? null : "Mã Hex hợp lệ dạng #RRGGBB";
+  const botNameError = editBotName.trim().length === 0 ? t("validationBotNameRequired") : null;
+  const primaryColorError = isHexColor(primaryColor.trim()) ? null : t("validationHexFormat");
   const solidColorError =
     chatBackgroundType === BackgroundType.SOLID && !isHexColor(solidColor.trim())
-      ? "Mã Hex hợp lệ dạng #RRGGBB"
+      ? t("validationHexFormat")
       : null;
   const welcomeMessageError =
-    welcomeMessage.trim().length === 0 ? "Tin nhắn không được để trống" : null;
+    welcomeMessage.trim().length === 0 ? t("validationWelcomeRequired") : null;
 
   return (
     <Card className="shadow-xs overflow-hidden rounded-2xl border border-border/50 bg-card transition-all">
@@ -123,11 +126,9 @@ export function AppearanceSettingsCard({
           </div>
           <div>
             <CardTitle className="text-base font-semibold text-foreground">
-              Giao diện Widget
+              {t("cardTitle")}
             </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Tùy chỉnh thông tin và màu sắc hiển thị của Bot
-            </p>
+            <p className="text-xs text-muted-foreground">{t("cardDescription")}</p>
           </div>
         </div>
       </CardHeader>
@@ -137,7 +138,7 @@ export function AppearanceSettingsCard({
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <span>Thông tin cơ bản</span>
+            <span>{t("themeSection")}</span>
           </div>
 
           <div className="flex flex-col gap-4 rounded-xl border border-border/40 bg-muted/10 p-4 sm:flex-row sm:items-center">
@@ -151,14 +152,14 @@ export function AppearanceSettingsCard({
 
             <div className="w-full flex-1 space-y-1.5">
               <Label htmlFor="editBotName" className="text-xs font-medium text-foreground">
-                Tên Bot <span className="text-destructive">*</span>
+                {t("botName")} <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="editBotName"
                 type="text"
                 value={editBotName}
                 onChange={(e) => setEditBotName(e.target.value)}
-                placeholder="Tên chatbot"
+                placeholder={t("botNamePlaceholder")}
                 className="h-9 rounded-lg border-border/60 bg-background text-xs transition-colors focus-visible:ring-1 focus-visible:ring-primary"
                 aria-invalid={!!botNameError}
               />
@@ -171,14 +172,16 @@ export function AppearanceSettingsCard({
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
             <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
-            <span>Màu sắc & Vị trí</span>
+            <span>
+              {t("primaryColor")} & {t("positionButton")}
+            </span>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Màu chủ đạo */}
             <div className="space-y-1.5 rounded-xl border border-border/40 bg-muted/10 p-3.5">
               <Label htmlFor="primaryColor" className="text-xs font-medium text-foreground">
-                Màu chủ đạo
+                {t("primaryColor")}
               </Label>
               <div className="flex gap-2">
                 <div className="relative h-9 w-10 shrink-0 overflow-hidden rounded-lg border border-border/60">
@@ -207,7 +210,7 @@ export function AppearanceSettingsCard({
 
             {/* Vị trí hiển thị */}
             <div className="space-y-1.5 rounded-xl border border-border/40 bg-muted/10 p-3.5">
-              <Label className="text-xs font-medium text-foreground">Vị trí hiển thị</Label>
+              <Label className="text-xs font-medium text-foreground">{t("positionButton")}</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -216,7 +219,7 @@ export function AppearanceSettingsCard({
                 className="h-9 w-full justify-center gap-2 rounded-lg border-border/60 bg-background text-xs font-medium text-foreground transition-all hover:bg-muted active:scale-[0.99]"
               >
                 <MapPin className="h-3.5 w-3.5 text-primary" />
-                Chỉnh vị trí Widget
+                {t("positionButton")}
               </Button>
             </div>
           </div>
@@ -227,11 +230,11 @@ export function AppearanceSettingsCard({
           {/* Nền chat */}
           <div className="space-y-3 rounded-xl border border-border/40 bg-muted/10 p-3.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium text-foreground">Nền chat</Label>
+              <Label className="text-xs font-medium text-foreground">{t("bgSection")}</Label>
               <div className="inline-flex rounded-lg border border-border/40 bg-background p-0.5">
                 <button
                   type="button"
-                  title="Màu đơn"
+                  title={t("bgTypeSolid")}
                   onClick={() => setChatBackgroundType(EWidgetBackgroundType.Solid)}
                   className={`flex h-7 w-7 items-center justify-center rounded-md transition-all ${
                     chatBackgroundType === BackgroundType.SOLID
@@ -243,7 +246,7 @@ export function AppearanceSettingsCard({
                 </button>
                 <button
                   type="button"
-                  title="Hình ảnh"
+                  title={t("bgTypeImage")}
                   onClick={() => setChatBackgroundType(EWidgetBackgroundType.Image)}
                   className={`flex h-7 w-7 items-center justify-center rounded-md transition-all ${
                     chatBackgroundType === BackgroundType.IMAGE
@@ -313,7 +316,7 @@ export function AppearanceSettingsCard({
                     {bgPreviewFile && isUploadingBg ? (
                       <div className="flex items-center gap-2 text-xs text-primary">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Đang tải lên...</span>
+                        <span>{tCommon("loading")}</span>
                       </div>
                     ) : chatBackgroundValue && chatBackgroundValue.startsWith("http") ? (
                       <div className="group relative h-28 w-full overflow-hidden rounded-lg">
@@ -341,10 +344,10 @@ export function AppearanceSettingsCard({
                     ) : (
                       <>
                         <Upload className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-xs font-medium text-foreground">Tải ảnh nền</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          JPG, PNG (Tối đa 5MB)
+                        <span className="text-xs font-medium text-foreground">
+                          {t("uploadImage")}
                         </span>
+                        <span className="text-[10px] text-muted-foreground">JPG, PNG</span>
                       </>
                     )}
                   </button>
@@ -355,7 +358,7 @@ export function AppearanceSettingsCard({
 
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-foreground">Độ mờ nền</span>
+                <span className="font-medium text-foreground">{t("bgOpacity")}</span>
                 <span className="shadow-xs inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">
                   {chatBackgroundOpacity}%
                 </span>
@@ -379,11 +382,11 @@ export function AppearanceSettingsCard({
           {/* Icon nút chat */}
           <div className="space-y-3 rounded-xl border border-border/40 bg-muted/10 p-3.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium text-foreground">Icon nút chat</Label>
+              <Label className="text-xs font-medium text-foreground">{t("iconSection")}</Label>
               <div className="inline-flex rounded-lg border border-border/40 bg-background p-0.5">
                 <button
                   type="button"
-                  title="Có sẵn"
+                  title={t("iconTypePreset")}
                   onClick={() => setChatIconType(EWidgetIconType.Preset)}
                   className={`flex h-7 w-7 items-center justify-center rounded-md transition-all ${
                     chatIconType === EWidgetIconType.Preset
@@ -395,7 +398,7 @@ export function AppearanceSettingsCard({
                 </button>
                 <button
                   type="button"
-                  title="Tải lên"
+                  title={t("iconTypeCustom")}
                   onClick={() => setChatIconType(EWidgetIconType.Custom)}
                   className={`flex h-7 w-7 items-center justify-center rounded-md transition-all ${
                     chatIconType === EWidgetIconType.Custom
@@ -480,7 +483,9 @@ export function AppearanceSettingsCard({
                       ) : (
                         <>
                           <Upload className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-[10px] text-muted-foreground">Tải ảnh</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {t("uploadImage")}
+                          </span>
                         </>
                       )}
                     </label>
@@ -510,19 +515,19 @@ export function AppearanceSettingsCard({
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
             <MessageSquare className="h-3.5 w-3.5 text-primary" />
-            <span>Lời chào & Gợi ý</span>
+            <span>{t("greetingSection")}</span>
           </div>
 
           <div className="space-y-4 rounded-xl border border-border/40 bg-muted/10 p-4">
             <div className="space-y-1.5">
               <Label htmlFor="welcomeMessage" className="text-xs font-medium text-foreground">
-                Tin nhắn chào mừng <span className="text-destructive">*</span>
+                {t("welcomeMessage")} <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 id="welcomeMessage"
                 value={welcomeMessage}
                 onChange={(e) => setWelcomeMessage(e.target.value)}
-                placeholder="Xin chào! Tôi có thể giúp gì cho bạn?"
+                placeholder={t("welcomePlaceholder")}
                 rows={2}
                 className="resize-none rounded-lg border-border/60 bg-background text-xs transition-colors focus-visible:ring-1 focus-visible:ring-primary"
                 aria-invalid={!!welcomeMessageError}
@@ -535,9 +540,11 @@ export function AppearanceSettingsCard({
             {canUseSuggestedQuestions ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-medium text-foreground">Câu hỏi gợi ý</Label>
+                  <Label className="text-xs font-medium text-foreground">
+                    {t("suggestedQuestions")}
+                  </Label>
                   <span className="text-[10px] text-muted-foreground">
-                    Tối đa {WIDGET_LIMITS.SUGGESTED_QUESTIONS_MAX_COUNT} câu
+                    {WIDGET_LIMITS.SUGGESTED_QUESTIONS_MAX_COUNT} max
                   </span>
                 </div>
 
@@ -551,7 +558,7 @@ export function AppearanceSettingsCard({
                           newQuestions[index] = e.target.value;
                           setSuggestedQuestions(newQuestions);
                         }}
-                        placeholder={`Câu hỏi gợi ý ${index + 1}...`}
+                        placeholder={`${t("suggestedQuestions")} ${index + 1}...`}
                         maxLength={WIDGET_LIMITS.SUGGESTED_QUESTIONS_MAX_LENGTH}
                         className="h-8 flex-1 rounded-lg border-border/60 bg-background text-[11px] transition-colors focus-visible:ring-1 focus-visible:ring-primary"
                       />
@@ -578,24 +585,26 @@ export function AppearanceSettingsCard({
                     className="h-8 w-full rounded-lg border-border/60 bg-background text-xs font-medium text-foreground transition-all hover:bg-muted active:scale-[0.99]"
                   >
                     <Plus className="mr-1 h-3.5 w-3.5" />
-                    Thêm câu hỏi
+                    {t("addQuestion")}
                   </Button>
                 )}
               </div>
             ) : (
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-foreground">Câu hỏi gợi ý</Label>
+                <Label className="text-xs font-medium text-foreground">
+                  {t("suggestedQuestions")}
+                </Label>
                 <div className="relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-background via-muted/10 to-muted/20 p-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                       <Crown className="h-4 w-4 text-amber-500" />
-                      <span>Tính năng dành cho các gói trả phí (Standard / Pro / Enterprise)</span>
+                      <span>{t("paidPlanFeature")}</span>
                     </div>
                     <Link
                       href="/dashboard/upgrade"
                       className="text-xs font-semibold text-primary transition-opacity hover:opacity-80"
                     >
-                      Nâng cấp →
+                      {t("upgradeNow")}
                     </Link>
                   </div>
                 </div>
@@ -620,10 +629,10 @@ export function AppearanceSettingsCard({
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang lưu...
+                {t("saving")}
               </>
             ) : (
-              "Lưu cấu hình"
+              t("saveChanges")
             )}
           </Button>
         </div>
